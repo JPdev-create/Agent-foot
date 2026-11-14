@@ -23,6 +23,10 @@ La partie est sauvegardée automatiquement dans le navigateur.
 - Chaque semaine, **tous les championnats jouent** : classements et résultats dans l'onglet Compét.,
   matchs, buts, passes décisives et notes de vos joueurs sur leur fiche.
 
+- Chaque joueur a un **caractère** (travailleur, ambitieux, loyal, leader, fêtard, fragile).
+- **Prolongations** de contrat, **récompenses** de fin de saison, sélections nationales.
+- **Montées et descentes** entre les trois divisions belges ; le prestige des clubs évolue.
+
 ## Structure
 
 - `js/data.js` — championnats, clubs, noms, bureaux, objectifs

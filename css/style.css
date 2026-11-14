@@ -118,3 +118,9 @@ nav em { position: absolute; top: 4px; left: 56%; background: var(--bad); color:
 .tbl em { font-style: normal; font-size: 11px; }
 .resu td:first-child { text-align: right; width: 42%; } .resu td:last-child { text-align: left; width: 42%; } .resu td:nth-child(2) { text-align: center; white-space: nowrap; }
 main > .chips { padding-top: 0; }
+
+.trait { font-size: 13px; margin: 4px 0 10px; } .trait.mut { color: var(--mut); }
+.ovr.sm { width: 28px; height: 28px; font-size: 12px; border-radius: 8px; display: inline-grid; }
+.pstats tr { cursor: pointer; } .pstats td small { font-size: 11px; }
+.pstats tr.tot td { color: var(--mut); font-weight: 700; cursor: default; }
+main > .chips { padding-bottom: 10px; }

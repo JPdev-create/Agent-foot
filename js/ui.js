@@ -1,7 +1,7 @@
 /* Interface */
 'use strict';
 
-const UI = { tab: 'bureau', modal: null, toast: null, mk: { country: 'BE', pos: '', sort: 'ovr', fav: false }, lg: 'BE1', mode: 'transfer', clg: 'BE1' };
+const UI = { tab: 'bureau', modal: null, toast: null, mk: { country: 'BE', pos: '', sort: 'ovr', fav: false }, lg: 'BE1', mode: 'transfer', clg: 'BE1', jv: 'list' };
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ovrOf = (p) => Math.floor(p.ovr);
@@ -111,7 +111,7 @@ function playerRow(p, mine) {
   const o = ovrOf(p);
   return `<div class="prow" data-act="open" data-id="${p.id}">
     <span class="ovr ${ovrClass(o)}">${o}</span>
-    <div class="pmain"><b>${p.fav && !mine ? '⭐ ' : ''}${esc(p.n)}${p.inj > 0 ? ' 🚑' : ''}${p.loan ? ' 🔁' : ''}</b><small>${p.pos} · ${p.age} ans · ${clubTxt(p)}</small></div>
+    <div class="pmain"><b>${p.fav && !mine ? '⭐ ' : ''}${esc(p.n)}${p.intl ? ' 🌍' : ''}${p.inj > 0 ? ' 🚑' : ''}${p.loan ? ' 🔁' : ''}</b><small>${p.pos} · ${p.age} ans · ${clubTxt(p)}</small></div>
     <div class="pside">${mine
     ? `<b>${p.m} m · ${p.g} b · ${p.a} pd</b><small>Note ${avgNote(p)} · Moral ${Math.round(p.morale)}</small>`
     : `<b>Pot. ${potTxt(p)}</b><small>${fmt(playerValue(p))}</small>`}</div></div>`;
@@ -140,7 +140,16 @@ function viewMarche() {
 function viewJoueurs() {
   const cl = clients().sort((a, b) => b.ovr - a.ovr);
   if (!cl.length) return `<div class="card empty"><p>Aucun client pour l'instant.</p><p>Allez sur le <b>Marché</b>, observez de jeunes Belges et proposez-leur un mandat.</p></div>`;
-  return `<div class="card list">${cl.map((p) => playerRow(p, true)).join('')}</div>
+  const chips = `<div class="chips"><button class="chip ${UI.jv === 'list' ? 'on' : ''}" data-act="jv" data-id="list">👥 Liste</button>
+    <button class="chip ${UI.jv === 'stats' ? 'on' : ''}" data-act="jv" data-id="stats">📊 Statistiques</button></div>`;
+  if (UI.jv === 'stats') {
+    const by = cl.slice().sort((a, b) => (b.m ? b.rs / b.m : 0) - (a.m ? a.rs / a.m : 0));
+    return `${chips}<div class="card"><table class="tbl pstats"><tr><th>Niv</th><th>Joueur</th><th>M</th><th>B</th><th>PD</th><th>Note</th></tr>
+      ${by.map((p) => `<tr data-act="open" data-id="${p.id}"><td><span class="ovr sm ${ovrClass(ovrOf(p))}">${ovrOf(p)}</span></td>
+        <td>${esc(p.n)}<small>${p.pos} · ${esc(CLUBS[p.club].name)}</small></td><td>${p.m}</td><td>${p.g}</td><td>${p.a}</td><td><b class="${p.m ? noteClass(p.rs / p.m) : ''}">${avgNote(p)}</b></td></tr>`).join('')}
+      <tr class="tot"><td></td><td>Total agence</td><td>${cl.reduce((s, p) => s + p.m, 0)}</td><td>${cl.reduce((s, p) => s + p.g, 0)}</td><td>${cl.reduce((s, p) => s + p.a, 0)}</td><td></td></tr></table></div>`;
+  }
+  return `${chips}<div class="card list">${cl.map((p) => playerRow(p, true)).join('')}</div>
     <p class="hint">Vous touchez ${pct(COMMISSION_SALARY)} du salaire de vos clients chaque semaine et ${pct(commissionTransfer())} de chaque transfert.</p>`;
 }
 
@@ -196,8 +205,10 @@ function modalPlayer(p) {
       <div><small>Salaire/sem.</small><b>${fmt(p.sal)}</b></div>
       <div><small>Temps de jeu</small><b>${pct(playProb(p))}</b></div>
       <div><small>Saison</small><b>${p.m} m · ${p.g} b · ${p.a} pd</b></div>
-      <div><small>Contrat club</small><b>${p.cy} an(s)</b></div>
+      <div><small>Contrat club</small><b class="${p.cy <= 1 ? 'neg' : ''}">${p.cy} an(s)</b></div>
     </div>
+    ${p.tr && (p.mine || p.sc >= 1) ? `<p class="trait">${TRAITS[p.tr].icon} <b>${TRAITS[p.tr].name}</b> — ${TRAITS[p.tr].desc}</p>` : !p.tr || p.mine ? '' : '<p class="trait mut">Caractère inconnu : observez-le.</p>'}
+    ${p.intl ? '<p class="trait">🌍 <b>International</b> — valeur +12 %.</p>' : ''}
     ${p.inj > 0 ? `<p class="warn">🚑 Blessé encore ${p.inj} semaine(s).</p>` : ''}`;
   if (!p.mine) {
     const cd = p.cd > S.t, can = canRecruit(p);
@@ -218,6 +229,8 @@ function modalPlayer(p) {
     </div>
     <button class="btn" data-act="propose" data-id="${p.id}" ${inWindow(S.week) && !p.loan ? '' : 'disabled'}>📣 Transfert ou prêt${p.loan ? ' — en prêt cette saison' : inWindow(S.week) ? ' (1 action)' : ' — mercato fermé'}</button>
     <button class="btn alt" data-act="raise" data-id="${p.id}">💶 Demander une revalorisation (1 action)</button>
+    ${p.cy <= 1 ? `<button class="btn alt" data-act="renew" data-id="${p.id}" ${p.loan ? 'disabled' : ''}>📝 Négocier une prolongation (1 action)</button>
+    <small>Dernière année de contrat : les clubs acheteurs paieront 40 % de moins. Une prolongation vous rapporte 6 semaines de son salaire.</small>` : ''}
     <button class="btn alt" data-act="talk" data-id="${p.id}">💬 Discuter avec lui (1 action)</button>
     <h4>Saison en cours</h4>
     <div class="grid3">
@@ -229,6 +242,7 @@ function modalPlayer(p) {
       <span>${x.g ? '⚽'.repeat(x.g) : ''}${x.a ? '🅰️'.repeat(x.a) : ''} <b class="${noteClass(x.n)}">${x.n.toFixed(1)}</b></span></div>`).join('')}</div>` : ''}
     ${p.sh.length ? `<h4>Saisons précédentes</h4><table class="tbl"><tr><th>Saison</th><th>Club</th><th>M</th><th>B</th><th>PD</th><th>Note</th></tr>
       ${p.sh.map((h) => `<tr><td>${h.s}</td><td>${esc(h.club)}</td><td>${h.m}</td><td>${h.g}</td><td>${h.a}</td><td>${h.m ? h.avg.toFixed(1) : '–'}</td></tr>`).join('')}</table>` : ''}
+    ${p.aw.length ? `<h4>Palmarès</h4>${p.aw.map((a) => `<small>🏅 ${esc(a)}</small>`).join('')}` : ''}
     ${p.hist.length ? `<h4>Transferts</h4>${p.hist.map((h) => `<small>${h.s} : ${esc(h.from)} → ${esc(h.to)} (${fmt(h.fee)})</small>`).join('')}` : ''}
     <button class="btn ghost danger" data-act="release" data-id="${p.id}">Rompre le mandat</button>`;
 }
@@ -268,6 +282,7 @@ function modalHelp() {
     <p><b>3. Faites-le jouer.</b> Un jeune progresse surtout s'il joue. Regardez son « temps de jeu » : s'il est faible, prêtez-le dans un club plus modeste.</p>
     <p><b>4. Transférez.</b> Pendant le mercato (semaines 1–6 et 20–23), proposez vos clients à des clubs plus prestigieux. Vous touchez 10 % de l'indemnité, puis 7 % de son salaire chaque semaine.</p>
     <p><b>Suivez les matchs.</b> Chaque semaine, tous les championnats jouent : résultats de vos joueurs sur le Bureau, classements dans l'onglet Compét.</p>
+    <p><b>Caractère et contrats.</b> Chaque joueur a un caractère (visible après observation). En dernière année de contrat, négociez une prolongation ou vendez vite.</p>
     <p><b>5. Grandissez.</b> Agrandissez le bureau (plus de clients et d'actions), engagez du personnel et grimpez au classement des agences jusqu'aux 5 grands championnats.</p>
     <p><b>Attention</b> au moral de vos joueurs (un joueur frustré peut partir) et à votre caisse : faillite à -25 k€.</p>
     </div><button class="btn" data-act="close">C'est parti</button>`;
@@ -331,6 +346,8 @@ const ACTIONS = {
   },
   raise(d) { toast(actRaise(+d.id)); },
   talk(d) { toast(actTalk(+d.id)); },
+  renew(d) { toast(actRenew(+d.id)); },
+  jv(d) { UI.jv = d.id; },
   release(d) { if (confirm('Rompre le mandat de ce joueur ?')) { actRelease(+d.id); UI.modal = null; } },
   accept(d) { toast(actAccept(+d.id)); },
   nego(d) { toast(actNegotiate(+d.id)); },

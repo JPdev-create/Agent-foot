@@ -58,6 +58,19 @@ for (const lg in CLUB_LIST) {
   });
 }
 const CLUB_IDS = Object.keys(CLUBS);
+const CLUB_DEFAULT = {};
+CLUB_IDS.forEach((id) => { CLUB_DEFAULT[id] = { rep: CLUBS[id].rep, league: CLUBS[id].league }; });
+
+/* Caractère des joueurs */
+const TRAITS = {
+  pro: { name: 'Travailleur', icon: '💪', desc: 'Progresse plus vite.' },
+  amb: { name: 'Ambitieux', icon: '🔥', desc: 'Progresse un peu plus vite, mais supporte mal le banc.' },
+  loy: { name: 'Loyal', icon: '🤝', desc: 'Ne vous quittera pas pour un concurrent.' },
+  lea: { name: 'Leader', icon: '🧢', desc: 'Meilleures notes en match.' },
+  fet: { name: 'Fêtard', icon: '🍾', desc: 'Progresse moins vite et fait parler de lui.' },
+  fra: { name: 'Fragile', icon: '🩹', desc: 'Se blesse deux fois plus souvent.' },
+};
+const TRAIT_KEYS = Object.keys(TRAITS);
 const clubsOf = (lg) => CLUB_IDS.filter((id) => CLUBS[id].league === lg).map((id) => CLUBS[id]);
 
 const NAMES = {

@@ -101,3 +101,20 @@ nav em { position: absolute; top: 4px; left: 56%; background: var(--bad); color:
 .rank span { width: 22px; color: var(--mut); font-weight: 700; } .rank p { flex: 1; margin: 0; }
 .rank .me { color: var(--acc); font-weight: 700; } .rank .me span { color: var(--acc); }
 .help p { font-size: 14px; margin: 10px 0; color: var(--txt); }
+
+.mlist > div { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+.mlist > div:last-child { border: 0; }
+.mlist p { flex: 1; margin: 0; min-width: 0; } .mlist p b, .mlist p small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mlist span { white-space: nowrap; font-size: 13px; } .mlist .mut { color: var(--mut); font-size: 12px; }
+.mlist i { flex: none; width: 6px; height: 30px; border-radius: 3px; background: var(--mut); }
+.mlist i.w { background: var(--acc); } .mlist i.l { background: var(--bad); } .mlist i.d { background: var(--acc2); }
+.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tbl th { color: var(--mut); font-weight: 600; font-size: 11px; text-align: center; padding: 4px 3px; }
+.tbl td { padding: 7px 3px; text-align: center; border-top: 1px solid var(--line); }
+.tbl th:nth-child(2), .tbl td:nth-child(2) { text-align: left; }
+.stand td:first-child { color: var(--mut); width: 22px; }
+.stand tr.top td:first-child { color: var(--acc2); font-weight: 800; }
+.tbl tr.me td { color: var(--acc); font-weight: 600; }
+.tbl em { font-style: normal; font-size: 11px; }
+.resu td:first-child { text-align: right; width: 42%; } .resu td:last-child { text-align: left; width: 42%; } .resu td:nth-child(2) { text-align: center; white-space: nowrap; }
+main > .chips { padding-top: 0; }

@@ -20,6 +20,8 @@ La partie est sauvegardée automatiquement dans le navigateur.
 - **Prêtez** un jeune qui ne joue pas dans un club plus modeste jusqu'à la fin de la saison.
 - Des **événements** vous demandent de trancher (agent rival, presse, mal du pays...).
 - Grimpez au **classement des agences** face à 8 concurrents.
+- Chaque semaine, **tous les championnats jouent** : classements et résultats dans l'onglet Compét.,
+  matchs, buts, passes décisives et notes de vos joueurs sur leur fiche.
 
 ## Structure
 

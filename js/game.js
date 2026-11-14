@@ -76,7 +76,7 @@ function genPlayer(country, ageMin, ageMax) {
   const p = {
     id: S.nextId++, n: genName(country), nat: country, age, pos, ovr, pot,
     club: club.id, sal: 0, cy: rint(1, 3), mine: false, mandate: 0, morale: 70, inj: 0,
-    sc: 0, potLo: 0, potHi: 0, cd: 0, rej: {}, m: 0, g: 0, hist: [], fav: false, loan: null, o0: ovr,
+    sc: 0, potLo: 0, potHi: 0, cd: 0, rej: {}, m: 0, g: 0, a: 0, rs: 0, cs: 0, log: [], sh: [], hist: [], fav: false, loan: null, o0: ovr,
   };
   p.sal = fairSalary(p, club);
   return p;
@@ -132,7 +132,11 @@ function migrate() {
   if (!S.ss) { S.ss = { inc: 0, costs: 0, tr0: 0, rep0: 0 }; S.ss = newSeasonStats(); }
   if (S.event === undefined) S.event = null;
   if (S.recap === undefined) S.recap = null;
+  if (!S.tab) newTables();
+  if (!S.res) S.res = {};
+  if (!S.wk) S.wk = [];
   S.players.forEach((p) => {
+    if (p.a === undefined) { p.a = 0; p.rs = 0; p.cs = 0; p.log = []; p.sh = []; }
     if (p.fav === undefined) p.fav = false;
     if (p.loan === undefined) p.loan = null;
     if (p.o0 === undefined) p.o0 = p.ovr;
@@ -401,13 +405,81 @@ function hireStaff(k) {
 /* ---------- Simulation hebdomadaire ---------- */
 const GROWTH_K = { 15: 0.34, 16: 0.34, 17: 0.34, 18: 0.32, 19: 0.28, 20: 0.24, 21: 0.2, 22: 0.15, 23: 0.11, 24: 0.08, 25: 0.04, 26: 0.04, 27: 0.04 };
 
-function simPlayer(p) {
-  if (p.inj > 0) { p.inj--; return; }
+/* ---------- Championnats : calendrier, matchs, classements ---------- */
+function newTables() {
+  S.tab = {}; S.form = {}; S.res = {}; S.wk = [];
+  CLUB_IDS.forEach((id) => { S.tab[id] = [0, 0, 0, 0, 0, 0]; S.form[id] = rnd(-3, 3); }); // J G N P BP BC
+}
+const leagueRounds = (lg) => { const n = CLUB_LIST[lg].length; return (n >= 16 ? 2 : 3) * (n - 1); };
+
+/* Journée r d'un championnat (méthode du cercle), sous forme de paires [domicile, extérieur] */
+function fixtures(lg, r) {
+  const ids = clubsOf(lg).map((c) => c.id), n = ids.length, base = r % (n - 1), leg = Math.floor(r / (n - 1));
+  const list = [ids[0]];
+  for (let i = 0; i < n - 1; i++) list.push(ids[1 + (i + base) % (n - 1)]);
+  const out = [];
+  for (let i = 0; i < n / 2; i++) {
+    const a = list[i], b = list[n - 1 - i];
+    out.push(((base + i + leg) % 2 === 0) ? [a, b] : [b, a]);
+  }
+  return out;
+}
+function poisson(l) { const L = Math.exp(-l); let k = 0, p = 1; do { k++; p *= Math.random(); } while (p > L); return k - 1; }
+const pts = (t) => t[1] * 3 + t[2];
+function standings(lg) {
+  return clubsOf(lg).map((c) => ({ c, t: S.tab[c.id] }))
+    .sort((a, b) => pts(b.t) - pts(a.t) || (b.t[4] - b.t[5]) - (a.t[4] - a.t[5]) || b.t[4] - a.t[4] || b.c.rep - a.c.rep);
+}
+
+/* Joue la journée de la semaine dans tous les championnats ; renvoie le résultat par club */
+function playMatchday() {
+  const md = S.week - 2, byClub = {};
+  for (const lg in LEAGUES) {
+    if (md < 0 || md >= leagueRounds(lg)) { S.res[lg] = null; continue; }
+    S.res[lg] = fixtures(lg, md).map(([h, a]) => {
+      const d = (CLUBS[h].rep + S.form[h]) - (CLUBS[a].rep + S.form[a]);
+      const gh = poisson(clamp(1.5 * Math.exp(d / 22), 0.3, 3.6)), ga = poisson(clamp(1.15 * Math.exp(-d / 22), 0.25, 3.2));
+      const th = S.tab[h], ta = S.tab[a];
+      th[0]++; ta[0]++; th[4] += gh; th[5] += ga; ta[4] += ga; ta[5] += gh;
+      if (gh > ga) { th[1]++; ta[3]++; } else if (gh < ga) { ta[1]++; th[3]++; } else { th[2]++; ta[2]++; }
+      byClub[h] = { opp: a, home: true, gf: gh, ga };
+      byClub[a] = { opp: h, home: false, gf: ga, ga: gh };
+      return [h, a, gh, ga];
+    });
+  }
+  return byClub;
+}
+
+function simPlayer(p, res) {
+  if (p.inj > 0) {
+    p.inj--;
+    if (res && p.mine) S.wk.push({ pid: p.id, out: 'Blessé', opp: res.opp, home: res.home, gf: res.gf, ga: res.ga });
+    return;
+  }
   const pp = playProb(p);
-  if (Math.random() < pp) {
-    p.m++;
-    const gp = { GB: 0, DEF: 0.04, MIL: 0.12, ATT: 0.33 }[p.pos] * clamp(p.ovr / CLUBS[p.club].rep, 0.5, 1.3);
-    if (Math.random() < gp) p.g++;
+  const plays = res && Math.random() < pp;
+  if (res && !plays) {
+    if (p.mine) S.wk.push({ pid: p.id, out: 'Non utilisé', opp: res.opp, home: res.home, gf: res.gf, ga: res.ga });
+  } else if (plays) {
+    const lvl = clamp(p.ovr / CLUBS[p.club].rep, 0.6, 1.3), def = p.pos === 'GB' || p.pos === 'DEF';
+    let g = 0, a = 0;
+    for (let i = 0; i < res.gf; i++) {
+      const r = Math.random();
+      if (r < { GB: 0, DEF: 0.03, MIL: 0.08, ATT: 0.17 }[p.pos] * lvl) g++;
+      else if (r > 1 - { GB: 0.005, DEF: 0.04, MIL: 0.12, ATT: 0.09 }[p.pos] * lvl) a++;
+    }
+    let n = 6.3 + (p.ovr - (CLUBS[p.club].rep - 12)) / 25 + rnd(-0.9, 0.9) + g * 0.9 + a * 0.5
+      + (res.gf > res.ga ? 0.3 : res.gf < res.ga ? -0.3 : 0);
+    if (def) n += (res.ga === 0 ? 0.6 : 0) - Math.max(0, res.ga - 2) * 0.3;
+    n = Math.round(clamp(n, 3, 10) * 10) / 10;
+    p.m++; p.g += g; p.a += a; p.rs += n;
+    if (def && res.ga === 0) p.cs++;
+    if (p.mine) {
+      const line = { pid: p.id, w: S.week, opp: res.opp, home: res.home, gf: res.gf, ga: res.ga, g, a, n };
+      S.wk.push(line); p.log.unshift(line); if (p.log.length > 6) p.log.length = 6;
+      p.morale = clamp(p.morale + (n >= 7.5 ? 0.4 : n < 5.5 ? -0.3 : 0), 0, 100);
+      if (g >= 2 || n >= 9) news('⚽', `${p.n} brille avec ${CLUBS[p.club].name} contre ${CLUBS[res.opp].name} : ${g} but(s), ${a} passe(s), note ${n.toFixed(1)}.`);
+    }
   }
   const k = GROWTH_K[p.age] || 0;
   if (k > 0 && p.ovr < p.pot) {
@@ -421,7 +493,9 @@ function simPlayer(p) {
 function nextWeek() {
   if (S.over || S.event) return;
   S.t++; S.week++;
-  S.players.forEach(simPlayer);
+  S.wk = [];
+  const results = playMatchday();
+  S.players.forEach((p) => simPlayer(p, results[p.club]));
 
   const inc = weeklyIncome(), costs = weeklyCosts();
   earn(inc); S.cash -= costs; S.ss.costs += costs;
@@ -500,8 +574,21 @@ function endSeason() {
   };
   news('🎉', `Fin de la saison ${S.season}/${(S.season + 1) % 100}. ${cl.length} client(s), réputation +${repGain.toFixed(1)}.`);
 
+  // Champions et historique des saisons
+  const label = `${S.season}/${(S.season + 1) % 100}`, champs = {};
+  for (const lg in LEAGUES) champs[standings(lg)[0].c.id] = lg;
+  news('🏆', 'Champions : ' + ['BE1', 'ENG', 'ESP', 'ITA', 'GER', 'FRA'].map((lg) => `${LEAGUES[lg].flag} ${standings(lg)[0].c.name}`).join(' · ') + '.');
+  cl.forEach((p) => {
+    p.sh.unshift({ s: label, club: CLUBS[p.club].name, m: p.m, g: p.g, a: p.a, avg: p.m ? p.rs / p.m : 0 });
+    if (champs[p.club] && p.m >= 8) {
+      addRep(LEAGUES[champs[p.club]].big ? 2 : 0.8);
+      news('🥇', `${p.n} est champion avec ${CLUBS[p.club].name} (${LEAGUES[champs[p.club]].name}) !`);
+    }
+  });
+  newTables();
+
   S.players.forEach((p) => {
-    p.age++; p.cy--; p.m = 0; p.g = 0; p.o0 = p.ovr;
+    p.age++; p.cy--; p.m = 0; p.g = 0; p.a = 0; p.rs = 0; p.cs = 0; p.log = []; p.o0 = p.ovr;
     if (p.loan) {
       p.club = p.loan.back; p.loan = null;
       if (p.mine) news('🔁', `${p.n} rentre de prêt à ${CLUBS[p.club].name}.`);

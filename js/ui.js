@@ -1,7 +1,7 @@
 /* Interface */
 'use strict';
 
-const UI = { tab: 'bureau', modal: null, toast: null, mk: { country: 'BE', pos: '', sort: 'ovr', fav: false }, lg: 'BE1', mode: 'transfer' };
+const UI = { tab: 'bureau', modal: null, toast: null, mk: { country: 'BE', pos: '', sort: 'ovr', fav: false }, lg: 'BE1', mode: 'transfer', clg: 'BE1' };
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ovrOf = (p) => Math.floor(p.ovr);
@@ -9,6 +9,10 @@ const potTxt = (p) => (p.sc === 0 ? '??' : `${p.potLo}–${p.potHi}`);
 const ovrClass = (o) => (o >= 80 ? 'r5' : o >= 70 ? 'r4' : o >= 60 ? 'r3' : o >= 50 ? 'r2' : 'r1');
 const clubTxt = (p) => `${LEAGUES[CLUBS[p.club].league].flag} ${esc(CLUBS[p.club].name)}`;
 const pct = (x) => Math.round(x * 100) + ' %';
+const avgNote = (p) => (p.m ? (p.rs / p.m).toFixed(1) : '–');
+const noteClass = (n) => (n >= 7.5 ? 'pos' : n < 5.5 ? 'neg' : '');
+const scoreTxt = (x) => `${x.home ? 'Dom.' : 'Ext.'} ${esc(CLUBS[x.opp].name)} ${x.gf}-${x.ga}`;
+const resClass = (x) => (x.gf > x.ga ? 'w' : x.gf < x.ga ? 'l' : 'd');
 
 function toast(r) {
   if (!r || !r.msg) return;
@@ -96,6 +100,9 @@ function viewBureau() {
       <div><small>Clients</small><b>${clients().length}/${office().maxClients}</b></div>
     </div>
     ${S.offers.length ? `<h2>Offres sur la table</h2>${S.offers.map(offerCard).join('')}` : ''}
+    ${S.wk.length ? `<h2>Matchs de mes joueurs</h2><div class="card mlist">${S.wk.map((x) => { const p = getP(x.pid); return p ? `<div data-act="open" data-id="${p.id}">
+      <i class="${resClass(x)}"></i><p><b>${esc(p.n)}</b><small>${scoreTxt(x)}</small></p>
+      ${x.out ? `<span class="mut">${x.out}</span>` : `<span>${x.g ? '⚽'.repeat(x.g) : ''}${x.a ? '🅰️'.repeat(x.a) : ''} <b class="${noteClass(x.n)}">${x.n.toFixed(1)}</b></span>`}</div>` : ''; }).join('')}</div>` : ''}
     <h2>Actualités</h2>
     <div class="card news">${S.news.slice(0, 30).map((n) => `<div><span>${n.i}</span><p>${esc(n.x)}<small>S${n.w} · ${n.s}/${(n.s + 1) % 100}</small></p></div>`).join('')}</div>`;
 }
@@ -106,7 +113,7 @@ function playerRow(p, mine) {
     <span class="ovr ${ovrClass(o)}">${o}</span>
     <div class="pmain"><b>${p.fav && !mine ? '⭐ ' : ''}${esc(p.n)}${p.inj > 0 ? ' 🚑' : ''}${p.loan ? ' 🔁' : ''}</b><small>${p.pos} · ${p.age} ans · ${clubTxt(p)}</small></div>
     <div class="pside">${mine
-    ? `<b>${fmt(p.sal * COMMISSION_SALARY)}/s</b><small>Moral ${Math.round(p.morale)}</small>`
+    ? `<b>${p.m} m · ${p.g} b · ${p.a} pd</b><small>Note ${avgNote(p)} · Moral ${Math.round(p.morale)}</small>`
     : `<b>Pot. ${potTxt(p)}</b><small>${fmt(playerValue(p))}</small>`}</div></div>`;
 }
 
@@ -135,6 +142,21 @@ function viewJoueurs() {
   if (!cl.length) return `<div class="card empty"><p>Aucun client pour l'instant.</p><p>Allez sur le <b>Marché</b>, observez de jeunes Belges et proposez-leur un mandat.</p></div>`;
   return `<div class="card list">${cl.map((p) => playerRow(p, true)).join('')}</div>
     <p class="hint">Vous touchez ${pct(COMMISSION_SALARY)} du salaire de vos clients chaque semaine et ${pct(commissionTransfer())} de chaque transfert.</p>`;
+}
+
+function viewCompet() {
+  const lg = UI.clg, st = standings(lg), mine = {};
+  clients().forEach((p) => { mine[p.club] = (mine[p.club] || 0) + 1; });
+  const played = st[0].t[0], total = leagueRounds(lg), res = S.res[lg];
+  return `<div class="chips">${Object.keys(LEAGUES).map((l) => `<button class="chip ${lg === l ? 'on' : ''}" data-act="clg" data-id="${l}">${LEAGUES[l].flag} ${LEAGUES[l].name}</button>`).join('')}</div>
+    <h2>Classement · journée ${played}/${total}</h2>
+    <div class="card"><table class="tbl stand"><tr><th>#</th><th>Club</th><th>J</th><th>G</th><th>N</th><th>P</th><th>Diff</th><th>Pts</th></tr>
+    ${st.map((x, i) => `<tr class="${mine[x.c.id] ? 'me' : ''} ${i === 0 ? 'top' : ''}"><td>${i + 1}</td><td>${esc(x.c.name)}${mine[x.c.id] ? ` <em>${mine[x.c.id]}👤</em>` : ''}</td>
+      <td>${x.t[0]}</td><td>${x.t[1]}</td><td>${x.t[2]}</td><td>${x.t[3]}</td><td>${x.t[4] - x.t[5] > 0 ? '+' : ''}${x.t[4] - x.t[5]}</td><td><b>${pts(x.t)}</b></td></tr>`).join('')}</table>
+    <small>👤 = clubs où jouent vos clients.</small></div>
+    <h2>Derniers résultats</h2>
+    <div class="card">${res ? `<table class="tbl resu">${res.map(([h, a, gh, ga]) => `<tr class="${mine[h] || mine[a] ? 'me' : ''}"><td>${esc(CLUBS[h].name)}</td><td><b>${gh} - ${ga}</b></td><td>${esc(CLUBS[a].name)}</td></tr>`).join('')}</table>`
+    : `<p class="empty">${played >= total ? 'Championnat terminé.' : 'La saison n\'a pas encore commencé.'}</p>`}</div>`;
 }
 
 function viewAgence() {
@@ -173,7 +195,7 @@ function modalPlayer(p) {
       <div><small>Valeur</small><b>${fmt(playerValue(p))}</b></div>
       <div><small>Salaire/sem.</small><b>${fmt(p.sal)}</b></div>
       <div><small>Temps de jeu</small><b>${pct(playProb(p))}</b></div>
-      <div><small>Saison</small><b>${p.m} m. · ${p.g} b.</b></div>
+      <div><small>Saison</small><b>${p.m} m · ${p.g} b · ${p.a} pd</b></div>
       <div><small>Contrat club</small><b>${p.cy} an(s)</b></div>
     </div>
     ${p.inj > 0 ? `<p class="warn">🚑 Blessé encore ${p.inj} semaine(s).</p>` : ''}`;
@@ -197,6 +219,16 @@ function modalPlayer(p) {
     <button class="btn" data-act="propose" data-id="${p.id}" ${inWindow(S.week) && !p.loan ? '' : 'disabled'}>📣 Transfert ou prêt${p.loan ? ' — en prêt cette saison' : inWindow(S.week) ? ' (1 action)' : ' — mercato fermé'}</button>
     <button class="btn alt" data-act="raise" data-id="${p.id}">💶 Demander une revalorisation (1 action)</button>
     <button class="btn alt" data-act="talk" data-id="${p.id}">💬 Discuter avec lui (1 action)</button>
+    <h4>Saison en cours</h4>
+    <div class="grid3">
+      <div><small>Matchs</small><b>${p.m}</b></div><div><small>Buts</small><b>${p.g}</b></div><div><small>Passes déc.</small><b>${p.a}</b></div>
+      <div><small>Note moyenne</small><b>${avgNote(p)}</b></div><div><small>${p.pos === 'GB' || p.pos === 'DEF' ? 'Clean sheets' : 'Buts/match'}</small><b>${p.pos === 'GB' || p.pos === 'DEF' ? p.cs : p.m ? (p.g / p.m).toFixed(2).replace('.', ',') : '–'}</b></div>
+      <div><small>Progression</small><b class="pos">+${Math.max(0, Math.floor(p.ovr) - Math.floor(p.o0))}</b></div>
+    </div>
+    ${p.log.length ? `<h4>Derniers matchs</h4><div class="mlist">${p.log.map((x) => `<div><i class="${resClass(x)}"></i><p><small>Sem. ${x.w} · ${scoreTxt(x)}</small></p>
+      <span>${x.g ? '⚽'.repeat(x.g) : ''}${x.a ? '🅰️'.repeat(x.a) : ''} <b class="${noteClass(x.n)}">${x.n.toFixed(1)}</b></span></div>`).join('')}</div>` : ''}
+    ${p.sh.length ? `<h4>Saisons précédentes</h4><table class="tbl"><tr><th>Saison</th><th>Club</th><th>M</th><th>B</th><th>PD</th><th>Note</th></tr>
+      ${p.sh.map((h) => `<tr><td>${h.s}</td><td>${esc(h.club)}</td><td>${h.m}</td><td>${h.g}</td><td>${h.a}</td><td>${h.m ? h.avg.toFixed(1) : '–'}</td></tr>`).join('')}</table>` : ''}
     ${p.hist.length ? `<h4>Transferts</h4>${p.hist.map((h) => `<small>${h.s} : ${esc(h.from)} → ${esc(h.to)} (${fmt(h.fee)})</small>`).join('')}` : ''}
     <button class="btn ghost danger" data-act="release" data-id="${p.id}">Rompre le mandat</button>`;
 }
@@ -235,6 +267,7 @@ function modalHelp() {
     <p><b>2. Signez.</b> Proposez-lui un mandat. Plus votre réputation est haute, plus les bons joueurs acceptent. Une prime augmente vos chances.</p>
     <p><b>3. Faites-le jouer.</b> Un jeune progresse surtout s'il joue. Regardez son « temps de jeu » : s'il est faible, prêtez-le dans un club plus modeste.</p>
     <p><b>4. Transférez.</b> Pendant le mercato (semaines 1–6 et 20–23), proposez vos clients à des clubs plus prestigieux. Vous touchez 10 % de l'indemnité, puis 7 % de son salaire chaque semaine.</p>
+    <p><b>Suivez les matchs.</b> Chaque semaine, tous les championnats jouent : résultats de vos joueurs sur le Bureau, classements dans l'onglet Compét.</p>
     <p><b>5. Grandissez.</b> Agrandissez le bureau (plus de clients et d'actions), engagez du personnel et grimpez au classement des agences jusqu'aux 5 grands championnats.</p>
     <p><b>Attention</b> au moral de vos joueurs (un joueur frustré peut partir) et à votre caisse : faillite à -25 k€.</p>
     </div><button class="btn" data-act="close">C'est parti</button>`;
@@ -254,8 +287,8 @@ function renderModal() {
 function render() {
   const app = $('#app');
   if (!S) { app.innerHTML = viewStart(); $('#modal').innerHTML = ''; renderToast(); return; }
-  const views = { bureau: viewBureau, marche: viewMarche, joueurs: viewJoueurs, agence: viewAgence };
-  const tabs = [['bureau', '🏠', 'Bureau'], ['marche', '🔎', 'Marché'], ['joueurs', '👥', 'Joueurs'], ['agence', '🏢', 'Agence']];
+  const views = { bureau: viewBureau, marche: viewMarche, joueurs: viewJoueurs, compet: viewCompet, agence: viewAgence };
+  const tabs = [['bureau', '🏠', 'Bureau'], ['marche', '🔎', 'Marché'], ['joueurs', '👥', 'Joueurs'], ['compet', '🏆', 'Compét.'], ['agence', '🏢', 'Agence']];
   const y = window.scrollY, same = app.dataset.tab === UI.tab;
   app.innerHTML = `${header()}<main>${views[UI.tab]()}</main>
     <nav>${tabs.map(([k, i, l]) => `<button class="${UI.tab === k ? 'on' : ''}" data-act="tab" data-id="${k}"><span>${i}</span>${l}${k === 'bureau' && S.offers.length ? `<em>${S.offers.length}</em>` : ''}</button>`).join('')}</nav>`;
@@ -285,6 +318,7 @@ const ACTIONS = {
     if (r.ok) UI.modal = { type: 'player', id: +d.id }; else UI.modal.keep = true;
   },
   tab(d) { UI.tab = d.id; },
+  clg(d) { UI.clg = d.id; },
   open(d) { UI.modal = { type: 'player', id: +d.id }; },
   close() { UI.modal = null; },
   scout(d) { toast(actScout(+d.id)); },

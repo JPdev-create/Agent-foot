@@ -125,6 +125,7 @@ const GOALS = [
   { id: 'ovr80', label: 'Avoir un client de niveau 80+', reward: 150000 },
   { id: 'top90', label: 'Placer un joueur dans un club de prestige 90+', reward: 500000 },
   { id: 'rep75', label: 'Atteindre 75 de réputation', reward: 1000000 },
+  { id: 'top1', label: 'Devenir l\'agence n°1 du classement', reward: 5000000 },
 ];
 
 const SEASON_WEEKS = 38;

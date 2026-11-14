@@ -1,7 +1,7 @@
 /* Interface */
 'use strict';
 
-const UI = { tab: 'bureau', modal: null, toast: null, mk: { country: 'BE', pos: '', sort: 'ovr' }, lg: 'BE1' };
+const UI = { tab: 'bureau', modal: null, toast: null, mk: { country: 'BE', pos: '', sort: 'ovr', fav: false }, lg: 'BE1', mode: 'transfer' };
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ovrOf = (p) => Math.floor(p.ovr);
@@ -63,11 +63,33 @@ function offerCard(o) {
     </div></div>`;
 }
 
+function eventCard() {
+  const v = eventView();
+  return `<div class="card event"><small>Décision à prendre</small><h3>${esc(v.title)}</h3><p>${esc(v.text)}</p>
+    ${v.choices.map((c, i) => `<button class="btn ${i ? 'alt' : ''}" data-act="event" data-id="${i}">${esc(c)}</button>`).join('')}</div>`;
+}
+
+function recapCard() {
+  const r = S.recap, net = r.inc - r.costs;
+  return `<div class="card recap"><div class="row"><b>🎉 Bilan de la saison ${r.label}</b><button class="btn sm ghost" data-act="recap">OK</button></div>
+    <div class="grid3">
+      <div><small>Gains</small><b class="pos">${fmt(r.inc)}</b></div>
+      <div><small>Frais</small><b class="neg">${fmt(r.costs)}</b></div>
+      <div><small>Résultat</small><b class="${net < 0 ? 'neg' : 'pos'}">${fmt(net)}</b></div>
+      <div><small>Transferts</small><b>${r.tr}</b></div>
+      <div><small>Réputation</small><b>${Math.floor(r.rep0)} → ${Math.floor(r.rep1)}</b></div>
+      <div><small>Classement</small><b>${r.rank}ᵉ / ${S.rivals.length + 1}</b></div>
+    </div>
+    ${r.best ? `<small>Meilleure progression : ${esc(r.best)}</small>` : ''}</div>`;
+}
+
 function viewBureau() {
   const inc = weeklyIncome(), costs = weeklyCosts();
   return `
     ${S.over ? '<div class="card over"><b>Faillite !</b><p>Votre agence a coulé.</p><button class="btn" data-act="reset">Recommencer</button></div>'
-    : `<button class="btn big" data-act="week">▶ Semaine suivante</button>`}
+    : S.event ? eventCard()
+    : `<div class="weekbtns"><button class="btn big" data-act="week">▶ Semaine suivante</button><button class="btn big alt" data-act="fast" title="Avancer de 4 semaines">⏩ ×4</button></div>`}
+    ${S.recap ? recapCard() : ''}
     <div class="card grid3">
       <div><small>Revenus/sem.</small><b class="pos">+${fmt(inc)}</b></div>
       <div><small>Frais/sem.</small><b class="neg">-${fmt(costs)}</b></div>
@@ -82,7 +104,7 @@ function playerRow(p, mine) {
   const o = ovrOf(p);
   return `<div class="prow" data-act="open" data-id="${p.id}">
     <span class="ovr ${ovrClass(o)}">${o}</span>
-    <div class="pmain"><b>${esc(p.n)}${p.inj > 0 ? ' 🚑' : ''}</b><small>${p.pos} · ${p.age} ans · ${clubTxt(p)}</small></div>
+    <div class="pmain"><b>${p.fav && !mine ? '⭐ ' : ''}${esc(p.n)}${p.inj > 0 ? ' 🚑' : ''}${p.loan ? ' 🔁' : ''}</b><small>${p.pos} · ${p.age} ans · ${clubTxt(p)}</small></div>
     <div class="pside">${mine
     ? `<b>${fmt(p.sal * COMMISSION_SALARY)}/s</b><small>Moral ${Math.round(p.morale)}</small>`
     : `<b>Pot. ${potTxt(p)}</b><small>${fmt(playerValue(p))}</small>`}</div></div>`;
@@ -90,7 +112,7 @@ function playerRow(p, mine) {
 
 function viewMarche() {
   const f = UI.mk, locked = f.country !== 'BE' && S.office < INTL_OFFICE;
-  let list = S.players.filter((p) => !p.mine && p.nat === f.country && (!f.pos || p.pos === f.pos));
+  let list = S.players.filter((p) => !p.mine && p.nat === f.country && (!f.pos || p.pos === f.pos) && (!f.fav || p.fav));
   const sorters = {
     ovr: (a, b) => b.ovr - a.ovr, age: (a, b) => a.age - b.age || b.ovr - a.ovr,
     pot: (a, b) => (b.sc ? b.potHi : 0) - (a.sc ? a.potHi : 0) || b.ovr - a.ovr,
@@ -102,9 +124,10 @@ function viewMarche() {
       ${sel('country', Object.keys(COUNTRY_LABEL).map((c) => [c, COUNTRY_LABEL[c]]))}
       ${sel('pos', [['', 'Tous postes'], ...Object.keys(POSITIONS).map((k) => [k, POSITIONS[k]])])}
       ${sel('sort', [['ovr', 'Tri : niveau'], ['pot', 'Tri : potentiel'], ['age', 'Tri : âge'], ['val', 'Tri : moins chers']])}
+      <button class="chip ${f.fav ? 'on' : ''}" data-act="favFilter" title="Joueurs suivis">⭐</button>
     </div>
     ${locked ? `<div class="card warn">🔒 Recrutement à l'étranger débloqué avec le bureau « ${OFFICES[INTL_OFFICE].name} ». Vous pouvez déjà observer.</div>` : ''}
-    <div class="card list">${list.slice(0, 80).map((p) => playerRow(p, false)).join('') || '<p class="empty">Aucun joueur.</p>'}</div>`;
+    <div class="card list">${list.slice(0, 80).map((p) => playerRow(p, false)).join('') || `<p class="empty">${f.fav ? 'Aucun joueur suivi. Ouvrez une fiche et touchez ☆ Suivre.' : 'Aucun joueur.'}</p>`}</div>`;
 }
 
 function viewJoueurs() {
@@ -125,6 +148,9 @@ function viewAgence() {
     <h2>Équipe</h2>
     ${Object.keys(STAFF).map((k) => { const s = STAFF[k]; return `<div class="card up"><div><b>${s.name}${S.staff[k] ? ' ✅' : ''}</b><small>${s.desc} ${fmt(s.weekly)}/sem.</small></div>
       <button class="btn ${S.staff[k] ? 'ghost' : ''}" data-act="staff" data-id="${k}" ${!S.staff[k] && S.cash < s.cost ? 'disabled' : ''}>${S.staff[k] ? 'Licencier' : fmt(s.cost)}</button></div>`; }).join('')}
+    <h2>Classement des agences</h2>
+    <div class="card rank">${[{ n: S.agency.name, rep: S.rep, me: true }, ...S.rivals].sort((a, b) => b.rep - a.rep)
+    .map((a, i) => `<div class="${a.me ? 'me' : ''}"><span>${i + 1}</span><p>${esc(a.n)}</p><b>${Math.floor(a.rep)}</b></div>`).join('')}</div>
     <h2>Objectifs</h2>
     <div class="card goals">${GOALS.map((g) => `<div class="${S.goals[g.id] ? 'done' : ''}"><span>${S.goals[g.id] ? '✅' : '⬜'}</span><p>${g.label}<small>Prime : ${fmt(g.reward)}</small></p></div>`).join('')}</div>
     <h2>Statistiques</h2>
@@ -133,6 +159,7 @@ function viewAgence() {
       <div><small>Record</small><b>${fmt(S.stats.bestFee)}</b></div>
       <div><small>Gains totaux</small><b>${fmt(S.stats.earned)}</b></div>
     </div>
+    <button class="btn alt" data-act="help">❓ Comment jouer</button>
     <button class="btn ghost danger" data-act="reset">Effacer la sauvegarde et recommencer</button>`;
 }
 
@@ -140,7 +167,7 @@ function viewAgence() {
 function modalPlayer(p) {
   const o = ovrOf(p), c = CLUBS[p.club];
   const info = `<div class="mhead"><span class="ovr big ${ovrClass(o)}">${o}</span>
-      <div><h3>${esc(p.n)}</h3><small>${POSITIONS[p.pos]} · ${p.age} ans · ${COUNTRY_LABEL[p.nat]}</small><small>${clubTxt(p)} (prestige ${c.rep})</small></div></div>
+      <div><h3>${esc(p.n)}</h3><small>${POSITIONS[p.pos]} · ${p.age} ans · ${COUNTRY_LABEL[p.nat]}</small><small>${clubTxt(p)} (prestige ${c.rep})${p.loan ? ` · prêté par ${esc(CLUBS[p.loan.back].name)}` : ''}</small></div></div>
     <div class="grid3">
       <div><small>Potentiel</small><b>${potTxt(p)}</b></div>
       <div><small>Valeur</small><b>${fmt(playerValue(p))}</b></div>
@@ -153,6 +180,7 @@ function modalPlayer(p) {
   if (!p.mine) {
     const cd = p.cd > S.t, can = canRecruit(p);
     return `${info}
+      <button class="btn ghost" data-act="fav" data-id="${p.id}">${p.fav ? '⭐ Suivi — retirer' : '☆ Suivre ce joueur'}</button>
       <button class="btn alt" data-act="scout" data-id="${p.id}" ${p.sc >= 2 ? 'disabled' : ''}>🔎 Observer (1 action)${p.sc >= 2 ? ' — rapport complet' : ''}</button>
       <h4>Proposer un mandat (1 action)</h4>
       ${cd ? `<p class="warn">Il refuse de discuter encore ${p.cd - S.t} semaine(s).</p>` : ''}
@@ -166,7 +194,7 @@ function modalPlayer(p) {
       <div><small>Mandat</small><b>${p.mandate} saison(s)</b></div>
       <div><small>Pour vous</small><b class="pos">${fmt(p.sal * COMMISSION_SALARY)}/s</b></div>
     </div>
-    <button class="btn" data-act="propose" data-id="${p.id}" ${inWindow(S.week) ? '' : 'disabled'}>📣 Proposer à un club${inWindow(S.week) ? ' (1 action)' : ' — mercato fermé'}</button>
+    <button class="btn" data-act="propose" data-id="${p.id}" ${inWindow(S.week) && !p.loan ? '' : 'disabled'}>📣 Transfert ou prêt${p.loan ? ' — en prêt cette saison' : inWindow(S.week) ? ' (1 action)' : ' — mercato fermé'}</button>
     <button class="btn alt" data-act="raise" data-id="${p.id}">💶 Demander une revalorisation (1 action)</button>
     <button class="btn alt" data-act="talk" data-id="${p.id}">💬 Discuter avec lui (1 action)</button>
     ${p.hist.length ? `<h4>Transferts</h4>${p.hist.map((h) => `<small>${h.s} : ${esc(h.from)} → ${esc(h.to)} (${fmt(h.fee)})</small>`).join('')}` : ''}
@@ -174,29 +202,52 @@ function modalPlayer(p) {
 }
 
 function modalPropose(p) {
-  const cur = CLUBS[p.club];
+  const cur = CLUBS[p.club], loan = UI.mode === 'loan';
   const list = clubsOf(UI.lg).sort((a, b) => b.rep - a.rep);
-  return `<h3>Proposer ${esc(p.n)}</h3>
-    <small>Niveau ${ovrOf(p)} · potentiel ${potTxt(p)} · valeur ${fmt(playerValue(p))}. Un club regarde le niveau actuel, ou le potentiel pour les jeunes.</small>
+  return `<h3>${loan ? 'Prêter' : 'Transférer'} ${esc(p.n)}</h3>
+    <div class="chips"><button class="chip ${loan ? '' : 'on'}" data-act="mode" data-id="transfer">🤝 Transfert</button>
+      <button class="chip ${loan ? 'on' : ''}" data-act="mode" data-id="loan">🔁 Prêt</button></div>
+    <small>${loan
+    ? `Prêt jusqu'à la fin de la saison dans un club plus modeste, pour jouer et progresser. Temps de jeu actuel : ${pct(playProb(p))}. Aucune commission.`
+    : `Niveau ${ovrOf(p)} · potentiel ${potTxt(p)} · valeur ${fmt(playerValue(p))}. Un club regarde le niveau actuel, ou le potentiel pour les jeunes.`}</small>
     <div class="chips">${Object.keys(LEAGUES).map((l) => `<button class="chip ${UI.lg === l ? 'on' : ''}" data-act="lg" data-id="${l}">${LEAGUES[l].flag} ${LEAGUES[l].name}</button>`).join('')}</div>
     <div class="list">${list.map((c) => {
-    const same = c.id === p.club, low = !playerAccepts(p, c), rej = p.rej[c.id] > S.t;
-    const why = same ? 'Club actuel' : low ? 'Trop petit pour lui' : rej ? 'A déjà refusé' : '';
+    const same = c.id === p.club, rej = p.rej[c.id] > S.t;
+    let why = same ? 'Club actuel' : rej ? 'A déjà refusé' : '', sub;
+    if (loan) {
+      if (!why && !loanOk(p, c)) why = c.rep >= cur.rep ? 'Pas plus modeste que son club' : p.ovr < c.rep - 14 ? 'Il n\'y jouerait pas' : 'Niveau trop faible pour lui';
+      sub = `Temps de jeu estimé : ${pct(clamp(0.5 + (p.ovr - (c.rep - 12)) / 16, 0.05, 0.97))}`;
+    } else {
+      if (!why && !playerAccepts(p, c)) why = 'Trop petit pour lui';
+      sub = c.rep > cur.rep ? 'Club plus prestigieux' : 'Niveau équivalent';
+    }
     return `<div class="prow"><span class="ovr ${ovrClass(c.rep - 10)}">${c.rep}</span>
-        <div class="pmain"><b>${esc(c.name)}</b><small>${why || (c.rep > cur.rep ? 'Club plus prestigieux' : 'Niveau équivalent')}</small></div>
-        <button class="btn sm" data-act="doPropose" data-id="${p.id}" data-club="${esc(c.id)}" ${why ? 'disabled' : ''}>Proposer</button></div>`;
+        <div class="pmain"><b>${esc(c.name)}</b><small>${why || sub}</small></div>
+        <button class="btn sm" data-act="${loan ? 'doLoan' : 'doPropose'}" data-id="${p.id}" data-club="${esc(c.id)}" ${why ? 'disabled' : ''}>${loan ? 'Prêter' : 'Proposer'}</button></div>`;
   }).join('')}</div>
     <button class="btn ghost" data-act="open" data-id="${p.id}">← Retour</button>`;
+}
+
+function modalHelp() {
+  return `<h3>Comment jouer</h3>
+    <div class="help">
+    <p><b>1. Observez.</b> Sur le Marché, ouvrez la fiche d'un jeune et observez-le pour découvrir son potentiel. Suivez (⭐) ceux qui vous plaisent.</p>
+    <p><b>2. Signez.</b> Proposez-lui un mandat. Plus votre réputation est haute, plus les bons joueurs acceptent. Une prime augmente vos chances.</p>
+    <p><b>3. Faites-le jouer.</b> Un jeune progresse surtout s'il joue. Regardez son « temps de jeu » : s'il est faible, prêtez-le dans un club plus modeste.</p>
+    <p><b>4. Transférez.</b> Pendant le mercato (semaines 1–6 et 20–23), proposez vos clients à des clubs plus prestigieux. Vous touchez 10 % de l'indemnité, puis 7 % de son salaire chaque semaine.</p>
+    <p><b>5. Grandissez.</b> Agrandissez le bureau (plus de clients et d'actions), engagez du personnel et grimpez au classement des agences jusqu'aux 5 grands championnats.</p>
+    <p><b>Attention</b> au moral de vos joueurs (un joueur frustré peut partir) et à votre caisse : faillite à -25 k€.</p>
+    </div><button class="btn" data-act="close">C'est parti</button>`;
 }
 
 function renderModal() {
   const m = UI.modal;
   if (!m) { $('#modal').innerHTML = ''; return; }
-  const p = getP(m.id);
-  if (!p) { UI.modal = null; $('#modal').innerHTML = ''; return; }
+  const p = m.type === 'help' ? null : getP(m.id);
+  if (!p && m.type !== 'help') { UI.modal = null; $('#modal').innerHTML = ''; return; }
   const sc = $('#modal .sheet') ? $('#modal .sheet').scrollTop : 0;
   $('#modal').innerHTML = `<div class="backdrop" data-act="close"></div><div class="sheet">
-    <button class="x" data-act="close">✕</button>${m.type === 'propose' ? modalPropose(p) : modalPlayer(p)}</div>`;
+    <button class="x" data-act="close">✕</button>${m.type === 'help' ? modalHelp() : m.type === 'propose' ? modalPropose(p) : modalPlayer(p)}</div>`;
   if (m.keep) $('#modal .sheet').scrollTop = sc;
 }
 
@@ -215,14 +266,30 @@ function render() {
 
 /* ---------- Événements ---------- */
 const ACTIONS = {
-  start() { newGame($('#in-name').value.trim(), $('#in-city').value); },
+  start() { newGame($('#in-name').value.trim(), $('#in-city').value); UI.modal = { type: 'help' }; },
   week() { nextWeek(); },
+  fast() {
+    for (let i = 0; i < 4; i++) {
+      nextWeek();
+      if (S.over || S.event || S.offers.length || S.recap || S.week === 20) break;
+    }
+  },
+  event(d) { toast(resolveEvent(+d.id)); },
+  recap() { S.recap = null; save(); },
+  fav(d) { actFav(+d.id); },
+  favFilter() { UI.mk.fav = !UI.mk.fav; },
+  help() { UI.modal = { type: 'help' }; },
+  mode(d) { UI.mode = d.id; UI.modal.keep = false; },
+  doLoan(d) {
+    const r = actLoan(+d.id, d.club); toast(r);
+    if (r.ok) UI.modal = { type: 'player', id: +d.id }; else UI.modal.keep = true;
+  },
   tab(d) { UI.tab = d.id; },
   open(d) { UI.modal = { type: 'player', id: +d.id }; },
   close() { UI.modal = null; },
   scout(d) { toast(actScout(+d.id)); },
   sign(d) { const r = actSign(+d.id, +d.lv); toast(r); if (r.ok) UI.modal = null; },
-  propose(d) { UI.modal = { type: 'propose', id: +d.id }; },
+  propose(d) { UI.modal = { type: 'propose', id: +d.id }; UI.lg = CLUBS[getP(+d.id).club].league; },
   lg(d) { UI.lg = d.id; UI.modal.keep = false; },
   doPropose(d) {
     const r = actPropose(+d.id, d.club); toast(r);

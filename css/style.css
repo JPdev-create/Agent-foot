@@ -53,7 +53,7 @@ main { padding: 12px; }
 .news p, .goals p { margin: 0; font-size: 13.5px; }
 .goals .done p { color: var(--mut); text-decoration: line-through; }
 
-.filters { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 10px; }
+.filters { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 6px; margin-bottom: 10px; }
 select, input { width: 100%; background: var(--panel2); color: var(--txt); border: 1px solid var(--line); border-radius: 10px; padding: 9px 8px; font: inherit; font-size: 13px; }
 .list { padding: 2px 12px; }
 .prow { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
@@ -90,3 +90,14 @@ nav em { position: absolute; top: 4px; left: 56%; background: var(--bad); color:
 .start p { color: var(--mut); margin-bottom: 22px; }
 .start label { display: block; text-align: left; font-size: 13px; color: var(--mut); margin-bottom: 12px; }
 .start input, .start select { margin-top: 4px; font-size: 15px; padding: 12px; }
+
+.weekbtns { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.weekbtns .btn { margin: 0 0 12px; }
+.card.event { border-color: var(--acc2); }
+.card.event h3 { margin: 2px 0 6px; } .card.event p { margin: 0 0 6px; font-size: 14px; }
+.card.recap { border-color: var(--acc); }
+.rank > div { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.rank > div:last-child { border: 0; }
+.rank span { width: 22px; color: var(--mut); font-weight: 700; } .rank p { flex: 1; margin: 0; }
+.rank .me { color: var(--acc); font-weight: 700; } .rank .me span { color: var(--acc); }
+.help p { font-size: 14px; margin: 10px 0; color: var(--txt); }

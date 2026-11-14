@@ -17,6 +17,9 @@ La partie est sauvegardée automatiquement dans le navigateur.
 - Les transferts ne sont possibles que pendant le **mercato** (semaines 1–6 et 20–23).
 - Un jeune qui ne joue pas progresse moins vite : choisissez bien ses clubs.
 - Agrandissez le bureau pour gérer plus de clients, puis recruter à l'étranger.
+- **Prêtez** un jeune qui ne joue pas dans un club plus modeste jusqu'à la fin de la saison.
+- Des **événements** vous demandent de trancher (agent rival, presse, mal du pays...).
+- Grimpez au **classement des agences** face à 8 concurrents.
 
 ## Structure
 

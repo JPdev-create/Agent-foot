@@ -11,7 +11,7 @@ const clubTxt = (p) => `${LEAGUES[CLUBS[p.club].league].flag} ${esc(CLUBS[p.club
 const pct = (x) => Math.round(x * 100) + ' %';
 const avgNote = (p) => (p.m ? (p.rs / p.m).toFixed(1) : '–');
 const noteClass = (n) => (n >= 7.5 ? 'pos' : n < 5.5 ? 'neg' : '');
-const scoreTxt = (x) => `${x.home ? 'Dom.' : 'Ext.'} ${esc(CLUBS[x.opp].name)} ${x.gf}-${x.ga}`;
+const scoreTxt = (x) => `${x.cup ? EU[x.cup].icon + ' ' + EU[x.cup].short : x.home ? 'Dom.' : 'Ext.'} ${esc(CLUBS[x.opp].name)} ${x.gf}-${x.ga}`;
 const resClass = (x) => (x.gf > x.ga ? 'w' : x.gf < x.ga ? 'l' : 'd');
 
 function toast(r) {
@@ -153,11 +153,29 @@ function viewJoueurs() {
     <p class="hint">Vous touchez ${pct(COMMISSION_SALARY)} du salaire de vos clients chaque semaine et ${pct(commissionTransfer())} de chaque transfert.</p>`;
 }
 
+function competChips() {
+  return `<div class="chips">${Object.keys(LEAGUES).map((l) => `<button class="chip ${UI.clg === l ? 'on' : ''}" data-act="clg" data-id="${l}">${LEAGUES[l].flag} ${LEAGUES[l].name}</button>`).join('')}
+    ${Object.keys(EU).map((k) => `<button class="chip ${UI.clg === k ? 'on' : ''}" data-act="clg" data-id="${k}">${EU[k].icon} ${EU[k].name}</button>`).join('')}</div>`;
+}
+
+function viewEurope(k, mine) {
+  const cup = S.eu[k], r = cup.rounds.length;
+  const row = ([h, a, gh, ga, pen]) => `<tr class="${mine[h] || mine[a] ? 'me' : ''}"><td>${pen === 1 ? '✓ ' : ''}${esc(CLUBS[h].name)}</td><td><b>${gh} - ${ga}</b>${pen ? '<small>t.a.b.</small>' : ''}</td><td>${esc(CLUBS[a].name)}${pen === 2 ? ' ✓' : ''}</td></tr>`;
+  return `${competChips()}
+    ${cup.champ ? `<div class="card champ">${EU[k].icon}<b>${esc(CLUBS[cup.champ].name)}</b><small>Vainqueur de la ${EU[k].name}</small></div>`
+    : `<h2>${EU_ROUNDS[r]} · semaine ${EU_WEEKS[r]}</h2><div class="card list">${cup.alive.map((id, i) => `${i % 2 === 0 && i ? '<hr>' : ''}<div class="prow tie ${mine[id] ? 'me' : ''}"><span class="ovr sm ${ovrClass(CLUBS[id].rep - 10)}">${CLUBS[id].rep}</span>
+      <div class="pmain"><b>${esc(CLUBS[id].name)}${mine[id] ? ` ${mine[id]}👤` : ''}</b><small>${LEAGUES[CLUBS[id].league].flag} ${LEAGUES[CLUBS[id].league].name}</small></div></div>`).join('')}</div>`}
+    ${cup.rounds.map((ties, i) => `<h2>${EU_ROUNDS[i]}</h2><div class="card"><table class="tbl resu">${ties.map(row).join('')}</table></div>`).reverse().join('')}
+    <p class="hint">16 clubs qualifiés selon les classements de la saison précédente. Élimination directe sur un match.</p>`;
+}
+
 function viewCompet() {
-  const lg = UI.clg, st = standings(lg), mine = {};
+  const mine = {};
   clients().forEach((p) => { mine[p.club] = (mine[p.club] || 0) + 1; });
+  if (EU[UI.clg]) return viewEurope(UI.clg, mine);
+  const lg = UI.clg, st = standings(lg), scorers = topScorers(lg, 10);
   const played = st[0].t[0], total = leagueRounds(lg), res = S.res[lg];
-  return `<div class="chips">${Object.keys(LEAGUES).map((l) => `<button class="chip ${lg === l ? 'on' : ''}" data-act="clg" data-id="${l}">${LEAGUES[l].flag} ${LEAGUES[l].name}</button>`).join('')}</div>
+  return `${competChips()}
     <h2>Classement · journée ${played}/${total}</h2>
     <div class="card"><table class="tbl stand"><tr><th>#</th><th>Club</th><th>J</th><th>G</th><th>N</th><th>P</th><th>Diff</th><th>Pts</th></tr>
     ${st.map((x, i) => `<tr class="${mine[x.c.id] ? 'me' : ''} ${i === 0 ? 'top' : ''}"><td>${i + 1}</td><td>${esc(x.c.name)}${mine[x.c.id] ? ` <em>${mine[x.c.id]}👤</em>` : ''}</td>
@@ -165,7 +183,11 @@ function viewCompet() {
     <small>👤 = clubs où jouent vos clients.</small></div>
     <h2>Derniers résultats</h2>
     <div class="card">${res ? `<table class="tbl resu">${res.map(([h, a, gh, ga]) => `<tr class="${mine[h] || mine[a] ? 'me' : ''}"><td>${esc(CLUBS[h].name)}</td><td><b>${gh} - ${ga}</b></td><td>${esc(CLUBS[a].name)}</td></tr>`).join('')}</table>`
-    : `<p class="empty">${played >= total ? 'Championnat terminé.' : 'La saison n\'a pas encore commencé.'}</p>`}</div>`;
+    : `<p class="empty">${played >= total ? 'Championnat terminé.' : 'La saison n\'a pas encore commencé.'}</p>`}</div>
+    <h2>Meilleurs buteurs</h2>
+    <div class="card">${scorers.length ? `<table class="tbl scor"><tr><th>#</th><th>Joueur</th><th>Buts</th></tr>
+      ${scorers.map((x, i) => `<tr class="${x.mine ? 'me' : ''}" ${x.pid ? `data-act="open" data-id="${x.pid}"` : ''}><td>${i + 1}</td><td>${esc(x.n)}${x.mine ? ' 👤' : ''}<small>${esc(x.club)}</small></td><td><b>${x.g}</b></td></tr>`).join('')}</table>`
+    : '<p class="empty">Aucun but pour l\'instant.</p>'}</div>`;
 }
 
 function viewAgence() {
@@ -190,6 +212,10 @@ function viewAgence() {
       <div><small>Record</small><b>${fmt(S.stats.bestFee)}</b></div>
       <div><small>Gains totaux</small><b>${fmt(S.stats.earned)}</b></div>
     </div>
+    <h2>Application</h2>
+    <div class="card">${UI.standalone ? '<small>✅ Application installée. Elle se met à jour toute seule à chaque ouverture (connexion nécessaire).</small>'
+    : UI.installEvt ? '<button class="btn" data-act="install" style="margin-top:0">📲 Installer l\'application</button><small>Ajoute Agent Foot à votre écran d\'accueil. Mises à jour automatiques.</small>'
+    : '<small><b>Installer sur le téléphone</b><br>Android (Chrome) : menu ⋮ → « Installer l\'application » ou « Ajouter à l\'écran d\'accueil ».<br>iPhone (Safari) : bouton Partager → « Sur l\'écran d\'accueil ».<br>L\'appli se met ensuite à jour toute seule à chaque ouverture.</small>'}</div>
     <button class="btn alt" data-act="help">❓ Comment jouer</button>
     <button class="btn ghost danger" data-act="reset">Effacer la sauvegarde et recommencer</button>`;
 }
@@ -238,6 +264,7 @@ function modalPlayer(p) {
       <div><small>Note moyenne</small><b>${avgNote(p)}</b></div><div><small>${p.pos === 'GB' || p.pos === 'DEF' ? 'Clean sheets' : 'Buts/match'}</small><b>${p.pos === 'GB' || p.pos === 'DEF' ? p.cs : p.m ? (p.g / p.m).toFixed(2).replace('.', ',') : '–'}</b></div>
       <div><small>Progression</small><b class="pos">+${Math.max(0, Math.floor(p.ovr) - Math.floor(p.o0))}</b></div>
     </div>
+    ${p.em ? `<small>Coupe d'Europe : ${p.em} match(s), ${p.eg} but(s)</small>` : ''}
     ${p.log.length ? `<h4>Derniers matchs</h4><div class="mlist">${p.log.map((x) => `<div><i class="${resClass(x)}"></i><p><small>Sem. ${x.w} · ${scoreTxt(x)}</small></p>
       <span>${x.g ? '⚽'.repeat(x.g) : ''}${x.a ? '🅰️'.repeat(x.a) : ''} <b class="${noteClass(x.n)}">${x.n.toFixed(1)}</b></span></div>`).join('')}</div>` : ''}
     ${p.sh.length ? `<h4>Saisons précédentes</h4><table class="tbl"><tr><th>Saison</th><th>Club</th><th>M</th><th>B</th><th>PD</th><th>Note</th></tr>
@@ -346,6 +373,7 @@ const ACTIONS = {
   },
   raise(d) { toast(actRaise(+d.id)); },
   talk(d) { toast(actTalk(+d.id)); },
+  install() { const e = UI.installEvt; UI.installEvt = null; if (e) e.prompt(); },
   renew(d) { toast(actRenew(+d.id)); },
   jv(d) { UI.jv = d.id; },
   release(d) { if (confirm('Rompre le mandat de ce joueur ?')) { actRelease(+d.id); UI.modal = null; } },
@@ -367,6 +395,17 @@ document.addEventListener('change', (e) => {
   const k = e.target.dataset && e.target.dataset.filter;
   if (k) { UI.mk[k] = e.target.value; render(); }
 });
+
+/* ---------- Application installable (PWA) ---------- */
+UI.standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); UI.installEvt = e; render(); });
+window.addEventListener('appinstalled', () => { UI.installEvt = null; UI.standalone = true; render(); });
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    // Vérifie les mises à jour à chaque retour sur l'appli
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update(); });
+  }).catch(() => { /* hors ligne ou non supporté */ });
+}
 
 load();
 render();

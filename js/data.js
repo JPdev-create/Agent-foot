@@ -142,4 +142,9 @@ const GOALS = [
 ];
 
 const SEASON_WEEKS = 38;
+
+/* Coupes d'Europe : 16 clubs, élimination directe sur un match */
+const EU = { C1: { name: 'Ligue des champions', short: 'LDC', icon: '🏆' }, C3: { name: 'Ligue Europa', short: 'C3', icon: '🥈' } };
+const EU_WEEKS = [10, 16, 26, 34];
+const EU_ROUNDS = ['8es de finale', 'Quarts de finale', 'Demi-finales', 'Finale'];
 const inWindow = (w) => (w >= 1 && w <= 6) || (w >= 20 && w <= 23);

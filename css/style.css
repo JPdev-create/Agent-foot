@@ -10,7 +10,7 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: v
 h3 { margin: 0; font-size: 19px; } h4 { margin: 16px 0 6px; font-size: 14px; color: var(--mut); }
 .pos { color: var(--acc); } .neg { color: var(--bad); }
 
-header { position: sticky; top: 0; z-index: 5; background: rgba(12, 26, 20, .96); border-bottom: 1px solid var(--line); padding: 10px 14px; }
+header { position: sticky; top: 0; z-index: 5; background: rgba(12, 26, 20, .96); border-bottom: 1px solid var(--line); padding: calc(10px + env(safe-area-inset-top)) 14px 10px; }
 .h1 { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
 .h1 b { font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .win { font-size: 11px; padding: 3px 8px; border-radius: 99px; background: var(--panel2); color: var(--mut); white-space: nowrap; }
@@ -124,3 +124,9 @@ main > .chips { padding-top: 0; }
 .pstats tr { cursor: pointer; } .pstats td small { font-size: 11px; }
 .pstats tr.tot td { color: var(--mut); font-weight: 700; cursor: default; }
 main > .chips { padding-bottom: 10px; }
+
+.resu td small { font-size: 10px; }
+.scor td:first-child { color: var(--mut); width: 22px; } .scor td small { font-size: 11px; } .scor tr[data-act] { cursor: pointer; }
+.card.champ { text-align: center; font-size: 34px; border-color: var(--acc2); } .card.champ b { display: block; font-size: 20px; }
+.prow.tie { cursor: default; padding: 7px 0; } .prow.tie.me b { color: var(--acc); }
+.list hr { border: 0; border-top: 2px solid var(--line); margin: 4px 0; } .list hr + .prow { border-top: 0; }

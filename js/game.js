@@ -76,7 +76,7 @@ function genPlayer(country, ageMin, ageMax) {
   const p = {
     id: S.nextId++, n: genName(country), nat: country, age, pos, ovr, pot,
     club: club.id, sal: 0, cy: rint(1, 3), mine: false, mandate: 0, morale: 70, inj: 0,
-    sc: 0, potLo: 0, potHi: 0, cd: 0, rej: {}, m: 0, g: 0, a: 0, rs: 0, cs: 0, log: [], sh: [], hist: [], fav: false, loan: null, o0: ovr, tr: Math.random() < 0.6 ? pick(TRAIT_KEYS) : '', intl: false, aw: [],
+    sc: 0, potLo: 0, potHi: 0, cd: 0, rej: {}, m: 0, g: 0, a: 0, rs: 0, cs: 0, log: [], sh: [], hist: [], fav: false, loan: null, o0: ovr, tr: Math.random() < 0.6 ? pick(TRAIT_KEYS) : '', intl: false, aw: [], em: 0, eg: 0,
   };
   p.sal = fairSalary(p, club);
   return p;
@@ -145,10 +145,13 @@ function migrate() {
   applyClubs();
   if (!S.tab) newTables();
   if (!S.res) S.res = {};
+  if (!S.gs) { S.gs = {}; CLUB_IDS.forEach((id) => { S.gs[id] = [0, 0, 0]; }); }
+  if (!S.eu) newEurope(euQualified());
   if (!S.wk) S.wk = [];
   S.players.forEach((p) => {
     if (p.a === undefined) { p.a = 0; p.rs = 0; p.cs = 0; p.log = []; p.sh = []; }
     if (p.tr === undefined) { p.tr = Math.random() < 0.6 ? pick(TRAIT_KEYS) : ''; p.intl = false; p.aw = []; }
+    if (p.em === undefined) { p.em = 0; p.eg = 0; }
     if (p.fav === undefined) p.fav = false;
     if (p.loan === undefined) p.loan = null;
     if (p.o0 === undefined) p.o0 = p.ovr;
@@ -440,8 +443,8 @@ const GROWTH_K = { 15: 0.34, 16: 0.34, 17: 0.34, 18: 0.32, 19: 0.28, 20: 0.24, 2
 
 /* ---------- Championnats : calendrier, matchs, classements ---------- */
 function newTables() {
-  S.tab = {}; S.form = {}; S.res = {}; S.wk = [];
-  CLUB_IDS.forEach((id) => { S.tab[id] = [0, 0, 0, 0, 0, 0]; S.form[id] = rnd(-3, 3); }); // J G N P BP BC
+  S.tab = {}; S.form = {}; S.res = {}; S.wk = []; S.gs = {};
+  CLUB_IDS.forEach((id) => { S.tab[id] = [0, 0, 0, 0, 0, 0]; S.form[id] = rnd(-3, 3); S.gs[id] = [0, 0, 0]; }); // J G N P BP BC
 }
 const leagueRounds = (lg) => { const n = CLUB_LIST[lg].length; return (n >= 16 ? 2 : 3) * (n - 1); };
 
@@ -464,6 +467,81 @@ function standings(lg) {
     .sort((a, b) => pts(b.t) - pts(a.t) || (b.t[4] - b.t[5]) - (a.t[4] - a.t[5]) || b.t[4] - a.t[4] || b.c.rep - a.c.rep);
 }
 
+/* Buteurs vedettes de chaque club (3 par club, noms fixes pour quelques saisons) */
+function hashStr(s) { let h = 7; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
+function starName(id, i) {
+  const n = NAMES[LEAGUES[CLUB_DEFAULT[id].league].country], h = hashStr(id + '#' + i);
+  const gen = Math.floor((S.season + h % 6) / 6);
+  return n.first[(h + gen * 7) % n.first.length] + ' ' + n.last[((h >>> 8) + gen * 11) % n.last.length];
+}
+function starGoals(id, goals) {
+  for (let k = 0; k < goals; k++) {
+    const r = Math.random();
+    if (r < 0.24) S.gs[id][0]++; else if (r < 0.40) S.gs[id][1]++; else if (r < 0.52) S.gs[id][2]++;
+  }
+}
+function topScorers(lg, n) {
+  const out = [];
+  clubsOf(lg).forEach((c) => S.gs[c.id].forEach((g, i) => { if (g > 0) out.push({ n: starName(c.id, i), club: c.name, g }); }));
+  S.players.forEach((p) => { if (p.g > 0 && CLUBS[p.club].league === lg) out.push({ n: p.n, club: CLUBS[p.club].name, g: p.g, pid: p.id, mine: p.mine }); });
+  return out.sort((a, b) => b.g - a.g).slice(0, n || 10);
+}
+
+/* ---------- Coupes d'Europe ---------- */
+function euQualified() {
+  const q = { C1: [], C3: [] };
+  ['ENG', 'ESP', 'ITA', 'GER', 'FRA'].forEach((lg) => {
+    const st = standings(lg).map((x) => x.c.id);
+    q.C1.push(...st.slice(0, 3)); q.C3.push(...st.slice(3, 6));
+  });
+  const be = standings('BE1').map((x) => x.c.id);
+  q.C1.push(be[0]); q.C3.push(be[1]);
+  return q;
+}
+function newEurope(q) {
+  S.eu = {};
+  for (const k in q) S.eu[k] = { alive: q[k].slice().sort(() => Math.random() - 0.5), rounds: [], champ: null };
+}
+function playEuRound(k, silent) {
+  const cup = S.eu[k], r = cup.rounds.length, a = cup.alive, ties = [], win = [];
+  if (a.length < 2) return;
+  for (let i = 0; i < a.length; i += 2) {
+    const h = a[i], w = a[i + 1], d = (CLUBS[h].rep + S.form[h]) - (CLUBS[w].rep + S.form[w]);
+    const gh = poisson(clamp(1.3 * Math.exp(d / 22), 0.3, 3.4)), ga = poisson(clamp(1.3 * Math.exp(-d / 22), 0.3, 3.4));
+    let pen = 0;
+    if (gh === ga) pen = Math.random() < 0.5 + d / 100 ? 1 : 2;
+    const winner = gh > ga || pen === 1 ? h : w, loser = winner === h ? w : h;
+    ties.push([h, w, gh, ga, pen]); win.push(winner);
+    if (silent) continue;
+    S.players.forEach((p) => {
+      if (p.club === h) playMatch(p, { opp: w, home: true, gf: gh, ga }, k);
+      else if (p.club === w) playMatch(p, { opp: h, home: false, gf: ga, ga: gh }, k);
+    });
+    if (win.length * 2 > 1 && a.length > 2 && clients().some((p) => p.club === winner || p.club === loser)) {
+      news(EU[k].icon, `${EU[k].name}, ${EU_ROUNDS[r].toLowerCase()} : ${CLUBS[winner].name} élimine ${CLUBS[loser].name} (${winner === h ? gh : ga}-${winner === h ? ga : gh}${pen ? ' t.a.b.' : ''}).`);
+    }
+  }
+  cup.rounds.push(ties); cup.alive = win;
+  if (win.length === 1) {
+    cup.champ = win[0];
+    const t = ties[0], label = `${S.season}/${(S.season + 1) % 100}`;
+    setClub(win[0], CLUBS[win[0]].rep + 1);
+    news(EU[k].icon, `FINALE de la ${EU[k].name} : ${CLUBS[t[0]].name} ${t[2]}-${t[3]} ${CLUBS[t[1]].name}${t[4] ? ' (t.a.b.)' : ''}. ${CLUBS[win[0]].name} soulève le trophée !`);
+    clients().filter((p) => p.club === win[0]).forEach((p) => {
+      p.aw.unshift(`${label} : vainqueur de la ${EU[k].name}`); addRep(k === 'C1' ? 3 : 1.5); p.morale = clamp(p.morale + 15, 0, 100);
+      news('🥇', `${p.n} remporte la ${EU[k].name} avec ${CLUBS[p.club].name} !`);
+    });
+  }
+}
+function playEurope() {
+  const r = EU_WEEKS.indexOf(S.week);
+  if (r < 0) return;
+  for (const k in EU) {
+    while (S.eu[k].rounds.length < r) playEuRound(k, true);
+    if (S.eu[k].rounds.length === r) playEuRound(k, false);
+  }
+}
+
 /* Joue la journée de la semaine dans tous les championnats ; renvoie le résultat par club */
 function playMatchday() {
   const md = S.week - 2, byClub = {};
@@ -475,6 +553,7 @@ function playMatchday() {
       const th = S.tab[h], ta = S.tab[a];
       th[0]++; ta[0]++; th[4] += gh; th[5] += ga; ta[4] += ga; ta[5] += gh;
       if (gh > ga) { th[1]++; ta[3]++; } else if (gh < ga) { ta[1]++; th[3]++; } else { th[2]++; ta[2]++; }
+      starGoals(h, gh); starGoals(a, ga);
       byClub[h] = { opp: a, home: true, gf: gh, ga };
       byClub[a] = { opp: h, home: false, gf: ga, ga: gh };
       return [h, a, gh, ga];
@@ -483,17 +562,17 @@ function playMatchday() {
   return byClub;
 }
 
-function simPlayer(p, res) {
+/* Participation d'un joueur à un match (championnat, ou coupe d'Europe si cup est renseigné) */
+function playMatch(p, res, cup) {
+  if (!res) return;
   if (p.inj > 0) {
-    p.inj--;
-    if (res && p.mine) S.wk.push({ pid: p.id, out: 'Blessé', opp: res.opp, home: res.home, gf: res.gf, ga: res.ga });
+    if (p.mine) S.wk.push({ pid: p.id, out: 'Blessé', opp: res.opp, home: res.home, gf: res.gf, ga: res.ga, cup });
     return;
   }
-  const pp = playProb(p);
-  const plays = res && Math.random() < pp;
-  if (res && !plays) {
-    if (p.mine) S.wk.push({ pid: p.id, out: 'Non utilisé', opp: res.opp, home: res.home, gf: res.gf, ga: res.ga });
-  } else if (plays) {
+  const plays = Math.random() < playProb(p);
+  if (!plays) {
+    if (p.mine) S.wk.push({ pid: p.id, out: 'Non utilisé', opp: res.opp, home: res.home, gf: res.gf, ga: res.ga, cup });
+  } else {
     const lvl = clamp(p.ovr / CLUBS[p.club].rep, 0.6, 1.3), def = p.pos === 'GB' || p.pos === 'DEF';
     let g = 0, a = 0;
     for (let i = 0; i < res.gf; i++) {
@@ -505,15 +584,23 @@ function simPlayer(p, res) {
       + (res.gf > res.ga ? 0.3 : res.gf < res.ga ? -0.3 : 0);
     if (def) n += (res.ga === 0 ? 0.6 : 0) - Math.max(0, res.ga - 2) * 0.3;
     n = Math.round(clamp(n, 3, 10) * 10) / 10;
-    p.m++; p.g += g; p.a += a; p.rs += n;
-    if (def && res.ga === 0) p.cs++;
+    if (cup) { p.em++; p.eg += g; } else {
+      p.m++; p.g += g; p.a += a; p.rs += n;
+      if (def && res.ga === 0) p.cs++;
+    }
     if (p.mine) {
-      const line = { pid: p.id, w: S.week, opp: res.opp, home: res.home, gf: res.gf, ga: res.ga, g, a, n };
+      const line = { pid: p.id, w: S.week, opp: res.opp, home: res.home, gf: res.gf, ga: res.ga, g, a, n, cup };
       S.wk.push(line); p.log.unshift(line); if (p.log.length > 6) p.log.length = 6;
       p.morale = clamp(p.morale + (n >= 7.5 ? 0.4 : n < 5.5 ? -0.3 : 0), 0, 100);
       if (g >= 2 || n >= 9) news('⚽', `${p.n} brille avec ${CLUBS[p.club].name} contre ${CLUBS[res.opp].name} : ${g} but(s), ${a} passe(s), note ${n.toFixed(1)}.`);
     }
   }
+}
+
+function simPlayer(p, res) {
+  playMatch(p, res, null);
+  if (p.inj > 0) { p.inj--; return; }
+  const pp = playProb(p);
   const k = GROWTH_K[p.age] || 0;
   if (k > 0 && p.ovr < p.pot) {
     const boost = (p.mine && S.staff.coach ? 1.15 : 1) * ({ pro: 1.15, amb: 1.08, fet: 0.9 }[p.tr] || 1);
@@ -528,6 +615,7 @@ function nextWeek() {
   S.t++; S.week++;
   S.wk = [];
   const results = playMatchday();
+  playEurope();
   S.players.forEach((p) => simPlayer(p, results[p.club]));
 
   const inc = weeklyIncome(), costs = weeklyCosts();
@@ -662,11 +750,20 @@ function endSeason() {
     }
   });
   seasonAwards(cl);
+  for (const lg in LEAGUES) {
+    const top = topScorers(lg, 1)[0], p = top && top.mine ? getP(top.pid) : null;
+    if (p) {
+      p.aw.unshift(`${label} : meilleur buteur de ${LEAGUES[lg].name} (${p.g} buts)`); addRep(LEAGUES[lg].big ? 3 : 1);
+      news('👑', `${p.n} termine meilleur buteur de ${LEAGUES[lg].name} avec ${p.g} buts !`);
+    }
+  }
+  const euq = euQualified();
   moveClubs(cl);
   newTables();
+  newEurope(euq);
 
   S.players.forEach((p) => {
-    p.age++; p.cy--; p.m = 0; p.g = 0; p.a = 0; p.rs = 0; p.cs = 0; p.log = []; p.o0 = p.ovr;
+    p.age++; p.cy--; p.m = 0; p.g = 0; p.a = 0; p.rs = 0; p.cs = 0; p.em = 0; p.eg = 0; p.log = []; p.o0 = p.ovr;
     if (p.loan) {
       p.club = p.loan.back; p.loan = null;
       if (p.mine) news('🔁', `${p.n} rentre de prêt à ${CLUBS[p.club].name}.`);

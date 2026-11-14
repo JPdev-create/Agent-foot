@@ -27,8 +27,20 @@ La partie est sauvegardée automatiquement dans le navigateur.
 - **Prolongations** de contrat, **récompenses** de fin de saison, sélections nationales.
 - **Montées et descentes** entre les trois divisions belges ; le prestige des clubs évolue.
 
+- **Coupes d'Europe** (Ligue des champions et Ligue Europa) et **classement des buteurs**.
+
+## Installer l'application
+
+Le jeu est une application web installable (PWA). Ouvrez le site sur le téléphone puis :
+
+- Android (Chrome) : menu ⋮ → « Installer l'application » ;
+- iPhone (Safari) : Partager → « Sur l'écran d'accueil ».
+
+L'appli récupère la dernière version à chaque ouverture et reste jouable hors ligne.
+
 ## Structure
 
 - `js/data.js` — championnats, clubs, noms, bureaux, objectifs
 - `js/game.js` — règles et simulation
 - `js/ui.js` — interface
+- `sw.js`, `manifest.webmanifest`, `icons/` — application installable

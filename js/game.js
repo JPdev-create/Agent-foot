@@ -44,7 +44,7 @@ const playerAccepts = (p, club) => club.rep >= CLUBS[p.club].rep - (playProb(p) 
 
 function signChance(p, bonusLevel) {
   const req = (p.ovr - 42) * 1.6 + Math.max(0, p.pot - 70) * 0.8 + (p.nat !== 'BE' ? 10 : 0);
-  return clamp(0.5 + (S.rep - req) / 40 + [0, 0.15, 0.3][bonusLevel], 0.03, 0.95);
+  return clamp(0.5 + (S.rep - req) / 40 + [0, 0.15, 0.3][bonusLevel] + DIFFS[S.diff].sign, 0.03, 0.95);
 }
 function signBonusCost(p, level) {
   const v = playerValue(p);
@@ -85,10 +85,10 @@ function genPlayer(country, ageMin, ageMax, boost) {
 
 const MARKET_SIZE = { BE: 130, FR: 28, EN: 28, ES: 28, IT: 28, DE: 28 };
 
-function newGame(name, city) {
+function newGame(name, city, diff) {
   S = {
     v: 1, agency: { name: name || 'Mon Agence', city: city || 'Liège' },
-    cash: 20000, rep: 5, week: 1, season: 2026, t: 0, office: 0,
+    cash: DIFFS[diff === undefined ? 1 : diff].cash, diff: diff === undefined ? 1 : diff, rep: 5, week: 1, season: 2026, t: 0, office: 0,
     staff: { scout: false, nego: false, coach: false },
     actions: OFFICES[0].actions, players: [], nextId: 1, offers: [], news: [],
     stats: { transfers: 0, bestFee: 0, earned: 0 }, goals: {}, over: false,
@@ -115,7 +115,7 @@ const getP = (id) => S.players.find((p) => p.id === id);
 const clients = () => S.players.filter((p) => p.mine);
 const office = () => OFFICES[S.office];
 const weeklyCosts = () => office().weekly + Object.keys(STAFF).reduce((s, k) => s + (S.staff[k] ? STAFF[k].weekly : 0), 0);
-const weeklyIncome = () => Math.round(clients().reduce((s, p) => s + p.sal * COMMISSION_SALARY, 0));
+const weeklyIncome = () => Math.round(clients().reduce((s, p) => s + p.sal * COMMISSION_SALARY + (p.sp ? p.sp.w : 0), 0));
 const canRecruit = (p) => p.nat === 'BE' || S.office >= INTL_OFFICE;
 /* Plus l'agence est réputée, plus il est difficile de gagner encore en réputation */
 function addRep(x) { S.rep = clamp(S.rep + (x > 0 ? x * clamp((115 - S.rep) / 100, 0.15, 1) : x), 0, 100); }
@@ -143,6 +143,8 @@ function migrate() {
   if (S.event === undefined) S.event = null;
   if (S.recap === undefined) S.recap = null;
   if (!S.cs) S.cs = {};
+  if (S.diff === undefined) S.diff = 1;
+  if (S.bdo === undefined) S.bdo = null;
   if (!S.hist) S.hist = [];
   if (S.stats.troph === undefined) { S.stats.troph = 0; S.stats.bestName = ''; }
   applyClubs();
@@ -224,6 +226,7 @@ function actSign(id, bonusLevel) {
   if (ok) {
     S.cash -= cost; p.mine = true; p.mandate = 3; p.morale = 75; p.o0 = p.ovr; p.vh = [{ v: playerValue(p) }]; p.dream = newDream(p);
     if (p.sc < 1) { p.sc = 1; setEstimate(p); }
+    p.cov = null;
     news('✍️', `${p.n} (${p.age} ans, ${p.pos}) signe un mandat de 3 saisons avec l'agence.`);
     addRep(0.3); checkGoals(); save();
     return { ok: true, msg: `${p.n} rejoint l'agence !` };
@@ -362,6 +365,73 @@ function importSave(text) {
     S = d; migrate(); save();
     return { ok: true, msg: `Partie importée : ${S.agency.name}, saison ${S.season}/${(S.season + 1) % 100}.` };
   } catch (e) { return { ok: false, msg: 'Fichier de sauvegarde invalide.' }; }
+}
+
+/* Contrat de sponsoring personnel : l'agence touche un revenu chaque semaine */
+const sponsorChance = (p) => clamp(0.25 + (p.ovr - 58) / 40 + S.rep / 200 + (p.intl ? 0.15 : 0), 0.1, 0.9);
+const sponsorValue = (p) => Math.max(50, Math.round(baseValue(p.ovr) * 0.0002 * (p.intl ? 1.3 : 1) / 10) * 10);
+function actSponsor(id) {
+  const p = getP(id);
+  if (p.sp) return { ok: false, msg: `Il a déjà un contrat avec ${p.sp.b}.` };
+  if (p.ovr < 58) return { ok: false, msg: 'Pas encore assez connu pour intéresser une marque (niveau 58 requis).' };
+  if (p.spT && p.spT > S.t) return { ok: false, msg: `Les marques ont déjà été sollicitées (encore ${p.spT - S.t} sem.).` };
+  if (!useAction()) return { ok: false, msg: "Plus d'action cette semaine." };
+  if (Math.random() < sponsorChance(p)) {
+    p.sp = { b: pick(BRANDS), w: sponsorValue(p), end: S.season + 2 };
+    news('👟', `${p.n} signe un contrat de sponsoring avec ${p.sp.b} (2 saisons). Pour vous : ${fmt(p.sp.w)}/sem.`);
+    save();
+    return { ok: true, msg: `Contrat signé avec ${p.sp.b} : ${fmt(p.sp.w)}/sem. pour vous.` };
+  }
+  p.spT = S.t + 8; save();
+  return { ok: false, msg: 'Aucune marque n\'est intéressée pour l\'instant.' };
+}
+
+/* Les agences rivales convoitent puis signent des joueurs du marché */
+function rivalsMove() {
+  S.players.forEach((p) => {
+    if (p.cov && !p.mine && p.cov.t <= S.t) {
+      if (p.fav || p.sc > 0) news('🦊', `Trop tard : ${p.n} a signé chez ${p.cov.by}.`);
+      p.gone = true;
+    }
+  });
+  S.players = S.players.filter((p) => !p.gone);
+  if (Math.random() < DIFFS[S.diff].rivals) {
+    const c = S.players.filter((p) => !p.mine && !p.cov && p.pot >= 72);
+    if (c.length) {
+      const p = pick(c), r = pick(S.rivals);
+      p.cov = { by: r.n, t: S.t + rint(3, 5) };
+      if (p.fav || p.sc > 0) news('👀', `${r.n} tourne autour de ${p.n}. Signez-le vite si vous le voulez !`);
+    }
+  }
+}
+
+/* Ballon d'Or : vedettes des 5 grands championnats et vos clients */
+function ballonDor(champs, label) {
+  const c1 = S.eu.C1.champ, list = [];
+  ['ENG', 'ESP', 'ITA', 'GER', 'FRA'].forEach((lg) => clubsOf(lg).forEach((c) => {
+    const bonus = (champs[c.id] ? 8 : 0) + (c1 === c.id ? 10 : 0);
+    S.gs[c.id].forEach((g, i) => list.push({ n: starName(c.id, i), club: c.name, sc: g * 2 + c.rep * 0.5 + bonus + rnd(0, 6) }));
+  }));
+  clients().forEach((p) => {
+    const c = CLUBS[p.club];
+    if (!LEAGUES[c.league].big || p.m < 15) return;
+    const sc = p.g * 2 + p.a + p.ovr * 0.55 + (p.rs / p.m - 6.5) * 15 + (champs[c.id] ? 8 : 0) + (c1 === c.id ? 10 : 0) + (p.intl ? 3 : 0) + rnd(0, 6);
+    list.push({ n: p.n, club: c.name, sc, pid: p.id, mine: true });
+  });
+  const top = list.sort((a, b) => b.sc - a.sc).slice(0, 10);
+  S.bdo = { label, top: top.map((x) => ({ n: x.n, club: x.club, pid: x.pid, mine: !!x.mine })) };
+  news('⭐', `Ballon d'Or ${label} : ${top[0].n} (${top[0].club}).`);
+  top.forEach((x, i) => {
+    if (!x.mine) return;
+    const p = getP(x.pid);
+    if (i === 0) {
+      p.aw.unshift(`${label} : BALLON D'OR`); addRep(6); S.stats.troph++; p.morale = 100;
+      news('🏆', `INCROYABLE : votre client ${p.n} remporte le Ballon d'Or !`);
+    } else {
+      p.aw.unshift(`${label} : ${i + 1}ᵉ au Ballon d'Or`); addRep(i < 3 ? 2 : 0.8);
+      news('⭐', `${p.n} termine ${i + 1}ᵉ au classement du Ballon d'Or.`);
+    }
+  });
 }
 
 function actFav(id) { const p = getP(id); p.fav = !p.fav; save(); }
@@ -683,7 +753,7 @@ function playMatch(p, res, cup) {
       if (def && res.ga === 0) p.cs++;
     }
     if (p.mine) {
-      const line = { pid: p.id, w: S.week, opp: res.opp, home: res.home, gf: res.gf, ga: res.ga, g, a, n, cup };
+      const line = { pid: p.id, club: p.club, w: S.week, opp: res.opp, home: res.home, gf: res.gf, ga: res.ga, g, a, n, cup };
       S.wk.push(line); p.log.unshift(line); if (p.log.length > 6) p.log.length = 6;
       p.morale = clamp(p.morale + (n >= 7.5 ? 0.4 : n < 5.5 ? -0.3 : 0), 0, 100);
       if (g >= 2 || n >= 9) news('⚽', `${p.n} brille avec ${CLUBS[p.club].name} contre ${CLUBS[res.opp].name} : ${g} but(s), ${a} passe(s), note ${n.toFixed(1)}.`);
@@ -764,6 +834,8 @@ function nextWeek() {
     }
   });
 
+  rivalsMove();
+
   if (S.staff.scout && Math.random() < 0.3) {
     const c = S.players.filter((p) => !p.mine && canRecruit(p) && p.sc === 0 && p.pot >= 76);
     if (c.length) {
@@ -778,11 +850,11 @@ function nextWeek() {
   if (S.week > SEASON_WEEKS) endSeason(); else maybeEvent();
   S.actions = office().actions;
   checkGoals();
-  if (S.cash < -25000) {
+  if (S.cash < -DIFFS[S.diff].bank) {
     S.over = true;
-    news('💀', 'FAILLITE : les dettes de l\'agence dépassent 25 000 €. La partie est terminée.');
+    news('💀', `FAILLITE : les dettes de l'agence dépassent ${fmt(DIFFS[S.diff].bank)}. La partie est terminée.`);
   } else if (S.cash < 0) {
-    news('⚠️', `Compte dans le rouge (${fmt(S.cash)}). Faillite à -25 k€ !`);
+    news('⚠️', `Compte dans le rouge (${fmt(S.cash)}). Faillite à -${fmt(DIFFS[S.diff].bank)} !`);
   }
   save();
 }
@@ -861,6 +933,7 @@ function endSeason() {
     }
   });
   seasonAwards(cl);
+  ballonDor(champs, label);
   for (const lg in LEAGUES) {
     const top = topScorers(lg, 1)[0], p = top && top.mine ? getP(top.pid) : null;
     if (p) {
@@ -875,6 +948,10 @@ function endSeason() {
 
   S.players.forEach((p) => {
     p.age++; p.cy--; p.m = 0; p.g = 0; p.a = 0; p.rs = 0; p.cs = 0; p.em = 0; p.eg = 0; p.ucl = 0; p.log = []; p.o0 = p.ovr;
+    if (p.sp && S.season + 1 >= p.sp.end) {
+      if (p.mine) news('📄', `Le contrat de sponsoring de ${p.n} avec ${p.sp.b} est terminé. Négociez-en un nouveau !`);
+      p.sp = null;
+    }
     if (p.loan) {
       p.club = p.loan.back; p.loan = null;
       if (p.mine) news('🔁', `${p.n} rentre de prêt à ${CLUBS[p.club].name}.`);

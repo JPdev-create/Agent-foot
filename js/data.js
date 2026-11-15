@@ -143,6 +143,16 @@ const GOALS = [
 
 const SEASON_WEEKS = 38;
 
+/* Niveaux de difficulté */
+const DIFFS = [
+  { name: 'Facile', cash: 40000, bank: 50000, sign: 0.1, rivals: 0.25 },
+  { name: 'Normal', cash: 20000, bank: 25000, sign: 0, rivals: 0.5 },
+  { name: 'Difficile', cash: 10000, bank: 10000, sign: -0.08, rivals: 0.8 },
+];
+
+/* Marques fictives pour les contrats de sponsoring */
+const BRANDS = ['Strada', 'Volt Sport', 'Kalyx', 'Nordwind', 'Brava', 'Pulse Energy', 'Mosa', 'Telcora', 'Atlas Wear', 'Zénith Montres', 'Ardenna', 'Fluxo'];
+
 /* Coupes d'Europe : 16 clubs, élimination directe sur un match */
 const EU = { C1: { name: 'Ligue des champions', short: 'LDC', icon: '🏆' }, C3: { name: 'Ligue Europa', short: 'C3', icon: '🥈' } };
 const EU_WEEKS = [10, 16, 26, 34];

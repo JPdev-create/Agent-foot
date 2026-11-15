@@ -32,6 +32,9 @@ La partie est sauvegardée automatiquement dans le navigateur.
 - **Joueurs libres** en fin de contrat (prime à la signature), **enchères**, **voyages de détection**,
   **rêves de carrière**, courbe de valeur, historique de l'agence et **export/import de la sauvegarde**.
 
+- **Agences rivales** qui signent les pépites du marché, **sponsoring**, **Ballon d'Or**,
+  **3 niveaux de difficulté** et **compte rendu de match** (buteurs, minutes, passeurs).
+
 ## Installer l'application
 
 Le jeu est une application web installable (PWA). Ouvrez le site sur le téléphone puis :

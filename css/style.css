@@ -130,3 +130,9 @@ main > .chips { padding-bottom: 10px; }
 .card.champ { text-align: center; font-size: 34px; border-color: var(--acc2); } .card.champ b { display: block; font-size: 20px; }
 .prow.tie { cursor: default; padding: 7px 0; } .prow.tie.me b { color: var(--acc); }
 .list hr { border: 0; border-top: 2px solid var(--line); margin: 4px 0; } .list hr + .prow { border-top: 0; }
+
+.btn.file { display: block; text-align: center; }
+.btn.trip { margin: 0 0 10px; } .btn.trip small { font-weight: 400; }
+.spark { width: 100%; height: 56px; display: block; margin: 4px 0; }
+.spark polyline { fill: none; stroke: var(--acc); stroke-width: 2; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.hist td:nth-child(2), .hist th:nth-child(2) { text-align: center; }

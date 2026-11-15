@@ -33,6 +33,7 @@ function viewStart() {
     <label>Nom de l'agence<input id="in-name" maxlength="24" value="JP Sport Management"></label>
     <label>Ville<select id="in-city">${['Liège', 'Bruxelles', 'Charleroi', 'Namur', 'Anvers', 'Gand', 'Marche-en-Famenne', 'Mons'].map((c) => `<option>${c}</option>`).join('')}</select></label>
     <button class="btn big" data-act="start">Créer mon agence</button>
+    <label class="btn ghost file">📥 Reprendre une sauvegarde<input type="file" id="imp" accept=".json,application/json" hidden></label>
   </div>`;
 }
 
@@ -55,11 +56,11 @@ function offerCard(o) {
   return `<div class="card offer">
     <div class="row"><b>${esc(p.n)}</b><span class="tag">${LEAGUES[c.league].flag} ${esc(c.name)}</span></div>
     <div class="grid3">
-      <div><small>Indemnité</small><b>${fmt(o.fee)}</b></div>
-      <div><small>Votre commission</small><b class="pos">${fmt(o.fee * commissionTransfer())}</b></div>
+      <div><small>Indemnité</small><b>${o.free ? 'Libre' : fmt(o.fee)}</b></div>
+      <div><small>${o.free ? 'Votre prime' : 'Votre commission'}</small><b class="pos">${fmt(o.free ? o.bonus : o.fee * commissionTransfer())}</b></div>
       <div><small>Salaire/sem.</small><b>${fmt(o.sal)}</b></div>
     </div>
-    <small>Prestige du club : ${c.rep} · expire dans ${o.exp - S.t} sem.</small>
+    <small>Prestige du club : ${c.rep} · expire dans ${o.exp - S.t} sem.${dreamMatch(p.dream, c) ? ' · 🌟 son rêve' : ''}</small>
     <div class="btns">
       <button class="btn" data-act="accept" data-id="${o.id}">Accepter</button>
       <button class="btn alt" data-act="nego" data-id="${o.id}" ${o.nego ? 'disabled' : ''}>Négocier</button>
@@ -111,7 +112,7 @@ function playerRow(p, mine) {
   const o = ovrOf(p);
   return `<div class="prow" data-act="open" data-id="${p.id}">
     <span class="ovr ${ovrClass(o)}">${o}</span>
-    <div class="pmain"><b>${p.fav && !mine ? '⭐ ' : ''}${esc(p.n)}${p.intl ? ' 🌍' : ''}${p.inj > 0 ? ' 🚑' : ''}${p.loan ? ' 🔁' : ''}</b><small>${p.pos} · ${p.age} ans · ${clubTxt(p)}</small></div>
+    <div class="pmain"><b>${p.fav && !mine ? '⭐ ' : ''}${esc(p.n)}${p.intl ? ' 🌍' : ''}${p.free ? ' 🆓' : ''}${p.inj > 0 ? ' 🚑' : ''}${p.loan ? ' 🔁' : ''}</b><small>${p.pos} · ${p.age} ans · ${clubTxt(p)}</small></div>
     <div class="pside">${mine
     ? `<b>${p.m} m · ${p.g} b · ${p.a} pd</b><small>Note ${avgNote(p)} · Moral ${Math.round(p.morale)}</small>`
     : `<b>Pot. ${potTxt(p)}</b><small>${fmt(playerValue(p))}</small>`}</div></div>`;
@@ -133,6 +134,7 @@ function viewMarche() {
       ${sel('sort', [['ovr', 'Tri : niveau'], ['pot', 'Tri : potentiel'], ['age', 'Tri : âge'], ['val', 'Tri : moins chers']])}
       <button class="chip ${f.fav ? 'on' : ''}" data-act="favFilter" title="Joueurs suivis">⭐</button>
     </div>
+    <button class="btn alt trip" data-act="trip" data-id="${f.country}" ${S.cash < tripCost(f.country) ? 'disabled' : ''}>✈️ Voyage de détection — ${fmt(tripCost(f.country))} · 1 action<small>Révèle 3 jeunes à fort potentiel</small></button>
     ${locked ? `<div class="card warn">🔒 Recrutement à l'étranger débloqué avec le bureau « ${OFFICES[INTL_OFFICE].name} ». Vous pouvez déjà observer.</div>` : ''}
     <div class="card list">${list.slice(0, 80).map((p) => playerRow(p, false)).join('') || `<p class="empty">${f.fav ? 'Aucun joueur suivi. Ouvrez une fiche et touchez ☆ Suivre.' : 'Aucun joueur.'}</p>`}</div>`;
 }
@@ -212,6 +214,16 @@ function viewAgence() {
       <div><small>Record</small><b>${fmt(S.stats.bestFee)}</b></div>
       <div><small>Gains totaux</small><b>${fmt(S.stats.earned)}</b></div>
     </div>
+    <div class="card grid3">
+      <div><small>Trophées clients</small><b>${S.stats.troph}</b></div>
+      <div style="grid-column: span 2"><small>Plus gros transfert</small><b>${S.stats.bestName ? esc(S.stats.bestName) : '–'}</b></div>
+    </div>
+    ${S.hist.length ? `<h2>Historique de l'agence</h2><div class="card"><table class="tbl hist"><tr><th>Saison</th><th>Rang</th><th>Rép.</th><th>Transf.</th><th>Résultat</th></tr>
+      ${S.hist.map((h) => `<tr><td>${h.label}</td><td>${h.rank}ᵉ</td><td>${Math.floor(h.rep1)}</td><td>${h.tr}</td><td class="${h.inc - h.costs < 0 ? 'neg' : 'pos'}">${fmt(h.inc - h.costs)}</td></tr>`).join('')}</table></div>` : ''}
+    <h2>Sauvegarde</h2>
+    <div class="card"><small>Votre partie est enregistrée sur cet appareil. Exportez-la pour la garder en sécurité ou la continuer ailleurs (ex. passer du navigateur à l'appli installée).</small>
+      <button class="btn alt" data-act="export">📤 Exporter la sauvegarde</button>
+      <label class="btn alt file">📥 Importer une sauvegarde<input type="file" id="imp" accept=".json,application/json" hidden></label></div>
     <h2>Application</h2>
     <div class="card">${UI.standalone ? '<small>✅ Application installée. Elle se met à jour toute seule à chaque ouverture (connexion nécessaire).</small>'
     : UI.installEvt ? '<button class="btn" data-act="install" style="margin-top:0">📲 Installer l\'application</button><small>Ajoute Agent Foot à votre écran d\'accueil. Mises à jour automatiques.</small>'
@@ -221,6 +233,15 @@ function viewAgence() {
 }
 
 /* ---------- Fenêtres ---------- */
+function sparkline(p) {
+  const pts = (p.vh || []).concat([{ v: playerValue(p) }]);
+  if (pts.length < 2) return '';
+  const vs = pts.map((x) => x.v), max = Math.max(...vs), min = Math.min(...vs), W = 300, H = 56;
+  const xy = vs.map((v, i) => `${(i / (vs.length - 1) * W).toFixed(1)},${(H - 4 - (max === min ? 0.5 : (v - min) / (max - min)) * (H - 8)).toFixed(1)}`);
+  return `<h4>Évolution de la valeur</h4><svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><polyline points="${xy.join(' ')}"/></svg>
+    <div class="row"><small>À la signature : ${fmt(vs[0])}</small><small>Aujourd'hui : ${fmt(vs[vs.length - 1])}</small></div>`;
+}
+
 function modalPlayer(p) {
   const o = ovrOf(p), c = CLUBS[p.club];
   const info = `<div class="mhead"><span class="ovr big ${ovrClass(o)}">${o}</span>
@@ -235,7 +256,9 @@ function modalPlayer(p) {
     </div>
     ${p.tr && (p.mine || p.sc >= 1) ? `<p class="trait">${TRAITS[p.tr].icon} <b>${TRAITS[p.tr].name}</b> — ${TRAITS[p.tr].desc}</p>` : !p.tr || p.mine ? '' : '<p class="trait mut">Caractère inconnu : observez-le.</p>'}
     ${p.intl ? '<p class="trait">🌍 <b>International</b> — valeur +12 %.</p>' : ''}
-    ${p.inj > 0 ? `<p class="warn">🚑 Blessé encore ${p.inj} semaine(s).</p>` : ''}`;
+    ${p.inj > 0 ? `<p class="warn">🚑 Blessé encore ${p.inj} semaine(s).</p>` : ''}
+    ${p.free ? `<p class="warn">🆓 <b>Libre</b> — sans contrat. Placez-le avant la fin du mercato d'été (semaine 6) : pas d'indemnité, mais une prime à la signature pour vous. Sinon il re-signera à la baisse.</p>` : ''}
+    ${p.mine && p.dream ? `<p class="trait">🌟 <b>Rêve :</b> ${esc(dreamText(p.dream))}${p.dream.done ? ' ✅' : ''}</p>` : ''}`;
   if (!p.mine) {
     const cd = p.cd > S.t, can = canRecruit(p);
     return `${info}
@@ -254,9 +277,10 @@ function modalPlayer(p) {
       <div><small>Pour vous</small><b class="pos">${fmt(p.sal * COMMISSION_SALARY)}/s</b></div>
     </div>
     <button class="btn" data-act="propose" data-id="${p.id}" ${inWindow(S.week) && !p.loan ? '' : 'disabled'}>📣 Transfert ou prêt${p.loan ? ' — en prêt cette saison' : inWindow(S.week) ? ' (1 action)' : ' — mercato fermé'}</button>
-    <button class="btn alt" data-act="raise" data-id="${p.id}">💶 Demander une revalorisation (1 action)</button>
-    ${p.cy <= 1 ? `<button class="btn alt" data-act="renew" data-id="${p.id}" ${p.loan ? 'disabled' : ''}>📝 Négocier une prolongation (1 action)</button>
-    <small>Dernière année de contrat : les clubs acheteurs paieront 40 % de moins. Une prolongation vous rapporte 6 semaines de son salaire.</small>` : ''}
+    <button class="btn alt" data-act="auction" data-id="${p.id}" ${inWindow(S.week) && !p.loan ? '' : 'disabled'}>🔨 Mettre aux enchères (2 actions)</button>
+    <button class="btn alt" data-act="raise" data-id="${p.id}" ${p.free ? 'disabled' : ''}>💶 Demander une revalorisation (1 action)</button>
+    ${p.cy <= 1 ? `<button class="btn alt" data-act="renew" data-id="${p.id}" ${p.loan ? 'disabled' : ''}>📝 ${p.free ? 'Re-signer avec son ancien club' : 'Négocier une prolongation'} (1 action)</button>
+    <small>${p.free ? 'Prime d\'agent : 6 semaines de salaire.' : 'Dernière année de contrat : les clubs acheteurs paieront 40 % de moins. Une prolongation vous rapporte 6 semaines de son salaire. Sinon, il sera libre l\'été prochain (grosse prime si vous le placez).'}</small>` : ''}
     <button class="btn alt" data-act="talk" data-id="${p.id}">💬 Discuter avec lui (1 action)</button>
     <h4>Saison en cours</h4>
     <div class="grid3">
@@ -264,13 +288,14 @@ function modalPlayer(p) {
       <div><small>Note moyenne</small><b>${avgNote(p)}</b></div><div><small>${p.pos === 'GB' || p.pos === 'DEF' ? 'Clean sheets' : 'Buts/match'}</small><b>${p.pos === 'GB' || p.pos === 'DEF' ? p.cs : p.m ? (p.g / p.m).toFixed(2).replace('.', ',') : '–'}</b></div>
       <div><small>Progression</small><b class="pos">+${Math.max(0, Math.floor(p.ovr) - Math.floor(p.o0))}</b></div>
     </div>
+    ${sparkline(p)}
     ${p.em ? `<small>Coupe d'Europe : ${p.em} match(s), ${p.eg} but(s)</small>` : ''}
     ${p.log.length ? `<h4>Derniers matchs</h4><div class="mlist">${p.log.map((x) => `<div><i class="${resClass(x)}"></i><p><small>Sem. ${x.w} · ${scoreTxt(x)}</small></p>
       <span>${x.g ? '⚽'.repeat(x.g) : ''}${x.a ? '🅰️'.repeat(x.a) : ''} <b class="${noteClass(x.n)}">${x.n.toFixed(1)}</b></span></div>`).join('')}</div>` : ''}
     ${p.sh.length ? `<h4>Saisons précédentes</h4><table class="tbl"><tr><th>Saison</th><th>Club</th><th>M</th><th>B</th><th>PD</th><th>Note</th></tr>
       ${p.sh.map((h) => `<tr><td>${h.s}</td><td>${esc(h.club)}</td><td>${h.m}</td><td>${h.g}</td><td>${h.a}</td><td>${h.m ? h.avg.toFixed(1) : '–'}</td></tr>`).join('')}</table>` : ''}
     ${p.aw.length ? `<h4>Palmarès</h4>${p.aw.map((a) => `<small>🏅 ${esc(a)}</small>`).join('')}` : ''}
-    ${p.hist.length ? `<h4>Transferts</h4>${p.hist.map((h) => `<small>${h.s} : ${esc(h.from)} → ${esc(h.to)} (${fmt(h.fee)})</small>`).join('')}` : ''}
+    ${p.hist.length ? `<h4>Transferts</h4>${p.hist.map((h) => `<small>${h.s} : ${esc(h.from)} → ${esc(h.to)} (${h.free ? 'libre' : fmt(h.fee)})</small>`).join('')}` : ''}
     <button class="btn ghost danger" data-act="release" data-id="${p.id}">Rompre le mandat</button>`;
 }
 
@@ -292,7 +317,7 @@ function modalPropose(p) {
       sub = `Temps de jeu estimé : ${pct(clamp(0.5 + (p.ovr - (c.rep - 12)) / 16, 0.05, 0.97))}`;
     } else {
       if (!why && !playerAccepts(p, c)) why = 'Trop petit pour lui';
-      sub = c.rep > cur.rep ? 'Club plus prestigieux' : 'Niveau équivalent';
+      sub = (dreamMatch(p.dream, c) ? '🌟 Son rêve · ' : '') + (c.rep > cur.rep ? 'Club plus prestigieux' : 'Niveau équivalent');
     }
     return `<div class="prow"><span class="ovr ${ovrClass(c.rep - 10)}">${c.rep}</span>
         <div class="pmain"><b>${esc(c.name)}</b><small>${why || sub}</small></div>
@@ -310,6 +335,7 @@ function modalHelp() {
     <p><b>4. Transférez.</b> Pendant le mercato (semaines 1–6 et 20–23), proposez vos clients à des clubs plus prestigieux. Vous touchez 10 % de l'indemnité, puis 7 % de son salaire chaque semaine.</p>
     <p><b>Suivez les matchs.</b> Chaque semaine, tous les championnats jouent : résultats de vos joueurs sur le Bureau, classements dans l'onglet Compét.</p>
     <p><b>Caractère et contrats.</b> Chaque joueur a un caractère (visible après observation). En dernière année de contrat, négociez une prolongation ou vendez vite.</p>
+    <p><b>Astuces d'agent.</b> Mettez un joueur aux enchères pour faire monter les prix, partez en voyage de détection pour dénicher des pépites, et réalisez le rêve de carrière de vos clients. Un joueur en fin de contrat devient libre : placez-le pour une grosse prime.</p>
     <p><b>5. Grandissez.</b> Agrandissez le bureau (plus de clients et d'actions), engagez du personnel et grimpez au classement des agences jusqu'aux 5 grands championnats.</p>
     <p><b>Attention</b> au moral de vos joueurs (un joueur frustré peut partir) et à votre caisse : faillite à -25 k€.</p>
     </div><button class="btn" data-act="close">C'est parti</button>`;
@@ -374,6 +400,18 @@ const ACTIONS = {
   raise(d) { toast(actRaise(+d.id)); },
   talk(d) { toast(actTalk(+d.id)); },
   install() { const e = UI.installEvt; UI.installEvt = null; if (e) e.prompt(); },
+  auction(d) { const r = actAuction(+d.id); toast(r); if (r.ok) { UI.modal = null; UI.tab = 'bureau'; } },
+  trip(d) { const r = actTrip(d.id); toast(r); if (r.ok) UI.mk.fav = true; },
+  export() {
+    try {
+      const blob = new Blob([JSON.stringify(S)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = `agent-foot-${S.season}-sem${S.week}.json`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+      toast({ ok: true, msg: 'Sauvegarde exportée.' });
+    } catch (e) { toast({ ok: false, msg: 'Export impossible sur cet appareil.' }); }
+  },
   renew(d) { toast(actRenew(+d.id)); },
   jv(d) { UI.jv = d.id; },
   release(d) { if (confirm('Rompre le mandat de ce joueur ?')) { actRelease(+d.id); UI.modal = null; } },
@@ -394,6 +432,11 @@ document.addEventListener('click', (e) => {
 document.addEventListener('change', (e) => {
   const k = e.target.dataset && e.target.dataset.filter;
   if (k) { UI.mk[k] = e.target.value; render(); }
+  if (e.target.id === 'imp' && e.target.files && e.target.files[0]) {
+    const file = e.target.files[0];
+    if (S && !confirm('Remplacer la partie en cours par cette sauvegarde ?')) return;
+    file.text().then((t) => { toast(importSave(t)); UI.tab = 'bureau'; UI.modal = null; render(); });
+  }
 });
 
 /* ---------- Application installable (PWA) ---------- */

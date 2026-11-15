@@ -1,5 +1,5 @@
 /* Service worker : réseau d'abord (l'appli est toujours à jour), cache en secours (jeu hors ligne) */
-const CACHE = 'agentfoot-v1';
+const CACHE = 'agentfoot-v2';
 const FILES = ['./', 'index.html', 'css/style.css', 'js/data.js', 'js/game.js', 'js/ui.js',
   'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 

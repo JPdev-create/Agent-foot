@@ -29,6 +29,9 @@ La partie est sauvegardée automatiquement dans le navigateur.
 
 - **Coupes d'Europe** (Ligue des champions et Ligue Europa) et **classement des buteurs**.
 
+- **Joueurs libres** en fin de contrat (prime à la signature), **enchères**, **voyages de détection**,
+  **rêves de carrière**, courbe de valeur, historique de l'agence et **export/import de la sauvegarde**.
+
 ## Installer l'application
 
 Le jeu est une application web installable (PWA). Ouvrez le site sur le téléphone puis :

@@ -66,7 +66,7 @@ const bar = (w, cls) => `<div class="bar"><i class="${cls || ''}" style="width:$
 const sec = (title, body, link) => `<section class="sec"><div class="sec-h"><h2>${title}</h2>${link || ''}</div>${body}</section>`;
 const seg = (act, cur, items) => `<div class="seg">${items.map(([k, l]) => `<button class="${cur === k ? 'on' : ''}" data-act="${act}" data-id="${k}">${l}</button>`).join('')}</div>`;
 const pills = (act, cur, items) => `<div class="pills">${items.map(([k, l]) => `<button class="pill ${cur === k ? 'on' : ''}" data-act="${act}" data-id="${esc(k)}">${l}</button>`).join('')}</div>`;
-const actBtn = (act, id, ic, title, sub, n, opt) => `<button class="act ${opt && opt.primary ? 'primary' : ''}" data-act="${act}" data-id="${id}" ${opt && opt.disabled ? 'disabled' : ''}>
+const actBtn = (act, id, ic, title, sub, n, opt) => `<button class="act ${opt && opt.primary && !(n > S.actions) ? 'primary' : ''}" data-act="${act}" data-id="${id}" ${(opt && opt.disabled) || n > S.actions ? 'disabled' : ''}>
   <span class="ic">${ic}</span><span class="tx"><b>${title}</b>${sub ? `<small>${sub}</small>` : ''}</span>${n ? cost(n) : ''}</button>`;
 const nextWindowTxt = () => (S.week < 20 ? `le mercato d'hiver ouvre dans ${20 - S.week} sem.` : `le mercato d'été rouvre en début de saison`);
 
@@ -147,6 +147,9 @@ function offerCard(o) {
       ${stat(o.free ? 'Votre prime' : 'Votre commission', fmt(o.free ? o.bonus : o.fee * commissionTransfer()), 'pos')}
       ${stat('Salaire / sem.', fmt(o.sal))}
     </div>
+    <div class="tags" style="margin:8px 0 0">${o.free ? tag('🆓 Joueur libre : pas d\'indemnité', 'info') : (() => { const r = o.fee / Math.max(1, playerValue(p)); return r > 1.15 ? tag('💰 Au-dessus de sa valeur', 'ok') : r < 0.9 ? tag('📉 En dessous de sa valeur', 'bad') : tag('⚖️ Prix correct', ''); })()}
+      ${c.rep > CLUBS[p.club].rep ? tag(`⬆️ Club plus prestigieux (+${c.rep - CLUBS[p.club].rep})`, 'ok') : c.rep < CLUBS[p.club].rep ? tag(`⬇️ Club moins prestigieux (${c.rep - CLUBS[p.club].rep})`, 'warn') : ''}
+      ${o.sal > p.sal ? tag(`💶 Salaire +${Math.round((o.sal / p.sal - 1) * 100)} %`, 'ok') : ''}</div>
     ${dreamMatch(p.dream, c) ? '<div class="note warn">🌟 Ce club réaliserait son rêve de carrière.</div>' : ''}
     <div class="btns">
       <button class="btn" data-act="accept" data-id="${o.id}">✔ Accepter</button>
@@ -224,7 +227,7 @@ function viewHome() {
     ${s && !S.over ? `<div class="kicker">${s.n > 1 ? `Bilan des ${s.n} dernières semaines` : 'Bilan de la semaine écoulée'}</div><div class="tags" style="margin:0 0 12px">${chip(`💶 ${s.dc >= 0 ? '+' : ''}${fmt(s.dc)}`, s.dc >= 0 ? 'ok' : 'bad')}${chip(`⭐ ${s.dr >= 0 ? '+' : ''}${s.dr.toFixed(1)} rép.`, s.dr >= 0 ? 'ok' : 'bad')}
       ${s.g ? chip(`⚽ ${s.g} but(s)`, 'ok') : ''}${s.offers ? chip(`📨 ${s.offers} nouvelle(s) offre(s)`, 'gold') : ''}${s.inj ? chip(`🚑 ${s.inj} blessé(s)`, 'bad') : ''}</div>` : ''}
     <div class="stats">${stat('Revenus / sem.', '+' + fmt(inc), 'pos')}${stat('Frais / sem.', '-' + fmt(costs), 'neg')}${stat('Solde', (net >= 0 ? '+' : '') + fmt(net), net < 0 ? 'neg' : 'pos')}</div>
-    <div class="split" style="margin-top:10px"><small>👥 ${clients().length}/${office().maxClients} clients</small><small>⚡ ${S.actions} action(s) restante(s)</small></div></div>`);
+    <div class="split" style="margin-top:10px"><small>👥 ${clients().length}/${office().maxClients} clients</small><small class="${S.actions ? '' : 'gold'}">⚡ ${S.actions ? `${S.actions} action(s) restante(s)` : 'Plus d\'action : semaine suivante !'}</small></div></div>`);
   const tips = assistantTips();
   if (tips.length) h += sec('🧠 Conseils de l\'assistant', `<div class="list">${tips.map((x) => `<button class="row" data-act="${x.act}" data-id="${x.id}"><span class="ico">${x.i}</span><div class="main"><span style="font-size:13.5px;display:block;white-space:normal">${esc(x.txt)}</span></div><span class="chev">›</span></button>`).join('')}</div>`);
   h += weekMatches();
@@ -243,7 +246,7 @@ function dock() {
   const block = !!S.event;
   const closed = !inWindow(S.week);
   if (block) return `<div class="dock" style="grid-template-columns:1fr"><button class="btn lg" disabled>⚡ Décision en attente (en haut)</button></div>`;
-  return `<div class="dock ${closed ? 'three' : ''}"><button class="btn lg" data-act="week" ${block ? 'disabled' : ''}>${block ? '⚡ Décision en attente' : '▶ Semaine'}</button>
+  return `<div class="dock ${closed ? 'three' : ''}"><button class="btn lg ${S.actions ? '' : 'pulse'}" data-act="week">▶ Semaine</button>
     <button class="btn lg sec icon" data-act="fast" ${block ? 'disabled' : ''} title="Avancer de 4 semaines">⏩ ×4</button>
     ${closed ? `<button class="btn lg sec icon" data-act="toWindow" ${block ? 'disabled' : ''} title="Avancer jusqu'au prochain mercato">⏭ Mercato</button>` : ''}</div>`;
 }
@@ -535,7 +538,7 @@ function traitLine(p) {
 }
 
 function marketSheet(p) {
-  const cd = p.cd > S.t, can = canRecruit(p);
+  const cd = p.cd > S.t, can = canRecruit(p), full = clients().length >= office().maxClients, noAct = S.actions < 1;
   return `${playerHead(p)}
     <div class="stats">${stat('Potentiel', potTxt(p), 'gold')}${stat('Valeur', fmt(playerValue(p)))}${stat('Salaire / sem.', fmt(p.sal))}</div>
     <div class="stats" style="margin-top:8px">${stat('Temps de jeu', pct(playProb(p)))}${stat('Saison', `${p.m} m · ${p.g} b`)}${stat('Contrat club', `${p.cy} an(s)`, p.cy <= 1 ? 'neg' : '')}</div>
@@ -549,10 +552,12 @@ function marketSheet(p) {
       <small>Plus elle est basse, plus il est facile de le convaincre.</small>
       <div class="seg" style="margin:10px 0 0;position:static;box-shadow:none">${COMS.map((c, i) => `<button class="${UI.com === i ? 'on' : ''}" data-act="com" data-id="${i}">${Math.round(c * 100)} %</button>`).join('')}</div></div>
     ${cd ? `<div class="note warn">Il refuse de discuter encore ${p.cd - S.t} semaine(s).</div>` : ''}
+    ${full ? `<div class="note warn">👥 Agence pleine (${office().maxClients} clients) : agrandissez le bureau ou libérez une place.</div>` : ''}
+    ${noAct && !full ? '<div class="note warn">⚡ Plus d\'action cette semaine : revenez la semaine prochaine.</div>' : ''}
     ${!can ? `<div class="note warn">🔒 Recrutement à l'étranger non débloqué (bureau « ${OFFICES[INTL_OFFICE].name} »).</div>` : ''}
     ${['🤝 Simple poignée de main', '💶 Avec prime à la signature', '💰 Avec grosse prime'].map((l, i) => {
     const ch = signChance(p, i, UI.com);
-    return `<button class="choice" data-act="sign" data-id="${p.id}" data-lv="${i}" data-ci="${UI.com}" ${cd || !can ? 'disabled' : ''}><div class="top2"><b>${l}</b><b>${pct(ch)}</b></div>
+    return `<button class="choice" data-act="sign" data-id="${p.id}" data-lv="${i}" data-ci="${UI.com}" ${cd || !can || full || noAct ? 'disabled' : ''}><div class="top2"><b>${l}</b><b>${pct(ch)}</b></div>
       <small>${i ? 'Coût : ' + fmt(signBonusCost(p, i)) : 'Gratuit'}</small>${bar(ch * 100, ch < 0.35 ? 'bad' : ch < 0.6 ? 'mid' : '')}</button>`;
   }).join('')}`;
 }
@@ -580,7 +585,8 @@ function clientOverview(p) {
 
 function clientActions(p) {
   const win = inWindow(S.week), canMove = win && !p.loan;
-  return `<div class="note" style="display:flex;justify-content:space-between;align-items:center"><span>⚡ Actions restantes cette semaine</span><b style="color:var(--gold)">${S.actions}</b></div>
+  return `${S.actions ? `<div class="note" style="display:flex;justify-content:space-between;align-items:center"><span>⚡ Actions restantes cette semaine</span><b style="color:var(--gold)">${S.actions}</b></div>`
+    : '<div class="note warn">⚡ Plus d\'action cette semaine : passez à la semaine suivante pour agir à nouveau.</div>'}
     <h4>Mercato</h4>
     ${!win ? `<div class="note">🔒 Mercato fermé : ${nextWindowTxt()}.</div>` : p.loan ? '<div class="note">🔁 En prêt jusqu\'à la fin de la saison.</div>' : ''}
     ${actBtn('propose', p.id, '📣', 'Transfert ou prêt', 'Choisir un club et lui proposer votre joueur', 1, { primary: canMove, disabled: !canMove })}
@@ -762,7 +768,7 @@ function confetti() {
 }
 function viewCer() {
   const c = S.cer, m = UI.modal, sl = c.slides[m.i], n = c.slides.length, last = m.i === n - 1;
-  const top = `<div class="cer-top"><small>🎬 ${esc(c.label)} · ${m.i + 1}/${n}</small><button class="x" data-act="cerClose">✕</button></div>`;
+  const top = `<div class="cer-top"><small>🎬 ${esc(c.label)} · ${m.i + 1}/${n}</small><div style="display:flex;gap:8px;align-items:center">${last ? '' : '<button class="btn sm ghost" style="color:#cfd9d3;border-color:rgba(255,255,255,.2)" data-act="cerSkip">Passer ⏭</button>'}<button class="x" data-act="cerClose">✕</button></div></div>`;
   const dots = `<div class="dots">${c.slides.map((_, i) => `<i class="${i === m.i ? 'on' : i < m.i ? 'past' : ''}"></i>`).join('')}</div>`;
   let body = '';
   if (sl.k === 'intro') {
@@ -832,6 +838,7 @@ function render() {
   app.innerHTML = `${topbar()}<main>${views[UI.tab]()}</main>${dock()}${navbar()}`;
   app.dataset.tab = UI.tab;
   window.scrollTo(0, same ? y : 0);
+  if (S && SAVE_FAIL && !UI.saveWarned) { UI.saveWarned = true; toast({ ok: false, msg: 'Sauvegarde impossible sur cet appareil (stockage plein ou navigation privée). Exportez votre partie dans Réglages.' }); }
   renderModal(); renderToast(); syncHistory();
 }
 
@@ -951,6 +958,7 @@ const ACTIONS = {
   // Cérémonie
   cer() { UI.modal = { type: 'cer', i: 0, open: false }; },
   cerNext() { cerNext(); },
+  cerSkip() { UI.modal.i = S.cer.slides.length - 1; UI.modal.open = false; },
   cerClose() { UI.modal = null; },
 };
 

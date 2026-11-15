@@ -194,7 +194,8 @@ function migrate() {
   });
 }
 
-function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) { /* stockage indisponible */ } }
+let SAVE_FAIL = false;
+function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); SAVE_FAIL = false; } catch (e) { SAVE_FAIL = true; } }
 function load() {
   try {
     const raw = localStorage.getItem(SAVE_KEY);

@@ -349,3 +349,6 @@ select { appearance: none; -webkit-appearance: none; background-image: linear-gr
 html, body { overscroll-behavior-y: none; }
 button, .row, [data-act] { touch-action: manipulation; -webkit-user-select: none; user-select: none; }
 .news-day { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--dim); padding: 8px 13px 4px; background: var(--s2); border-bottom: 1px solid var(--line); }
+
+.btn.pulse { animation: glow 1.6s ease-in-out infinite; }
+@keyframes glow { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--acc) 30%, transparent), 0 0 24px color-mix(in srgb, var(--acc) 45%, transparent); } }

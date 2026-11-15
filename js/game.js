@@ -37,7 +37,14 @@ function fairSalary(p, club) {
 
 function playProb(p) {
   const c = CLUBS[p.club];
-  return clamp(0.5 + (p.ovr - (c.rep - 12)) / 16, 0.05, 0.97);
+  return clamp(0.5 + (p.ovr - (c.rep - 12)) / 16 + (p.ptb > S.t ? 0.2 : 0), 0.05, 0.97);
+}
+
+/* Journal des opérations financières marquantes */
+function ledger(i, label, amount) {
+  if (!S.ledger) S.ledger = [];
+  S.ledger.unshift({ i, l: label, a: Math.round(amount), w: S.week, s: S.season });
+  if (S.ledger.length > 80) S.ledger.length = 80;
 }
 
 /* Intérêt d'un club pour un joueur : 0..1 */
@@ -220,7 +227,7 @@ function checkGoals() {
   };
   GOALS.forEach((g) => {
     if (done[g.id] && !S.goals[g.id]) {
-      S.goals[g.id] = true; S.cash += g.reward; addRep(1);
+      S.goals[g.id] = true; S.cash += g.reward; addRep(1); ledger('🏆', `Objectif : ${g.label}`, g.reward);
       news('🏆', `Objectif atteint : ${g.label} — prime de ${fmt(g.reward)}.`);
     }
   });
@@ -261,6 +268,7 @@ function actSign(id, bonusLevel, ci) {
   if (ok) {
     if (p.pot >= 88) S.flags.gem = 1;
     p.com = COMS[ci];
+    if (cost) ledger('✍️', `Prime de signature : ${p.n}`, -cost);
     S.cash -= cost; p.mine = true; p.mandate = 3; p.morale = 75; p.o0 = p.ovr; p.vh = [{ v: playerValue(p) }]; p.dream = newDream(p);
     if (p.sc < 1) { p.sc = 1; setEstimate(p); }
     p.cov = null; S.ss.sign = (S.ss.sign || 0) + 1;
@@ -355,7 +363,7 @@ function actTrip(country) {
   const cost = tripCost(country);
   if (S.cash < cost) return { ok: false, msg: 'Pas assez de liquidités pour ce voyage.' };
   if (!useAction()) return { ok: false, msg: "Plus d'action cette semaine." };
-  S.cash -= cost; S.ss.costs += cost;
+  S.cash -= cost; S.ss.costs += cost; ledger('✈️', `Voyage de détection (${COUNTRY_LABEL[country]})`, -cost);
   const found = [];
   for (let i = 0; i < 3; i++) {
     const p = genPlayer(country, 16, 18, rnd(6, 16));
@@ -522,7 +530,7 @@ function eventView() {
 
 function resolveEvent(i) {
   const e = S.event, p = getP(e.pid);
-  const pay = (x) => { if (S.cash < x) return false; S.cash -= x; return true; };
+  const pay = (x) => { if (S.cash < x) return false; S.cash -= x; ledger('⚡', `${eventView().title} (${p.n})`, -x); return true; };
   const mor = (x) => { p.morale = clamp(p.morale + x, 0, 100); };
   const broke = { ok: false, msg: 'Pas assez de liquidités pour ce choix.' };
   let r;
@@ -562,7 +570,7 @@ function resolveEvent(i) {
     else { mor(-3); r = { ok: true, msg: `${p.n} est un peu déçu.` }; }
   } else if (e.k === 'exotic') {
     if (i === 0) {
-      earn(e.c * 15); addRep(-1); toHof(p, 'Exil doré');
+      earn(e.c * 15); ledger('🌴', `Exil doré : ${p.n}`, e.c * 15); addRep(-1); toHof(p, 'Exil doré');
       p.mine = false; S.offers = S.offers.filter((o) => o.pid !== p.id); S.players = S.players.filter((x) => x.id !== p.id);
       news('🌴', `${p.n} part pour un exil doré loin de l'Europe. Votre commission : ${fmt(e.c * 15)}.`);
       r = { ok: true, msg: `Jackpot : ${fmt(e.c * 15)} encaissés, mais ${p.n} quitte l'agence.` };
@@ -614,7 +622,7 @@ function actAccept(oid) {
   if (o.free) S.flags.free = 1;
   p.promise = null;
   p.club = club.id; p.sal = o.sal; p.cy = rint(3, 5); p.morale = clamp(p.morale + 20, 0, 100); p.rej = {}; p.free = false;
-  earn(com); S.stats.transfers++;
+  earn(com); S.stats.transfers++; ledger('🤝', `${o.free ? 'Prime transfert libre' : 'Commission transfert'} : ${p.n} → ${club.name}`, com);
   if (o.fee > S.stats.bestFee) { S.stats.bestFee = o.fee; S.stats.bestName = `${p.n} → ${club.name}`; }
   S.ss.maxRep = Math.max(S.ss.maxRep || 0, club.rep);
   if (!o.free && (!S.ss.bestTr || o.fee > S.ss.bestTr.fee)) S.ss.bestTr = { n: p.n, from: from.name, to: club.name, fee: o.fee };
@@ -658,13 +666,31 @@ function actRenew(id) {
   if (Math.random() < 0.85) {
     p.sal = Math.round(Math.max(p.sal * 1.1, fairSalary(p, club) * 1.05) / 10) * 10;
     p.cy = rint(3, 4); p.morale = clamp(p.morale + 8, 0, 100); p.free = false;
-    const com = p.sal * 6; earn(com);
+    const com = p.sal * 6; earn(com); ledger('📝', `Prolongation : ${p.n}`, com);
     news('📝', `${p.n} prolonge à ${club.name} : ${fmt(p.sal)}/sem. Prime d'agent : ${fmt(com)}.`);
     save();
     return { ok: true, msg: `Prolongation signée ! Prime d'agent : ${fmt(com)}.` };
   }
   save();
   return { ok: false, msg: `${club.name} ne veut pas prolonger pour l'instant.` };
+}
+
+/* Demander au club plus de temps de jeu pour un client (effet 12 semaines) */
+const ptChance = (p) => clamp(0.35 + rel(p.club) / 150 + (p.ovr - (CLUBS[p.club].rep - 12)) / 40, 0.1, 0.85);
+function actPlaytime(id) {
+  const p = getP(id), c = CLUBS[p.club];
+  if (p.loan) return { ok: false, msg: 'Impossible pendant un prêt.' };
+  if (p.ptb > S.t) return { ok: false, msg: `Le club lui accorde déjà plus de temps de jeu (encore ${p.ptb - S.t} sem.).` };
+  if (p.ptT > S.t) return { ok: false, msg: `Vous avez déjà sollicité le club récemment (encore ${p.ptT - S.t} sem.).` };
+  if (playProb(p) >= 0.8) return { ok: false, msg: 'Il joue déjà presque tout le temps.' };
+  if (!useAction()) return { ok: false, msg: "Plus d'action cette semaine." };
+  p.ptT = S.t + 10;
+  if (Math.random() < ptChance(p)) {
+    p.ptb = S.t + 12; p.morale = clamp(p.morale + 6, 0, 100); addRel(p.club, -3); save();
+    return { ok: true, msg: `${c.name} accepte de lui donner plus de temps de jeu : ${Math.round(playProb(p) * 100)} % pendant 12 semaines.` };
+  }
+  addRel(p.club, -6); p.morale = clamp(p.morale - 3, 0, 100); save();
+  return { ok: false, msg: `${c.name} refuse et n'apprécie pas d'être mis sous pression.` };
 }
 
 function actTalk(id) {
@@ -686,6 +712,7 @@ function buyOffice() {
   const next = OFFICES[S.office + 1];
   if (!next) return { ok: false, msg: 'Niveau maximum atteint.' };
   if (S.cash < next.cost) return { ok: false, msg: 'Pas assez de liquidités.' };
+  ledger('🏢', `Déménagement : ${next.name}`, -next.cost);
   S.cash -= next.cost; S.office++; S.actions += next.actions - OFFICES[S.office - 1].actions; addRep(2);
   news('🏢', `L'agence déménage : ${next.name}. ${next.maxClients} clients max, ${next.actions} actions par semaine.`);
   save();
@@ -698,7 +725,7 @@ function hireStaff(k) {
   if (S.stl[k] >= 3) return { ok: false, msg: 'Niveau maximum atteint.' };
   const cost = staffCost(k);
   if (S.cash < cost) return { ok: false, msg: 'Pas assez de liquidités.' };
-  S.cash -= cost; S.stl[k]++; S.staff[k] = true; save();
+  S.cash -= cost; S.stl[k]++; S.staff[k] = true; ledger('🧑‍💼', `${st.name} niveau ${S.stl[k]}`, -cost); save();
   return { ok: true, msg: S.stl[k] === 1 ? `${st.name} engagé !` : `${st.name} passe au niveau ${S.stl[k]} !` };
 }
 function fireStaff(k) { S.stl[k] = 0; S.staff[k] = false; save(); return { ok: true, msg: `${STAFF[k].name} licencié.` }; }
@@ -923,7 +950,7 @@ function nextWeek() {
     }
     if (p.ovr >= 68 && Math.random() < 0.015) {
       const c = Math.round(baseValue(p.ovr) * 0.004 / 100) * 100;
-      earn(c); news('👟', `${p.n} signe un contrat de sponsoring. Votre commission : ${fmt(c)}.`);
+      earn(c); ledger('👟', `Sponsoring ponctuel : ${p.n}`, c); news('👟', `${p.n} signe un contrat de sponsoring. Votre commission : ${fmt(c)}.`);
     }
     if (win && !p.loan && p.inj === 0 && Math.random() < (p.free ? 0.25 : 0.09) * (S.week === 6 || S.week === 23 ? 2.2 : 1) && !S.offers.some((o) => o.pid === p.id)) {
       const cands = CLUB_IDS.map((id) => CLUBS[id]).filter((c) => playerAccepts(p, c) && clubInterest(p, c) > 0.3 && !(p.rej[c.id] > S.t));
@@ -986,7 +1013,7 @@ function seasonAwards(cl) {
   });
   for (const lg in bestYoung) {
     const p = bestYoung[lg], prize = Math.round(baseValue(p.ovr) * 0.003 / 100) * 100;
-    p.aw.unshift(`${label} : meilleur espoir de ${LEAGUES[lg].name}`); addRep(LEAGUES[lg].big ? 1.5 : 0.6); earn(prize);
+    p.aw.unshift(`${label} : meilleur espoir de ${LEAGUES[lg].name}`); addRep(LEAGUES[lg].big ? 1.5 : 0.6); earn(prize); ledger('🏅', `Prime meilleur espoir : ${p.n}`, prize);
     news('🏅', `${p.n} est élu meilleur espoir de ${LEAGUES[lg].name} (note ${avg(p).toFixed(1)}). Prime : ${fmt(prize)}.`);
   }
 }

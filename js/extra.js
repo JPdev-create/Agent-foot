@@ -22,7 +22,7 @@ function buyAcademy() {
   if (!next) return { ok: false, msg: 'Académie au niveau maximum.' };
   if (S.office < 1) return { ok: false, msg: 'Il faut d\'abord un vrai bureau (niveau 2).' };
   if (S.cash < next.cost) return { ok: false, msg: 'Pas assez de liquidités.' };
-  S.cash -= next.cost; S.acad++; addRep(1);
+  S.cash -= next.cost; S.acad++; addRep(1); ledger('🏫', next.name, -next.cost);
   news('🏫', `Votre ${next.name.toLowerCase()} ouvre ses portes : ${next.kids} jeune(s) formé(s) rejoindront l'agence chaque été.`);
   save();
   return { ok: true, msg: `${next.name} construite !` };
@@ -159,6 +159,7 @@ const clubSponsorCost = (c) => Math.max(5000, Math.round(baseValue(c.rep - 15) *
 function invMarketing() {
   if (S.inv.mk === S.season) return { ok: false, msg: 'Une seule campagne par saison.' };
   if (S.cash < mkCost()) return { ok: false, msg: 'Pas assez de liquidités.' };
+  ledger('📣', 'Campagne de communication', -mkCost());
   S.cash -= mkCost(); S.ss.costs += mkCost(); S.inv.mk = S.season; addRep(3);
   clients().forEach((p) => { p.fol = Math.round((p.fol || 0) * 1.08 + 500); });
   news('📣', 'Grande campagne de communication : l\'agence fait parler d\'elle partout en Europe.');
@@ -168,6 +169,7 @@ function invGala() {
   if (S.inv.gala === S.season) return { ok: false, msg: 'Un seul gala par saison.' };
   if (!clients().length) return { ok: false, msg: 'Aucun client à inviter.' };
   if (S.cash < galaCost()) return { ok: false, msg: 'Pas assez de liquidités.' };
+  ledger('🥂', 'Gala de l\'agence', -galaCost());
   S.cash -= galaCost(); S.ss.costs += galaCost(); S.inv.gala = S.season; addRep(1);
   clients().forEach((p) => { p.morale = clamp(p.morale + 15, 0, 100); });
   news('🥂', 'Soirée de gala de l\'agence : tous vos clients sont aux anges.');
@@ -177,7 +179,7 @@ function invClub(id) {
   const c = CLUBS[id], cost = clubSponsorCost(c);
   if (S.inv.cl[id] === S.season) return { ok: false, msg: 'Déjà partenaire de ce club cette saison.' };
   if (S.cash < cost) return { ok: false, msg: 'Pas assez de liquidités.' };
-  S.cash -= cost; S.ss.costs += cost; S.inv.cl[id] = S.season; addRel(id, 20);
+  S.cash -= cost; S.ss.costs += cost; S.inv.cl[id] = S.season; addRel(id, 20); ledger('🤝', `Partenariat : ${c.name}`, -cost);
   news('🤝', `Partenariat signé avec ${c.name} : vos relations se renforcent.`);
   save(); return { ok: true, msg: `Partenariat avec ${c.name} : relation +20.` };
 }
@@ -250,6 +252,7 @@ function buyClub(id) {
   if (S.owned.length >= 1) return { ok: false, msg: 'Vous possédez déjà un club : concentrez-vous sur lui.' };
   if (tierIdx(S.rep) < OWN_TIER) return { ok: false, msg: `Il faut le statut « ${TIERS[OWN_TIER][2]} » pour racheter un club.` };
   if (S.cash < price) return { ok: false, msg: 'Pas assez de liquidités.' };
+  ledger('🏛️', `Rachat de ${c.name}`, -price);
   S.cash -= price; S.ss.costs += price; S.owned.push(id); addRel(id, 100); addRep(3);
   news('🏛️', `HISTORIQUE : ${S.agency.name} rachète ${c.name} pour ${fmt(price)} ! Objectif : l'Europe.`);
   save(); return { ok: true, msg: `Vous êtes le nouveau propriétaire de ${c.name} !` };
@@ -259,11 +262,26 @@ function investClub(id) {
   if (!S.owned.includes(id)) return { ok: false, msg: 'Ce club ne vous appartient pas.' };
   if (S.inv.own[id] === S.season) return { ok: false, msg: 'Un seul grand investissement par saison.' };
   if (S.cash < cost) return { ok: false, msg: 'Pas assez de liquidités.' };
-  S.cash -= cost; S.ss.costs += cost; S.inv.own[id] = S.season; setClub(id, c.rep + 2);
+  S.cash -= cost; S.ss.costs += cost; S.inv.own[id] = S.season; setClub(id, c.rep + 2); ledger('🏗️', `Investissement : ${c.name}`, -cost);
   news('🏗️', `Investissement massif à ${c.name} (stade, centre d'entraînement, recrues) : prestige ${c.rep}.`);
   save(); return { ok: true, msg: `${c.name} gagne 2 points de prestige.` };
 }
 /* Chaque été, votre club grandit un peu et vos clients y sont choyés */
 function ownedClubsSeason() {
   (S.owned || []).forEach((id) => { setClub(id, CLUBS[id].rep + 1); S.rel[id] = 100; });
+}
+
+/* ---------- Projection : niveau attendu dans un an ---------- */
+function projectOvr(p) {
+  const pot = p.mine || p.sc >= 1 ? (p.potLo + p.potHi) / 2 || p.pot : null;
+  if (pot === null) return null;
+  let o = p.ovr, age = p.age;
+  const pp = playProb(p), boost = (p.mine ? (1 + 0.12 * S.stl.coach) * PLANS[p.plan || 'std'].g : 1) * ({ pro: 1.15, amb: 1.08, fet: 0.9 }[p.tr] || 1);
+  for (let w = 0; w < SEASON_WEEKS; w++) {
+    if (w === SEASON_WEEKS - S.week + 1) age++;
+    const k = GROWTH_K[age] || 0;
+    if (k > 0 && o < pot) o = Math.min(pot, o + (pot - o) * k / 38 * (0.45 + 0.9 * pp) * boost);
+    else if (age >= 31) o -= 0.045;
+  }
+  return Math.floor(o);
 }

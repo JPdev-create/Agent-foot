@@ -36,7 +36,7 @@ function applyTheme() {
 const UI = {
   tab: 'home', modal: null, toast: null, newsAll: false,
   mk: { country: 'BE', pos: '', sort: 'ovr', fav: false, u19: false, q: '' }, com: 1,
-  cs: 'ovr', jv: 'list', lg: 'BE1', mode: 'transfer',
+  cs: 'ovr', jv: 'list', cmp: [], lg: 'BE1', mode: 'transfer',
   cmode: 'lg', clg: 'BE1', cview: 'table', eu: 'C1', av: 'dev',
   nw: { name: 'JP Sport Management', logo: '⚽', color: '#35d07f', diff: 1, city: 'Liège' },
 };
@@ -276,7 +276,16 @@ function viewClients() {
   cl.sort(sorters[UI.cs]);
   const total = cl.reduce((s, p) => s + playerValue(p), 0);
   let h = `<div class="card"><div class="stats">${stat('Clients', `${cl.length}/${office().maxClients}`)}${stat('Revenus / sem.', fmt(cl.reduce((s, p) => s + forYou(p), 0)), 'pos')}${stat('Valeur totale', fmt(total))}</div></div>`;
-  h += seg('jv', UI.jv, [['list', '👥 Effectif'], ['stats', '📊 Statistiques']]);
+  h += seg('jv', UI.jv, [['list', '👥 Effectif'], ['stats', '📊 Stats'], ['ctr', '📝 Contrats']]);
+  if (UI.jv === 'ctr') {
+    const by = cl.slice().sort((a, b) => (a.free ? -1 : a.cy) - (b.free ? -1 : b.cy) || a.mandate - b.mandate);
+    return h + `<div class="card flush"><table class="tbl"><tr><th class="l">Joueur</th><th>Club</th><th>Mandat</th><th>Com.</th><th>Pour vous</th></tr>
+      ${by.map((p) => `<tr data-act="open" data-id="${p.id}"><td class="l">${esc(p.n)}<small>${fmt(p.sal)}/sem.</small></td>
+        <td><b class="${p.free ? 'gold' : p.cy <= 1 ? 'neg' : ''}">${p.free ? 'Libre' : p.cy + ' an' + (p.cy > 1 ? 's' : '')}</b></td><td class="${p.mandate <= 1 ? 'neg' : ''}">${p.mandate} s.</td>
+        <td>${Math.round(comRate(p) * 100)} %</td><td class="pos">${fmt(forYou(p))}</td></tr>`).join('')}</table>
+      <div class="legend" style="padding:0 0 10px"><span>Club : années de contrat restantes</span><span>Mandat : saisons avec votre agence</span></div></div>
+      <p class="hint">En rouge : contrat ou mandat qui se termine bientôt. Un contrat qui expire rend le joueur libre (prime pour vous s'il est placé).</p>`;
+  }
   if (UI.jv === 'stats') {
     const by = cl.slice().sort((a, b) => (b.m ? b.rs / b.m : 0) - (a.m ? a.rs / a.m : 0));
     return h + `<div class="card flush"><table class="tbl"><tr><th></th><th class="l">Joueur</th><th>M</th><th>B</th><th>PD</th><th>Note</th></tr>
@@ -417,6 +426,9 @@ function agencyDev() {
     ${line('Commissions sur salaires', '+' + fmt(salCom), 'pos')}${spons ? line('Contrats de sponsoring', '+' + fmt(spons), 'pos') : ''}
     ${line('Loyer du bureau', '-' + fmt(o.weekly), 'neg')}${staffC ? line('Personnel', '-' + fmt(staffC), 'neg') : ''}${planC ? line('Entraînements intensifs', '-' + fmt(planC), 'neg') : ''}${acadC ? line('Académie', '-' + fmt(acadC), 'neg') : ''}${ownedIncome() ? line('Revenus de votre club', '+' + fmt(ownedIncome()), 'pos') : ''}
     ${line('<b>Solde</b>', fmt(weeklyIncome() - weeklyCosts()), weeklyIncome() - weeklyCosts() < 0 ? 'neg' : 'pos')}</div>`);
+  const lg = (S.ledger || []).slice(0, UI.ledAll ? 80 : 8);
+  h += sec('🧾 Journal des opérations', lg.length ? `<div class="list">${lg.map((x) => `<div class="row wrap" style="padding:9px 13px"><span class="ico" style="font-size:16px">${x.i}</span><div class="main"><b style="font-weight:550;font-size:13.5px">${esc(x.l)}</b><small>Sem. ${x.w} · ${seasonTxt(x.s)}</small></div><div class="side"><b class="${x.a >= 0 ? 'pos' : 'neg'}">${x.a >= 0 ? '+' : ''}${fmt(x.a)}</b></div></div>`).join('')}</div>`
+    : '<div class="card"><p class="empty">Les grosses rentrées et dépenses (transferts, primes, achats…) apparaîtront ici.</p></div>', (S.ledger || []).length > 8 ? `<button class="link" data-act="ledAll">${UI.ledAll ? 'Réduire' : 'Tout voir'}</button>` : '');
   h += sec('🏢 Locaux', upgradeCard('🏢', o.name, `Niv. ${S.office + 1}/${OFFICES.length}`, `${o.maxClients} clients · ${o.actions} actions/sem. · ${fmt(o.weekly)}/sem.`,
     nx && { title: nx.name, desc: `${nx.maxClients} clients · ${nx.actions} actions · ${fmt(nx.weekly)}/sem.${S.office + 1 === INTL_OFFICE ? ' · recrutement à l\'étranger' : ''}`, price: fmt(nx.cost), disabled: S.cash < nx.cost }, 'office'));
   h += sec('🧑‍💼 Personnel', Object.keys(STAFF).map((k) => {
@@ -542,11 +554,13 @@ function marketSheet(p) {
   return `${playerHead(p)}
     <div class="stats">${stat('Potentiel', potTxt(p), 'gold')}${stat('Valeur', fmt(playerValue(p)))}${stat('Salaire / sem.', fmt(p.sal))}</div>
     <div class="stats" style="margin-top:8px">${stat('Temps de jeu', pct(playProb(p)))}${stat('Saison', `${p.m} m · ${p.g} b`)}${stat('Contrat club', `${p.cy} an(s)`, p.cy <= 1 ? 'neg' : '')}</div>
+    ${projLine(p)}
     ${attrCard(p)}
     <div class="info">${traitLine(p)}</div>
     ${p.cov ? `<div class="note bad">👀 <b>${esc(p.cov.by)}</b> veut le signer : il sera parti dans ${Math.max(1, p.cov.t - S.t)} semaine(s) !</div>` : ''}
     ${p.sc >= 2 ? '' : actBtn('scout', p.id, '🔎', p.sc ? 'Affiner le rapport' : 'Observer le joueur', p.sc ? 'Potentiel estimé plus précisément' : 'Révèle son potentiel, ses qualités et son caractère', 1)}
-    <button class="btn sec" style="margin:0 0 4px" data-act="fav" data-id="${p.id}">${p.fav ? '⭐ Joueur suivi — ne plus suivre' : '☆ Suivre ce joueur'}</button>
+    <div class="stats two" style="margin:0 0 4px"><button class="btn sec" style="margin:0" data-act="fav" data-id="${p.id}">${p.fav ? '⭐ Suivi' : '☆ Suivre'}</button>
+      <button class="btn sec" style="margin:0" data-act="cmpToggle" data-id="${p.id}">${UI.cmp.includes(p.id) ? '⚖️ Retirer' : '⚖️ Comparer'}</button></div>
     <h4>Proposer un mandat · 1 action</h4>
     <div class="card" style="padding:12px"><div class="split"><b style="font-size:14px">Votre commission sur son salaire</b><small>${['Attractif', 'Standard', 'Gourmand'][UI.com]}</small></div>
       <small>Plus elle est basse, plus il est facile de le convaincre.</small>
@@ -562,12 +576,23 @@ function marketSheet(p) {
   }).join('')}`;
 }
 
+function projLine(p) {
+  const n = projectOvr(p);
+  if (n === null) return '';
+  const d = n - ovrOf(p);
+  const slow = p.mine && playProb(p) < 0.35 && p.age <= 23 && (projectOvr(p) < (p.potLo + p.potHi) / 2);
+  return `<div class="note" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>📈 Niveau estimé dans un an</span><b style="color:var(--txt)">${n} <span class="${d > 0 ? 'pos' : d < 0 ? 'neg' : 'mut'}">(${d > 0 ? '+' : ''}${d})</span></b></div>
+    ${slow ? '<div class="note warn" style="margin-top:-4px">🪑 Il joue trop peu pour progresser : demandez plus de temps de jeu ou prêtez-le (onglet Actions).</div>' : ''}`;
+}
+const cmpBtn = (p) => `<button class="btn sec" data-act="cmpToggle" data-id="${p.id}">${UI.cmp.includes(p.id) ? '⚖️ Retirer de la comparaison' : '⚖️ Comparer avec un autre joueur'}</button>`;
+
 function clientOverview(p) {
   const prog = Math.max(0, Math.floor(p.ovr) - Math.floor(p.o0));
   return `<div class="stats">${stat('Valeur', fmt(playerValue(p)))}${stat('Potentiel', potTxt(p), 'gold')}${stat(`Pour vous · ${Math.round(comRate(p) * 100)} %`, fmt(forYou(p)) + '/s', 'pos')}</div>
     <div class="stats" style="margin-top:8px">${stat('Temps de jeu', pct(playProb(p)), playProb(p) < 0.35 ? 'neg' : '')}${stat('Contrat club', `${p.cy} an(s)`, p.cy <= 1 ? 'neg' : '')}${stat('Mandat', `${p.mandate} saison(s)`)}</div>
     <div class="stats" style="margin-top:8px">${stat('Salaire / sem.', fmt(p.sal))}${stat('Abonnés', fmtFol(p.fol || 0))}${stat('Progression', '+' + prog, 'pos')}</div>
     <div class="moral"><small style="width:52px">Moral</small>${bar(p.morale, moralCls(p.morale))}<b>${Math.round(p.morale)}</b></div>
+    ${projLine(p)}
     ${moraleFactors(p).length ? `<div class="tags" style="margin:-4px 0 10px">${moraleFactors(p).map(([i, t, c]) => tag(`${i} ${t}`, c)).join('')}</div>` : ''}
     ${nextMatch(p).map((x) => `<div class="note nextm" data-act="club" data-id="${esc(x.opp)}">📅 <span>Prochain match · ${x.cup ? EU[x.cup].icon + ' ' : ''}${x.comp}</span><b>${x.home ? 'Dom.' : 'Ext.'} ${esc(CLUBS[x.opp].name)} ›</b></div>`).join('')}
     ${attrCard(p)}
@@ -580,7 +605,8 @@ function clientOverview(p) {
       <div><span>${PLANS[p.plan || 'std'].icon}</span><p><b>Entraînement :</b> ${PLANS[p.plan || 'std'].name}</p></div>
       ${p.sp ? `<div><span>👟</span><p><b>Sponsor ${esc(p.sp.b)}</b> — ${fmt(p.sp.w)}/sem. jusqu'en ${seasonTxt(p.sp.end - 1)}</p></div>` : ''}
     </div>
-    ${sparkline(p)}`;
+    ${sparkline(p)}
+    ${cmpBtn(p)}`;
 }
 
 function clientActions(p) {
@@ -598,6 +624,8 @@ function clientActions(p) {
     ${p.sp ? `<div class="info"><div><span>👟</span><p><b>Sponsor ${esc(p.sp.b)}</b> — ${fmt(p.sp.w)}/sem. pour vous</p></div></div>`
     : actBtn('sponsor', p.id, '👟', 'Chercher un sponsor', p.ovr >= 58 ? `${pct(sponsorChance(p))} de chances · ${fmt(sponsorValue(p))}/sem. pour vous` : 'Niveau 58 requis', 1, { disabled: p.ovr < 58 })}
     <h4>Suivi</h4>
+    ${p.ptb > S.t ? `<div class="info"><div><span>⏱️</span><p><b>Temps de jeu négocié</b> — encore ${p.ptb - S.t} semaine(s)</p></div></div>`
+    : actBtn('playtime', p.id, '⏱️', 'Demander plus de temps de jeu', p.loan ? 'Impossible pendant un prêt' : playProb(p) >= 0.8 ? 'Il joue déjà presque tout le temps' : p.ptT > S.t ? `Club déjà sollicité (encore ${p.ptT - S.t} sem.)` : `${pct(ptChance(p))} de chances · +20 % de temps de jeu pendant 12 sem. · froisse un peu le club`, 1, { disabled: !!p.loan || playProb(p) >= 0.8 || p.ptT > S.t })}
     ${actBtn('talk', p.id, '💬', 'Discuter avec lui', 'Remonte son moral', 1)}
     <div class="card" style="padding:12px"><b style="font-size:14px">Plan d'entraînement</b><small>${PLANS[p.plan || 'std'].desc}${p.plan === 'int' ? ` (${fmt(planCost(p))}/sem.)` : ''}</small>
       <div class="seg" style="margin:10px 0 0;position:static;box-shadow:none">${Object.keys(PLANS).map((k) => `<button class="${(p.plan || 'std') === k ? 'on' : ''}" data-act="plan" data-id="${p.id}" data-k="${k}">${PLANS[k].icon} ${PLANS[k].name}</button>`).join('')}</div></div>
@@ -726,6 +754,36 @@ function modalClub(id, m) {
     ${m && m.back ? `<button class="btn ghost" data-act="open" data-id="${m.back}">← Retour à la fiche de ${esc(getP(m.back) ? getP(m.back).n : '')}</button>` : ''}`;
 }
 
+function modalCmp() {
+  const ps = UI.cmp.map(getP).filter(Boolean);
+  if (ps.length < 2) return '<p class="empty">Choisissez deux joueurs à comparer.</p>';
+  const [a, b] = ps, known = (p) => p.mine || p.sc >= 1;
+  const row = (l, fa, fb, num) => {
+    const va = fa(a), vb = fb(b), na = num ? num(a) : null, nb = num ? num(b) : null;
+    const wa = na !== null && nb !== null && na > nb, wb = na !== null && nb !== null && nb > na;
+    return `<tr><td class="${wa ? 'win' : ''}">${va}</td><th>${l}</th><td class="${wb ? 'win' : ''}">${vb}</td></tr>`;
+  };
+  const aa = attrs(a), ab = attrs(b), names = attrNames(a), same = (a.pos === 'GB') === (b.pos === 'GB');
+  const pr = (p) => projectOvr(p);
+  return `<h3>⚖️ Comparaison</h3>
+    <div class="cmp-head">${[a, b].map((p) => `<button class="cmp-p" data-act="open" data-id="${p.id}">${rt(ovrOf(p), 'xl')}<b>${esc(p.n)}</b><small>${POS_SHORT[p.pos]} · ${p.age} ans</small><small>${clubTxt(p)}</small></button>`).join('<span class="vs">VS</span>')}</div>
+    <div class="card flush"><table class="tbl cmp">
+      ${row('Niveau', (p) => ovrOf(p), (p) => ovrOf(p), (p) => p.ovr)}
+      ${row('Potentiel', potTxt, potTxt, (p) => (known(p) ? (p.potLo + p.potHi) / 2 : null))}
+      ${row('Dans 1 an', (p) => (pr(p) === null ? '??' : pr(p)), (p) => (pr(p) === null ? '??' : pr(p)), (p) => pr(p))}
+      ${row('Âge', (p) => p.age, (p) => p.age, (p) => -p.age)}
+      ${row('Valeur', (p) => fmt(playerValue(p)), (p) => fmt(playerValue(p)))}
+      ${row('Salaire', (p) => fmt(p.sal), (p) => fmt(p.sal))}
+      ${row('Temps de jeu', (p) => pct(playProb(p)), (p) => pct(playProb(p)), playProb)}
+      ${row('Saison', (p) => `${p.m} m · ${p.g} b · ${p.a} pd`, (p) => `${p.m} m · ${p.g} b · ${p.a} pd`)}
+      ${row('Note moy.', avgNote, avgNote, (p) => (p.m ? p.rs / p.m : null))}
+      ${same ? names.map((nm, i) => row(nm, () => (known(a) ? aa[i] : '??'), () => (known(b) ? ab[i] : '??'), (p) => (known(p) ? (p === a ? aa[i] : ab[i]) : null))).join('') : ''}
+      ${row('Caractère', (p) => (p.tr && known(p) ? TRAITS[p.tr].icon + ' ' + TRAITS[p.tr].name : p.tr ? '??' : '—'), (p) => (p.tr && known(p) ? TRAITS[p.tr].icon + ' ' + TRAITS[p.tr].name : p.tr ? '??' : '—'))}
+    </table></div>
+    ${same ? '' : '<p class="hint">Gardien contre joueur de champ : les qualités ne sont pas comparables.</p>'}
+    <button class="btn ghost" data-act="cmpDone">Terminer la comparaison</button>`;
+}
+
 function modalNego(p, m) {
   const o = S.offers.find((x) => x.id === m.oid);
   if (!o) return '<p class="empty">Offre expirée.</p>';
@@ -805,11 +863,11 @@ function renderModal() {
   const m = UI.modal, el = $('#modal');
   if (!m) { el.innerHTML = ''; return; }
   if (m.type === 'cer') { el.innerHTML = `<div class="stage">${viewCer()}</div>`; return; }
-  const free = m.type === 'help' || m.type === 'club';
+  const free = m.type === 'help' || m.type === 'club' || m.type === 'cmp';
   const p = free ? null : getP(m.id);
   if (!p && !free) { UI.modal = null; el.innerHTML = ''; return; }
   const old = $('#modal .sheet'), sc = old ? old.scrollTop : 0, key = m.type + (m.id || ''), same = old && old.dataset.key === key;
-  const content = m.type === 'help' ? modalHelp() : m.type === 'club' ? modalClub(m.id, m) : m.type === 'match' ? modalMatch(p, m) : m.type === 'nego' ? modalNego(p, m) : m.type === 'propose' ? modalPropose(p) : modalPlayer(p, m);
+  const content = m.type === 'help' ? modalHelp() : m.type === 'cmp' ? modalCmp() : m.type === 'club' ? modalClub(m.id, m) : m.type === 'match' ? modalMatch(p, m) : m.type === 'nego' ? modalNego(p, m) : m.type === 'propose' ? modalPropose(p) : modalPlayer(p, m);
   el.innerHTML = `<div class="backdrop" data-act="close"></div><div class="sheet ${m.type === 'player' && p.mine ? 'tall' : ''}" data-key="${key}" style="${same ? 'animation:none' : ''}">
     <div class="grab"></div><button class="x" data-act="close" aria-label="Fermer">✕</button>${content}</div>`;
   if (m.keep && same) $('#modal .sheet').scrollTop = sc;
@@ -835,7 +893,8 @@ function render() {
   const views = { home: viewHome, clients: viewClients, scout: viewScout, compet: viewCompet, agence: viewAgence };
   const y = window.scrollY, same = app.dataset.tab === UI.tab;
   app.className = UI.tab === 'home' && !S.over ? 'has-dock' : '';
-  app.innerHTML = `${topbar()}<main>${views[UI.tab]()}</main>${dock()}${navbar()}`;
+  UI.cmp = UI.cmp.filter((id) => getP(id));
+  app.innerHTML = `${topbar()}<main>${views[UI.tab]()}</main>${UI.cmp.length === 1 ? `<div class="cmpbar ${UI.tab === 'home' && !S.over ? 'up' : ''}"><span>⚖️ ${esc(getP(UI.cmp[0]).n)} · choisissez un 2e joueur</span><button class="btn sm ghost" data-act="cmpClear">Annuler</button></div>` : ''}${dock()}${navbar()}`;
   app.dataset.tab = UI.tab;
   window.scrollTo(0, same ? y : 0);
   if (S && SAVE_FAIL && !UI.saveWarned) { UI.saveWarned = true; toast({ ok: false, msg: 'Sauvegarde impossible sur cet appareil (stockage plein ou navigation privée). Exportez votre partie dans Réglages.' }); }
@@ -921,6 +980,7 @@ const ACTIONS = {
   raise(d) { toast(actRaise(+d.id)); keep(); },
   renew(d) { toast(actRenew(+d.id)); keep(); },
   talk(d) { toast(actTalk(+d.id)); keep(); },
+  playtime(d) { toast(actPlaytime(+d.id)); keep(); },
   sponsor(d) { toast(actSponsor(+d.id)); keep(); },
   plan(d) { getP(+d.id).plan = d.k; save(); keep(); },
   release(d) { if (confirm('Rompre le mandat de ce joueur ?')) { actRelease(+d.id); UI.modal = null; } },
@@ -934,6 +994,15 @@ const ACTIONS = {
   staff(d) { toast(hireStaff(d.id)); },
   fire(d) { if (confirm('Licencier ce membre du personnel ?')) toast(fireStaff(d.id)); },
   acad() { toast(buyAcademy()); },
+  ledAll() { UI.ledAll = !UI.ledAll; },
+  cmpToggle(d) {
+    const id = +d.id, i = UI.cmp.indexOf(id);
+    if (i >= 0) UI.cmp.splice(i, 1); else { UI.cmp.push(id); if (UI.cmp.length > 2) UI.cmp.shift(); }
+    if (UI.cmp.length === 2) UI.modal = { type: 'cmp' }; else { keep(); toast({ ok: true, msg: i >= 0 ? 'Retiré de la comparaison.' : 'Ajouté : ouvrez un 2e joueur et touchez « Comparer ».' }); }
+  },
+  cmpOpen() { UI.modal = { type: 'cmp' }; },
+  cmpClear() { UI.cmp = []; },
+  cmpDone() { UI.cmp = []; UI.modal = null; },
   invMk() { toast(invMarketing()); },
   invGala() { toast(invGala()); },
   invClub(d) { toast(invClub(d.id)); keep(); },

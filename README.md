@@ -52,6 +52,9 @@ La partie est sauvegardée automatiquement dans le navigateur.
 - **Fin de partie** : rachat d'un club belge à mener jusqu'en Europe, réputation à entretenir au sommet,
   rivaux qui réagissent, succès de long terme. Raccourcis clavier sur ordinateur (Entrée, 1 à 5).
 
+- **Outils d'agent** : demande de temps de jeu au club, niveau estimé dans un an, comparateur de joueurs,
+  vue « Contrats » (échéances, mandats, commissions) et journal des opérations financières.
+
 ## Installer l'application
 
 Le jeu est une application web installable (PWA). Ouvrez le site sur le téléphone puis :

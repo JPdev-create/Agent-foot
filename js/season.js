@@ -25,7 +25,7 @@ function checkMissions() {
   if (!S.mis) return;
   S.mis.forEach((m) => {
     if (m.done || MISSIONS[m.k].prog() < m.n) return;
-    m.done = true; S.cash += m.r; addRep(0.5);
+    m.done = true; S.cash += m.r; addRep(0.5); ledger('🎯', `Mission : ${MISSIONS[m.k].t(m.n)}`, m.r);
     news('🎯', `Mission accomplie : ${MISSIONS[m.k].t(m.n)}. Prime : ${fmt(m.r)}.`);
   });
 }
@@ -133,7 +133,7 @@ function buildCeremony(champs, label, cl) {
   const gb = nominees(young, 5);
   if (gb[0].mine) {
     const p = getP(gb[0].pid), cash = prize(baseValue(p.ovr) * 0.01);
-    p.aw.unshift(`${label} : GOLDEN BOY`); addRep(3); S.stats.troph++; earn(cash); p.fol = Math.round(p.fol * 1.3 + 20000);
+    p.aw.unshift(`${label} : GOLDEN BOY`); addRep(3); S.stats.troph++; earn(cash); ledger('🌟', `Golden Boy : ${p.n}`, cash); p.fol = Math.round(p.fol * 1.3 + 20000);
     mine.push(`🌟 ${p.n} — Golden Boy (+${fmt(cash)})`);
   } else gb.filter((x) => x.mine).forEach((x) => { const p = getP(x.pid); p.aw.unshift(`${label} : nommé au Golden Boy`); addRep(0.8); });
   award({ title: 'Golden Boy', icon: '🌟', sub: 'Meilleur joueur de 21 ans ou moins', noms: gb });
@@ -183,7 +183,7 @@ function buildCeremony(champs, label, cl) {
   const an = nominees(ag, 4);
   if (an[0].mine) {
     const cash = missionReward() * 2;
-    addRep(2); S.stats.troph++; S.cash += cash; mine.push(`🕴️ Agent de l'année (+${fmt(cash)})`);
+    addRep(2); S.stats.troph++; S.cash += cash; ledger('🕴️', 'Prix de l\'agent de l\'année', cash); mine.push(`🕴️ Agent de l'année (+${fmt(cash)})`);
   }
   award({ title: 'Agent de l\'année', icon: '🕴️', sub: 'La meilleure agence de joueurs de la saison', noms: an.map((x) => Object.assign(x, { txt: x.club, club: '' })) });
 

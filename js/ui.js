@@ -120,7 +120,7 @@ function navbar() {
 function offerCard(o) {
   const p = getP(o.pid), c = CLUBS[o.club];
   return `<div class="card hl">
-    <div class="card-h"><div><span class="kicker">Offre pour ${esc(p.n)}</span><b>${LEAGUES[c.league].flag} ${esc(c.name)}</b><small>${LEAGUES[c.league].name} · prestige ${c.rep}</small></div>
+    <div class="card-h"><div><span class="kicker">Offre pour ${esc(p.n)}</span><b class="clublink" data-act="club" data-id="${esc(c.id)}">${LEAGUES[c.league].flag} ${esc(c.name)} ›</b><small>${LEAGUES[c.league].name} · prestige ${c.rep}</small></div>
       ${tag(`⏳ ${o.exp - S.t} sem.`, o.exp - S.t <= 1 ? 'bad' : 'warn')}</div>
     <div class="stats">
       ${stat('Indemnité', o.free ? 'Libre' : fmt(o.fee))}
@@ -181,10 +181,18 @@ function weekMatches() {
     <div class="side">${x.out ? `<small>${x.out}</small>` : `<b>${x.g ? '⚽'.repeat(x.g) : ''}${x.a ? '🅰️'.repeat(x.a) : ''} <span class="${noteClass(x.n)}">${x.n.toFixed(1)}</span></b>`}</div><span class="chev">›</span></div>` : ''; }).join('')}</div>`);
 }
 
+function sumCard() {
+  const s = UI.sum, chip = (t, cls) => `<span class="tag ${cls || ''}" style="font-size:12px;padding:4px 9px">${t}</span>`;
+  return `<div class="card sum"><div class="card-h" style="margin-bottom:8px"><span class="kicker" style="margin:0">⏱️ ${s.n > 1 ? `${s.n} semaines écoulées` : 'Semaine écoulée'}</span><button class="btn sm ghost" data-act="sumClose">OK</button></div>
+    <div class="tags" style="margin:0">${chip(`💶 ${s.dc >= 0 ? '+' : ''}${fmt(s.dc)}`, s.dc >= 0 ? 'ok' : 'bad')}${chip(`⭐ ${s.dr >= 0 ? '+' : ''}${s.dr.toFixed(1)} rép.`, s.dr >= 0 ? 'ok' : 'bad')}
+      ${s.g ? chip(`⚽ ${s.g} but(s)`, 'ok') : ''}${s.offers ? chip(`📨 ${s.offers} offre(s)`, 'gold') : ''}${s.inj ? chip(`🚑 ${s.inj} blessé(s)`, 'bad') : ''}</div></div>`;
+}
+
 function viewHome() {
   const inc = weeklyIncome(), costs = weeklyCosts(), net = inc - costs;
   let h = '';
   if (S.over) h += `<div class="card badc"><span class="kicker">Partie terminée</span><h3>💀 Faillite</h3><p>Les dettes de l'agence ont dépassé ${fmt(DIFFS[S.diff].bank)}.</p><button class="btn" data-act="reset">Recommencer une partie</button></div>`;
+  if (UI.sum && !S.over) h += sumCard();
   if (S.event) h += eventCard();
   if (S.offers.length) h += sec(`📨 Offres sur la table (${S.offers.length})`, S.offers.map(offerCard).join(''));
   if (S.cer && S.week <= 6) h += `<div class="card goldc cer-cta" data-act="cer"><span>🎬</span><div><b>Cérémonie des trophées ${S.cer.label}</b><small>Golden Boy, Soulier d'or, Ballon d'Or… Revoir la soirée</small></div><b class="gold">▶</b></div>`;
@@ -192,6 +200,8 @@ function viewHome() {
   h += sec('💼 Cette semaine', `<div class="card"><div class="stats">
       ${stat('Revenus', '+' + fmt(inc), 'pos')}${stat('Frais', '-' + fmt(costs), 'neg')}${stat('Solde', (net >= 0 ? '+' : '') + fmt(net), net < 0 ? 'neg' : 'pos')}
     </div><div class="split" style="margin-top:10px"><small>👥 ${clients().length}/${office().maxClients} clients</small><small>⚡ ${S.actions} action(s) restante(s)</small></div></div>`);
+  const tips = assistantTips();
+  if (tips.length) h += sec('🧠 Conseils de l\'assistant', `<div class="list">${tips.map((x) => `<button class="row" data-act="${x.act}" data-id="${x.id}"><span class="ico">${x.i}</span><div class="main"><span style="font-size:13.5px;display:block;white-space:normal">${esc(x.txt)}</span></div><span class="chev">›</span></button>`).join('')}</div>`);
   h += weekMatches();
   h += missionsBlock();
   h += agendaBlock();
@@ -292,7 +302,7 @@ function viewLeague(lg, mine) {
   let body = '';
   if (UI.cview === 'table') {
     body = `<div class="card flush"><table class="tbl"><tr><th>#</th><th class="l">Club</th><th>J</th><th>G</th><th>N</th><th>P</th><th>+/-</th><th>Pts</th></tr>
-      ${st.map((x, i) => `<tr class="${mine[x.c.id] ? 'me' : ''} ${zoneOf(lg, i, st.length)}"><td class="pos-n">${i + 1}</td><td class="l">${esc(x.c.name)}${mine[x.c.id] ? ` 👤${mine[x.c.id] > 1 ? mine[x.c.id] : ''}` : ''}</td>
+      ${st.map((x, i) => `<tr class="${mine[x.c.id] ? 'me' : ''} ${zoneOf(lg, i, st.length)}" data-act="club" data-id="${esc(x.c.id)}"><td class="pos-n">${i + 1}</td><td class="l">${esc(x.c.name)}${mine[x.c.id] ? ` 👤${mine[x.c.id] > 1 ? mine[x.c.id] : ''}` : ''}</td>
         <td>${x.t[0]}</td><td>${x.t[1]}</td><td>${x.t[2]}</td><td>${x.t[3]}</td><td>${x.t[4] - x.t[5] > 0 ? '+' : ''}${x.t[4] - x.t[5]}</td><td class="pts">${pts(x.t)}</td></tr>`).join('')}</table>
       <div class="legend" style="padding:0 0 10px">${LEAGUES[lg].big || lg === 'BE1' ? '<span><i style="background:var(--gold)"></i>Ligue des champions</span><span><i style="background:var(--info)"></i>Ligue Europa</span>' : ''}
         ${lg === 'BE2' || lg === 'BE3' ? '<span><i style="background:var(--acc)"></i>Montée</span>' : ''}${lg === 'BE1' || lg === 'BE2' ? '<span><i style="background:var(--bad)"></i>Relégation</span>' : ''}<span>👤 vos clients</span></div></div>`;
@@ -439,6 +449,21 @@ function sparkline(p) {
     <div class="split"><small>Signature : ${fmt(vs[0])}</small><small>Aujourd'hui : <b style="color:var(--txt)">${fmt(vs[vs.length - 1])}</b></small></div></div>`;
 }
 
+function radar(vals) {
+  const R = 64, cx = 80, cy = 76, pt = (i, r) => [cx + r * Math.sin(Math.PI * i / 3), cy - r * Math.cos(Math.PI * i / 3)];
+  const poly = (f) => [0, 1, 2, 3, 4, 5].map((i) => pt(i, f(i)).map((v) => v.toFixed(1)).join(',')).join(' ');
+  return `<svg class="radar" viewBox="0 0 160 152">${[0.25, 0.5, 0.75, 1].map((k) => `<polygon class="ring" points="${poly(() => R * k)}"/>`).join('')}
+    ${[0, 1, 2, 3, 4, 5].map((i) => { const [x, y] = pt(i, R); return `<line class="axis" x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}"/>`; }).join('')}
+    <polygon class="data" points="${poly((i) => R * Math.max(0.08, (vals[i] - 20) / 79))}"/></svg>`;
+}
+function attrCard(p) {
+  const known = p.mine || p.sc >= 1, a = attrs(p), n = attrNames(p);
+  if (!known) return `<div class="card attrs locked"><div class="radar-wrap">${radar([50, 50, 50, 50, 50, 50])}</div><div class="alist">${n.map((x) => `<div><span>${x}</span><b>??</b></div>`).join('')}</div>
+    <small class="full">🔎 Observez le joueur pour connaître ses qualités.</small></div>`;
+  return `<div class="card attrs"><div class="radar-wrap">${radar(a)}</div><div class="alist">${n.map((x, i) => `<div><span>${x}</span><b class="av ${ovrClass(a[i])}">${a[i]}</b></div>`).join('')}</div>
+    <small class="full">📋 ${esc(scoutBlurb(p))}</small></div>`;
+}
+
 function playerHead(p) {
   const c = CLUBS[p.club], t = [];
   if (p.mine) t.push(tag('👤 Client', 'ok'));
@@ -449,7 +474,7 @@ function playerHead(p) {
   if (p.cov && !p.mine) t.push(tag('👀 Convoité', 'bad'));
   if (p.fav && !p.mine) t.push(tag('⭐ Suivi', 'gold'));
   return `<div class="ph">${rt(ovrOf(p), 'xl')}<div style="min-width:0"><h3>${esc(p.n)}</h3><small>${POSITIONS[p.pos]} · ${p.age} ans · ${COUNTRY_LABEL[p.nat]}</small>
-    <small>${clubTxt(p)} · prestige ${c.rep}</small>${t.length ? `<div class="tags">${t.join('')}</div>` : ''}</div></div>`;
+    <small class="clublink" data-act="club" data-id="${esc(p.club)}">${clubTxt(p)} · prestige ${c.rep} ›</small>${t.length ? `<div class="tags">${t.join('')}</div>` : ''}</div></div>`;
 }
 
 function traitLine(p) {
@@ -463,11 +488,11 @@ function marketSheet(p) {
   return `${playerHead(p)}
     <div class="stats">${stat('Potentiel', potTxt(p), 'gold')}${stat('Valeur', fmt(playerValue(p)))}${stat('Salaire / sem.', fmt(p.sal))}</div>
     <div class="stats" style="margin-top:8px">${stat('Temps de jeu', pct(playProb(p)))}${stat('Saison', `${p.m} m · ${p.g} b`)}${stat('Contrat club', `${p.cy} an(s)`, p.cy <= 1 ? 'neg' : '')}</div>
-    <div class="info" style="margin-top:10px">${traitLine(p)}</div>
+    ${attrCard(p)}
+    <div class="info">${traitLine(p)}</div>
     ${p.cov ? `<div class="note bad">👀 <b>${esc(p.cov.by)}</b> veut le signer : il sera parti dans ${Math.max(1, p.cov.t - S.t)} semaine(s) !</div>` : ''}
-    <div class="stats two" style="margin-top:10px">
-      <button class="btn sec" style="margin:0" data-act="fav" data-id="${p.id}">${p.fav ? '⭐ Suivi' : '☆ Suivre'}</button>
-      <button class="btn sec" style="margin:0" data-act="scout" data-id="${p.id}" ${p.sc >= 2 ? 'disabled' : ''}>🔎 ${p.sc >= 2 ? 'Rapport complet' : `Observer ${cost(1)}`}</button></div>
+    ${p.sc >= 2 ? '' : actBtn('scout', p.id, '🔎', p.sc ? 'Affiner le rapport' : 'Observer le joueur', p.sc ? 'Potentiel estimé plus précisément' : 'Révèle son potentiel, ses qualités et son caractère', 1)}
+    <button class="btn sec" style="margin:0 0 4px" data-act="fav" data-id="${p.id}">${p.fav ? '⭐ Joueur suivi — ne plus suivre' : '☆ Suivre ce joueur'}</button>
     <h4>Proposer un mandat · 1 action</h4>
     ${cd ? `<div class="note warn">Il refuse de discuter encore ${p.cd - S.t} semaine(s).</div>` : ''}
     ${!can ? `<div class="note warn">🔒 Recrutement à l'étranger non débloqué (bureau « ${OFFICES[INTL_OFFICE].name} »).</div>` : ''}
@@ -484,6 +509,8 @@ function clientOverview(p) {
     <div class="stats" style="margin-top:8px">${stat('Temps de jeu', pct(playProb(p)), playProb(p) < 0.35 ? 'neg' : '')}${stat('Contrat club', `${p.cy} an(s)`, p.cy <= 1 ? 'neg' : '')}${stat('Mandat', `${p.mandate} saison(s)`)}</div>
     <div class="stats" style="margin-top:8px">${stat('Salaire / sem.', fmt(p.sal))}${stat('Abonnés', fmtFol(p.fol || 0))}${stat('Progression', '+' + prog, 'pos')}</div>
     <div class="moral"><small style="width:52px">Moral</small>${bar(p.morale, moralCls(p.morale))}<b>${Math.round(p.morale)}</b></div>
+    ${nextMatch(p).map((x) => `<div class="note nextm" data-act="club" data-id="${esc(x.opp)}">📅 <span>Prochain match · ${x.cup ? EU[x.cup].icon + ' ' : ''}${x.comp}</span><b>${x.home ? 'Dom.' : 'Ext.'} ${esc(CLUBS[x.opp].name)} ›</b></div>`).join('')}
+    ${attrCard(p)}
     ${p.free ? '<div class="note warn">🆓 <b>Libre</b> : placez-le avant la fin du mercato d\'été (semaine 6). Pas d\'indemnité, mais une prime à la signature pour vous. Sinon il re-signera à la baisse.</div>' : ''}
     ${!p.free && p.cy <= 1 ? '<div class="note warn">📝 Dernière année de contrat : les acheteurs paieront 40 % de moins. Prolongez-le ou laissez-le partir libre l\'été prochain.</div>' : ''}
     ${p.promise ? `<div class="note warn">🤞 Vous lui avez promis un transfert : encore ${Math.max(0, p.promise - S.t)} semaine(s).</div>` : ''}
@@ -605,6 +632,29 @@ function modalMatch(p, m) {
     <button class="btn sec" data-act="open" data-id="${p.id}">Voir la fiche de ${esc(p.n)}</button>`}`;
 }
 
+function modalClub(id, m) {
+  const c = CLUBS[id], lg = c.league, st = standings(lg), pos = st.findIndex((x) => x.c.id === id), t = S.tab[id], r = rel(id);
+  const here = clients().filter((p) => p.club === id), win = inWindow(S.week);
+  const stars = S.gs[id].map((g, i) => ({ n: starName(id, i), g })).sort((a, b) => b.g - a.g);
+  const cups = Object.keys(EU).filter((k) => S.eu[k].alive.includes(id) && !S.eu[k].champ);
+  const cands = clients().filter((p) => p.club !== id && !p.loan).sort((a, b) => b.ovr - a.ovr);
+  return `<div class="ph">${rt(c.rep, 'xl')}<div><h3>${esc(c.name)}</h3><small>${LEAGUES[lg].flag} ${LEAGUES[lg].name} · prestige ${c.rep}</small>
+      <div class="tags">${tag(`${pos + 1}ᵉ du classement`)}${cups.map((k) => tag(`${EU[k].icon} ${EU[k].short}`, 'gold')).join('')}${r >= 10 ? tag(`🤝 ${relLabel(r)}`, 'ok') : ''}</div></div></div>
+    <div class="stats four">${stat('Points', pts(t))}${stat('Matchs', t[0])}${stat('Bilan', `${t[1]}-${t[2]}-${t[3]}`)}${stat('Buts', `${t[4]}:${t[5]}`)}</div>
+    <div class="moral"><small style="width:70px">Relation</small>${bar(r, r >= 30 ? '' : 'dim')}<b>${r}</b></div>
+    ${here.length ? `<h4>Vos joueurs ici</h4><div class="list">${here.map((p) => `<button class="row" data-act="open" data-id="${p.id}">${rt(ovrOf(p), 'sm')}<div class="main"><b>${esc(p.n)}</b><small>${POS_SHORT[p.pos]} · temps de jeu ${pct(playProb(p))}</small></div><span class="chev">›</span></button>`).join('')}</div>` : ''}
+    <h4>Joueurs vedettes</h4><div class="list">${stars.map((x) => `<div class="row" style="padding:9px 13px"><span class="ico" style="font-size:16px">⭐</span><div class="main"><b style="font-weight:550">${esc(x.n)}</b></div><div class="side"><b>${x.g}</b><small>buts</small></div></div>`).join('')}</div>
+    <h4>Proposer un de vos joueurs</h4>
+    ${!win ? `<div class="note">🔒 Mercato fermé : ${nextWindowTxt()}.</div>` : !cands.length ? '<div class="note">Aucun client disponible.</div>'
+    : `<div class="list">${cands.map((p) => {
+      const why = p.rej[id] > S.t ? 'A déjà refusé récemment' : !playerAccepts(p, c) ? 'Club trop modeste pour lui' : p.inj > 0 ? 'Blessé' : '';
+      const it = clubInterest(p, c);
+      return `<div class="row">${rt(ovrOf(p), 'sm')}<div class="main"><b>${esc(p.n)}</b><small>${why || (it > 0.5 ? '🔥 Très intéressé' : it > 0.2 ? '🙂 Intérêt possible' : '❄️ Peu intéressé')}</small></div>
+        <button class="btn sm" data-act="doPropose" data-id="${p.id}" data-club="${esc(id)}" ${why ? 'disabled' : ''}>Proposer</button></div>`;
+    }).join('')}</div><p class="hint">Une proposition coûte 1 action.</p>`}
+    ${m && m.back ? `<button class="btn ghost" data-act="open" data-id="${m.back}">← Retour à la fiche de ${esc(getP(m.back) ? getP(m.back).n : '')}</button>` : ''}`;
+}
+
 function modalNego(p, m) {
   const o = S.offers.find((x) => x.id === m.oid);
   if (!o) return '<p class="empty">Offre expirée.</p>';
@@ -683,10 +733,11 @@ function renderModal() {
   const m = UI.modal, el = $('#modal');
   if (!m) { el.innerHTML = ''; return; }
   if (m.type === 'cer') { el.innerHTML = `<div class="stage">${viewCer()}</div>`; return; }
-  const p = m.type === 'help' ? null : getP(m.id);
-  if (!p && m.type !== 'help') { UI.modal = null; el.innerHTML = ''; return; }
+  const free = m.type === 'help' || m.type === 'club';
+  const p = free ? null : getP(m.id);
+  if (!p && !free) { UI.modal = null; el.innerHTML = ''; return; }
   const old = $('#modal .sheet'), sc = old ? old.scrollTop : 0, key = m.type + (m.id || ''), same = old && old.dataset.key === key;
-  const content = m.type === 'help' ? modalHelp() : m.type === 'match' ? modalMatch(p, m) : m.type === 'nego' ? modalNego(p, m) : m.type === 'propose' ? modalPropose(p) : modalPlayer(p, m);
+  const content = m.type === 'help' ? modalHelp() : m.type === 'club' ? modalClub(m.id, m) : m.type === 'match' ? modalMatch(p, m) : m.type === 'nego' ? modalNego(p, m) : m.type === 'propose' ? modalPropose(p) : modalPlayer(p, m);
   el.innerHTML = `<div class="backdrop" data-act="close"></div><div class="sheet ${m.type === 'player' && p.mine ? 'tall' : ''}" data-key="${key}" style="${same ? 'animation:none' : ''}">
     <div class="grab"></div><button class="x" data-act="close" aria-label="Fermer">✕</button>${content}</div>`;
   if (m.keep && same) $('#modal .sheet').scrollTop = sc;
@@ -708,6 +759,11 @@ function render() {
 
 /* ============ Actions ============ */
 const keep = () => { if (UI.modal) UI.modal.keep = true; };
+const snap = () => ({ cash: S.cash, rep: S.rep, w: S.week, s: S.season, inj: clients().filter((p) => p.inj > 0).length });
+function weekSum(a) {
+  UI.sum = { dc: S.cash - a.cash, dr: S.rep - a.rep, n: S.season === a.s ? S.week - a.w : 1, g: S.wk.reduce((s, x) => s + (x.g || 0), 0),
+    offers: S.offers.length, inj: Math.max(0, clients().filter((p) => p.inj > 0).length - a.inj) };
+}
 const ACTIONS = {
   // Nouvelle partie
   nwLogo(d) { UI.nw.logo = d.id; }, nwColor(d) { UI.nw.color = d.id; }, nwDiff(d) { UI.nw.diff = +d.id; },
@@ -718,21 +774,24 @@ const ACTIONS = {
     UI.tab = 'home'; UI.modal = { type: 'help' };
   },
   // Navigation
-  tab(d) { UI.tab = d.id; UI.modal = null; },
+  tab(d) { UI.tab = d.id; UI.modal = null; window.scrollTo(0, 0); },
   close() { UI.modal = null; },
   help() { UI.modal = { type: 'help' }; },
   newsAll() { UI.newsAll = !UI.newsAll; },
   // Semaine
-  week() { nextWeek(); autoCer(); },
+  week() { const a = snap(); nextWeek(); weekSum(a); autoCer(); },
   fast() {
+    const a = snap();
     for (let i = 0; i < 4; i++) {
       nextWeek();
       if (S.over || S.event || S.offers.length || S.recap || S.week === 20) break;
     }
-    autoCer();
+    weekSum(a); autoCer();
   },
   event(d) { toast(resolveEvent(+d.id)); },
   recap() { S.recap = null; save(); },
+  sumClose() { UI.sum = null; },
+  club(d) { const prev = UI.modal; UI.modal = { type: 'club', id: d.id, back: prev && prev.type === 'player' && getP(prev.id) ? prev.id : null }; },
   // Offres
   accept(d) { const r = actAccept(+d.id); toast(r); if (r.ok) play(CHIME); },
   negoOpen(d) { const o = S.offers.find((x) => x.id === +d.id); if (o) UI.modal = { type: 'nego', id: o.pid, oid: o.id }; },
@@ -752,7 +811,7 @@ const ACTIONS = {
   propose(d) { UI.modal = { type: 'propose', id: +d.id }; UI.lg = CLUBS[getP(+d.id).club].league; },
   mode(d) { UI.mode = d.id; },
   lg(d) { UI.lg = d.id; keep(); },
-  doPropose(d) { const r = actPropose(+d.id, d.club); toast(r); if (r.ok) { UI.modal = null; UI.tab = 'home'; } else keep(); },
+  doPropose(d) { const r = actPropose(+d.id, d.club); toast(r); if (r.ok) { UI.modal = null; UI.tab = 'home'; play(CHIME); } else keep(); },
   doLoan(d) { const r = actLoan(+d.id, d.club); toast(r); if (r.ok) UI.modal = { type: 'player', id: +d.id, ptab: 'ov' }; else keep(); },
   auction(d) { const r = actAuction(+d.id); toast(r); if (r.ok) { UI.modal = null; UI.tab = 'home'; } else keep(); },
   raise(d) { toast(actRaise(+d.id)); keep(); },

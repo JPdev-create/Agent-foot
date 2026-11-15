@@ -78,3 +78,59 @@ function checkAch() {
     news('🏅', `Succès débloqué : ${a.i} ${a.l} — ${a.d}.`);
   });
 }
+
+/* ---------- Attributs détaillés (dérivés du niveau, du poste et du joueur) ---------- */
+const ATTR_NAMES = { GB: ['Plongeon', 'Réflexes', 'Placement', 'Jeu au pied', 'Mental', 'Physique'], X: ['Vitesse', 'Tir', 'Passe', 'Dribble', 'Défense', 'Physique'] };
+const ATTR_W = { GB: [4, 5, 3, -8, 1, -1], DEF: [-1, -13, -2, -7, 11, 7], MIL: [0, -3, 9, 5, -4, -3], ATT: [6, 9, -1, 5, -16, -2] };
+function attrs(p) {
+  const w = ATTR_W[p.pos], h = hashStr('attr' + p.id + p.n);
+  return w.map((x, i) => clamp(Math.round(p.ovr + x + (((h >>> (i * 4)) & 15) - 7.5) * 0.9), 20, 99));
+}
+const attrNames = (p) => ATTR_NAMES[p.pos === 'GB' ? 'GB' : 'X'];
+function scoutBlurb(p) {
+  const a = attrs(p), n = attrNames(p), idx = a.map((v, i) => [v, i]).sort((x, y) => y[0] - x[0]);
+  const best = idx.slice(0, 2).map(([, i]) => n[i].toLowerCase()), worst = n[idx[5][1]].toLowerCase();
+  const pot = p.sc ? (p.potHi >= 88 ? 'un talent rare, capable de devenir une star mondiale' : p.potHi >= 80 ? 'un futur titulaire d\'un grand club' : p.potHi >= 70 ? 'un bon joueur de première division' : 'un joueur au plafond limité') : null;
+  return `Points forts : ${best.join(' et ')}. Point faible : ${worst}.${pot ? ` Notre avis : ${pot}.` : ''}`;
+}
+
+/* ---------- Prochain match d'un joueur ---------- */
+function nextMatch(p) {
+  const w = S.week + 1, out = [];
+  const lg = CLUBS[p.club].league, md = w - 2;
+  if (md >= 0 && md < leagueRounds(lg)) {
+    const f = fixtures(lg, md).find(([h, a]) => h === p.club || a === p.club);
+    if (f) out.push({ w, home: f[0] === p.club, opp: f[0] === p.club ? f[1] : f[0], comp: LEAGUES[lg].name });
+  }
+  const r = EU_WEEKS.indexOf(w);
+  if (r >= 0) {
+    for (const k in EU) {
+      const cup = S.eu[k];
+      if (cup.rounds.length !== r) continue;
+      const i = cup.alive.indexOf(p.club);
+      if (i >= 0) { const j = i % 2 ? i - 1 : i + 1; out.push({ w, home: i % 2 === 0, opp: cup.alive[j], comp: EU[k].name, cup: k }); }
+    }
+  }
+  return out;
+}
+
+/* ---------- Assistant : conseils de la semaine ---------- */
+function assistantTips() {
+  const cl = clients(), win = inWindow(S.week), t = [];
+  const add = (pr, i, txt, act, id) => t.push({ pr, i, txt, act, id });
+  if (!cl.length) add(10, '🔎', 'Commencez par observer de jeunes Belges dans Recrutement, puis proposez-leur un mandat.', 'tab', 'scout');
+  if (S.cash < 0) add(9, '🚨', `Caisse dans le rouge : faillite si les dettes dépassent ${fmt(DIFFS[S.diff].bank)}. Réduisez vos frais ou vendez.`, 'tab', 'agence');
+  if (win && (S.week === 6 || S.week === 23)) add(8, '⏰', 'Dernière semaine de mercato : profitez-en pour placer vos joueurs !', 'tab', 'clients');
+  cl.forEach((p) => {
+    if (p.free) add(9, '🆓', `${p.n} est libre : placez-le avant la fin du mercato d'été.`, 'open', p.id);
+    else if (p.cy <= 1) add(6, '📝', `Le contrat de ${p.n} se termine : prolongez-le ou vendez-le.`, 'open', p.id);
+    if (p.morale < 35) add(7, '😠', `${p.n} a le moral à zéro : discutez avec lui ou trouvez-lui un club.`, 'open', p.id);
+    if (!p.loan && playProb(p) < 0.3 && p.age <= 23) add(win ? 6 : 3, '🪑', `${p.n} joue très peu (${Math.round(playProb(p) * 100)} %) : un prêt l'aiderait à progresser.`, 'open', p.id);
+    if (p.promise && p.promise - S.t <= 6) add(8, '🤞', `Promesse à tenir : ${p.n} attend son transfert.`, 'open', p.id);
+    if (!p.sp && p.ovr >= 60 && !(p.spT > S.t)) add(2, '👟', `${p.n} est assez connu pour décrocher un sponsor.`, 'open', p.id);
+  });
+  S.players.filter((p) => !p.mine && p.cov && (p.fav || p.sc)).forEach((p) => add(7, '👀', `${p.cov.by} va signer ${p.n} dans ${Math.max(1, p.cov.t - S.t)} sem. : à vous de jouer !`, 'open', p.id));
+  if (cl.length >= office().maxClients && OFFICES[S.office + 1]) add(5, '🏢', 'Votre agence est pleine : agrandissez le bureau pour signer plus de joueurs.', 'tab', 'agence');
+  if (S.actions > 0 && cl.length && !t.length) add(1, '⚡', `Il vous reste ${S.actions} action(s) cette semaine.`, 'tab', 'clients');
+  return t.sort((a, b) => b.pr - a.pr).slice(0, 4);
+}

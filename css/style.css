@@ -303,3 +303,21 @@ select { appearance: none; -webkit-appearance: none; background-image: linear-gr
 .confetti { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 31; }
 .confetti i { position: absolute; top: -12px; width: 8px; height: 14px; border-radius: 2px; opacity: 0; animation: fall linear forwards; }
 @keyframes fall { 0% { opacity: 1; transform: translateY(0) rotate(0); } 100% { opacity: .9; transform: translateY(105vh) rotate(720deg); } }
+
+/* Attributs, clubs, résumé */
+.attrs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 12px; }
+.radar-wrap { flex: 0 0 150px; }
+.radar { width: 150px; height: 142px; display: block; }
+.radar .ring { fill: none; stroke: var(--line2); stroke-width: 1; }
+.radar .axis { stroke: var(--line); stroke-width: 1; }
+.radar .data { fill: color-mix(in srgb, var(--acc) 30%, transparent); stroke: var(--acc); stroke-width: 2; stroke-linejoin: round; }
+.attrs.locked .radar .data { fill: rgba(255, 255, 255, .05); stroke: var(--dim); stroke-dasharray: 4 3; }
+.alist { flex: 1; min-width: 140px; }
+.alist > div { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 13px; border-bottom: 1px solid var(--line); }
+.alist > div:last-child { border: 0; }
+.av { min-width: 30px; text-align: center; border-radius: 7px; padding: 1px 6px; color: #08130d; font-size: 12.5px; }
+.attrs .full { flex-basis: 100%; margin-top: 4px; font-size: 12.5px; color: #c4d3ca; }
+.clublink { cursor: pointer; } .clublink:hover { text-decoration: underline; }
+.nextm { display: flex; justify-content: space-between; align-items: center; gap: 8px; cursor: pointer; }
+.nextm b { color: var(--txt); white-space: nowrap; }
+.card.sum { border-color: var(--line2); background: linear-gradient(160deg, var(--s2), var(--s1)); padding: 12px 14px; }

@@ -43,6 +43,9 @@ La partie est sauvegardée automatiquement dans le navigateur.
 - **Relations avec les clubs**, **académie de jeunes**, **23 succès** à débloquer, **graphiques** de l'agence,
   **recherche** de joueurs, **matchs à revivre en direct**, nouveaux événements et **logo/couleur** de l'agence.
 
+- **Commission négociable** (5, 7 ou 10 %), **Coupe de Belgique**, **investissements** (campagne, gala, partenariats de clubs),
+  **tournoi des espoirs**, **jour de clôture du mercato**, **records de l'agence**, attributs des joueurs et pages de clubs.
+
 ## Installer l'application
 
 Le jeu est une application web installable (PWA). Ouvrez le site sur le téléphone puis :

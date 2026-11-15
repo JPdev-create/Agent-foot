@@ -42,9 +42,9 @@ function clubInterest(p, club) {
 /* Un joueur qui ne joue pas accepte de redescendre pour avoir du temps de jeu */
 const playerAccepts = (p, club) => club.rep >= CLUBS[p.club].rep - (playProb(p) < 0.3 ? 15 : p.free ? 10 : 4);
 
-function signChance(p, bonusLevel) {
+function signChance(p, bonusLevel, ci) {
   const req = (p.ovr - 42) * 1.6 + Math.max(0, p.pot - 70) * 0.8 + (p.nat !== 'BE' ? 10 : 0);
-  return clamp(0.5 + (S.rep - req) / 40 + [0, 0.15, 0.3][bonusLevel] + DIFFS[S.diff].sign, 0.03, 0.95);
+  return clamp(0.5 + (S.rep - req) / 40 + [0, 0.15, 0.3][bonusLevel] + DIFFS[S.diff].sign + (ci === undefined ? 0 : COM_BONUS[ci]), 0.03, 0.95);
 }
 function signBonusCost(p, level) {
   const v = playerValue(p);
@@ -52,6 +52,8 @@ function signBonusCost(p, level) {
 }
 
 const COMMISSION_SALARY = 0.07;
+const COMS = [0.05, 0.07, 0.10], COM_BONUS = [0.12, 0, -0.15];
+const comRate = (p) => p.com || COMMISSION_SALARY;
 const commissionTransfer = () => 0.10;
 
 /* ---------- Génération ---------- */
@@ -117,7 +119,7 @@ const office = () => OFFICES[S.office];
 const weeklyCosts = () => office().weekly + Object.keys(STAFF).reduce((s, k) => s + STAFF[k].weekly * (S.stl ? S.stl[k] : S.staff[k] ? 1 : 0), 0)
   + clients().reduce((s, p) => s + planCost(p), 0) + ACADEMY[S.acad || 0].weekly;
 const planCost = (p) => (p.plan === 'int' ? Math.max(40, Math.round(p.sal * 0.2 / 10) * 10) : 0);
-const weeklyIncome = () => Math.round(clients().reduce((s, p) => s + p.sal * COMMISSION_SALARY + (p.sp ? p.sp.w : 0), 0));
+const weeklyIncome = () => Math.round(clients().reduce((s, p) => s + p.sal * comRate(p) + (p.sp ? p.sp.w : 0), 0));
 const canRecruit = (p) => p.nat === 'BE' || S.office >= INTL_OFFICE;
 /* Plus l'agence est réputée, plus il est difficile de gagner encore en réputation */
 function addRep(x) { S.rep = clamp(S.rep + (x > 0 ? x * clamp((115 - S.rep) / 100, 0.15, 1) : x), 0, 100); }
@@ -163,6 +165,9 @@ function migrate() {
   if (!S.res) S.res = {};
   if (!S.gs) { S.gs = {}; CLUB_IDS.forEach((id) => { S.gs[id] = [0, 0, 0]; }); }
   if (!S.eu) newEurope(euQualified());
+  if (S.eu && !S.eu.BC) S.eu.BC = { alive: clubsOf('BE1').map((c) => c.id).sort(() => Math.random() - 0.5), rounds: [], champ: null };
+  if (!S.inv) S.inv = { mk: 0, gala: 0, cl: {} };
+  if (!S.rec) S.rec = {};
   if (!S.wk) S.wk = [];
   S.players.forEach((p) => {
     if (p.a === undefined) { p.a = 0; p.rs = 0; p.cs = 0; p.log = []; p.sh = []; }
@@ -227,7 +232,8 @@ function setEstimate(p) {
   p.potLo = Math.max(Math.floor(p.ovr), c - w); p.potHi = Math.min(99, c + w);
 }
 
-function actSign(id, bonusLevel) {
+function actSign(id, bonusLevel, ci) {
+  if (ci === undefined || isNaN(ci)) ci = 1;
   const p = getP(id);
   if (p.mine) return { ok: false, msg: 'Déjà client.' };
   if (!canRecruit(p)) return { ok: false, msg: `Il faut le bureau « ${OFFICES[INTL_OFFICE].name} » pour recruter hors de Belgique.` };
@@ -236,13 +242,14 @@ function actSign(id, bonusLevel) {
   const cost = signBonusCost(p, bonusLevel);
   if (cost > 0 && cost > S.cash) return { ok: false, msg: 'Pas assez de liquidités pour cette prime.' };
   if (!useAction()) return { ok: false, msg: "Plus d'action cette semaine." };
-  const ok = Math.random() < signChance(p, bonusLevel);
+  const ok = Math.random() < signChance(p, bonusLevel, ci);
   if (ok) {
     if (p.pot >= 88) S.flags.gem = 1;
+    p.com = COMS[ci];
     S.cash -= cost; p.mine = true; p.mandate = 3; p.morale = 75; p.o0 = p.ovr; p.vh = [{ v: playerValue(p) }]; p.dream = newDream(p);
     if (p.sc < 1) { p.sc = 1; setEstimate(p); }
     p.cov = null; S.ss.sign = (S.ss.sign || 0) + 1;
-    news('✍️', `${p.n} (${p.age} ans, ${p.pos}) signe un mandat de 3 saisons avec l'agence.`);
+    news('✍️', `${p.n} (${p.age} ans, ${p.pos}) signe un mandat de 3 saisons avec l'agence (commission ${Math.round(p.com * 100)} %).`);
     addRep(0.3); checkGoals(); save();
     return { ok: true, msg: `${p.n} rejoint l'agence !` };
   }
@@ -462,6 +469,8 @@ function maybeEvent() {
   if (p.tr === 'fet') types.push('ecart', 'ecart', 'ecart');
   if (LEAGUES[CLUBS[p.club].league].country !== p.nat) types.push('mal');
   if (playProb(p) < 0.4 && !p.promise && !p.loan) types.push('leave', 'leave');
+  if (p.age >= 27 && p.ovr >= 65 && !p.loan) types.push('exotic');
+  if (!p.free && !p.loan) types.push('cut');
   let k = pick(types), who = p;
   const hurt = clients().filter((x) => x.inj >= 4);
   if (hurt.length && Math.random() < 0.3) { k = 'clinic'; who = pick(hurt); }
@@ -485,6 +494,10 @@ function eventView() {
       choices: ['Soutenir publiquement votre joueur', 'Rester neutre', 'Donner raison au club'] };
     case 'gala': return { title: 'Gala de charité', text: `${p.n} aimerait organiser un gala au profit d'une association de son quartier.`,
       choices: [`Financer le gala (${fmt(c)})`, 'Décliner poliment'] };
+    case 'exotic': return { title: 'Un pont d\'or exotique', text: `Un club d'un championnat lointain offre un salaire astronomique à ${p.n}. Il quitterait l'Europe… et votre agence.`,
+      choices: [`Accepter : commission de ${fmt(c * 15)}`, 'Refuser, sa carrière est en Europe'] };
+    case 'cut': return { title: 'Baisse de salaire demandée', text: `${CLUBS[p.club].name} traverse des difficultés et demande à ${p.n} de baisser son salaire de 15 %.`,
+      choices: ['Accepter la baisse', 'Refuser fermement'] };
     case 'clinic': return { title: 'Blessure : quel traitement ?', text: `${p.n} est blessé pour ${p.inj} semaines. Une clinique privée réputée peut accélérer sa guérison.`,
       choices: [`Clinique privée (${fmt(c * 2)})`, 'Suivre le protocole du club'] };
     default: return { title: 'Mal du pays', text: `${p.n} vit mal l'éloignement à ${CLUBS[p.club].name}.`,
@@ -532,6 +545,17 @@ function resolveEvent(i) {
   } else if (e.k === 'gala') {
     if (i === 0) { if (!pay(e.c)) return broke; addRep(1.2); mor(8); p.fol = Math.round((p.fol || 0) * 1.1 + 3000); r = { ok: true, msg: 'Soirée magnifique : la presse salue l\'engagement de votre agence.' }; }
     else { mor(-3); r = { ok: true, msg: `${p.n} est un peu déçu.` }; }
+  } else if (e.k === 'exotic') {
+    if (i === 0) {
+      earn(e.c * 15); addRep(-1); toHof(p, 'Exil doré');
+      p.mine = false; S.offers = S.offers.filter((o) => o.pid !== p.id); S.players = S.players.filter((x) => x.id !== p.id);
+      news('🌴', `${p.n} part pour un exil doré loin de l'Europe. Votre commission : ${fmt(e.c * 15)}.`);
+      r = { ok: true, msg: `Jackpot : ${fmt(e.c * 15)} encaissés, mais ${p.n} quitte l'agence.` };
+    } else { mor(-8); r = { ok: true, msg: `${p.n} reste en Europe, un peu à contrecœur.` }; }
+  } else if (e.k === 'cut') {
+    if (i === 0) { p.sal = Math.round(p.sal * 0.85 / 10) * 10; addRel(p.club, 10); mor(-6); r = { ok: true, msg: `Le club vous remercie. Nouveau salaire : ${fmt(p.sal)}/sem.` }; }
+    else if (Math.random() < 0.4) { addRel(p.club, -10); mor(-12); r = { ok: false, msg: `Le club se venge : ${p.n} est mis au placard quelques semaines.` }; }
+    else { addRel(p.club, -10); r = { ok: true, msg: 'Le club renonce à sa demande.' }; }
   } else if (e.k === 'clinic') {
     if (i === 0) { if (!pay(e.c * 2)) return broke; p.inj = Math.max(1, Math.ceil(p.inj / 2)); mor(6); r = { ok: true, msg: `Traitement réussi : ${p.n} reviendra dans ${p.inj} semaine(s).` }; }
     else if (Math.random() < 0.2) { p.inj += 3; r = { ok: false, msg: `Rechute : ${p.n} est absent 3 semaines de plus.` }; }
@@ -722,6 +746,7 @@ function euQualified() {
   });
   const be = standings('BE1').map((x) => x.c.id);
   q.C1.push(be[0]); q.C3.push(be[1]);
+  q.BC = be.slice();
   return q;
 }
 function newEurope(q) {
@@ -755,7 +780,7 @@ function playEuRound(k, silent) {
     news(EU[k].icon, `FINALE de la ${EU[k].name} : ${CLUBS[t[0]].name} ${t[2]}-${t[3]} ${CLUBS[t[1]].name}${t[4] ? ' (t.a.b.)' : ''}. ${CLUBS[win[0]].name} soulève le trophée !`);
     clients().filter((p) => p.club === win[0]).forEach((p) => {
       if (k === 'C1') S.flags.c1 = 1;
-      p.aw.unshift(`${label} : vainqueur de la ${EU[k].name}`); addRep(k === 'C1' ? 3 : 1.5); S.stats.troph++; p.morale = clamp(p.morale + 15, 0, 100);
+      p.aw.unshift(`${label} : vainqueur de la ${EU[k].name}`); addRep(k === 'C1' ? 3 : k === 'C3' ? 1.5 : 1); S.stats.troph++; p.morale = clamp(p.morale + 15, 0, 100);
       news('🥇', `${p.n} remporte la ${EU[k].name} avec ${CLUBS[p.club].name} !`);
     });
   }
@@ -866,6 +891,8 @@ function nextWeek() {
     });
   }
   if (S.week === 20) clients().forEach(pushVal);
+  if (S.week === 6 || S.week === 23) news('⏰', 'Jour de clôture du mercato : les clubs s\'activent, dernière chance de conclure !');
+  if (S.week === 15) youthTournament();
 
   const win = inWindow(S.week);
   clients().forEach((p) => {
@@ -883,7 +910,7 @@ function nextWeek() {
       const c = Math.round(baseValue(p.ovr) * 0.004 / 100) * 100;
       earn(c); news('👟', `${p.n} signe un contrat de sponsoring. Votre commission : ${fmt(c)}.`);
     }
-    if (win && !p.loan && p.inj === 0 && Math.random() < (p.free ? 0.25 : 0.09) && !S.offers.some((o) => o.pid === p.id)) {
+    if (win && !p.loan && p.inj === 0 && Math.random() < (p.free ? 0.25 : 0.09) * (S.week === 6 || S.week === 23 ? 2.2 : 1) && !S.offers.some((o) => o.pid === p.id)) {
       const cands = CLUB_IDS.map((id) => CLUBS[id]).filter((c) => playerAccepts(p, c) && clubInterest(p, c) > 0.3 && !(p.rej[c.id] > S.t));
       if (cands.length) {
         const c = pick(cands), o = makeOffer(p, c, 0.95);
@@ -994,6 +1021,7 @@ function endSeason() {
     p.sh.unshift({ s: label, club: CLUBS[p.club].name, m: p.m, g: p.g, a: p.a, avg: p.m ? p.rs / p.m : 0 });
     pushVal(p);
     if (p.dream && p.dream.done) p.dream = null;
+    updateRecords(p, label);
     if (champs[p.club] && p.m >= 8) {
       addRep(LEAGUES[champs[p.club]].big ? 2 : 0.8); S.stats.troph++;
       p.aw.unshift(`${label} : champion de ${LEAGUES[champs[p.club]].name}`);
@@ -1041,7 +1069,11 @@ function endSeason() {
       if (p.age >= 35) {
         toHof(p, 'Retraite'); p.mine = false; news('🎖️', `${p.n} prend sa retraite. Merci pour tout !`);
       } else if (p.mandate <= 0) {
-        if (p.morale >= 40 || p.tr === 'loy') { p.mandate = 3; news('✍️', `${p.n} renouvelle son mandat avec l'agence pour 3 saisons.`); }
+        if (p.morale >= 40 || p.tr === 'loy') {
+          p.mandate = 3;
+          if (p.ovr >= 80 && comRate(p) > 0.05) { p.com = Math.round((comRate(p) - 0.01) * 100) / 100; news('✍️', `${p.n}, devenu une star, renouvelle son mandat mais négocie votre commission à ${Math.round(p.com * 100)} %.`); }
+          else news('✍️', `${p.n} renouvelle son mandat avec l'agence pour 3 saisons.`);
+        }
         else { toHof(p, 'Fin de mandat'); p.mine = false; p.cd = S.t + 40; news('💔', `${p.n} ne renouvelle pas son mandat et quitte l'agence.`); }
       }
     }

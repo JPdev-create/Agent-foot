@@ -120,7 +120,8 @@ function assistantTips() {
   const add = (pr, i, txt, act, id) => t.push({ pr, i, txt, act, id });
   if (!cl.length) add(10, '🔎', 'Commencez par observer de jeunes Belges dans Recrutement, puis proposez-leur un mandat.', 'tab', 'scout');
   if (S.cash < 0) add(9, '🚨', `Caisse dans le rouge : faillite si les dettes dépassent ${fmt(DIFFS[S.diff].bank)}. Réduisez vos frais ou vendez.`, 'tab', 'agence');
-  if (win && (S.week === 6 || S.week === 23)) add(8, '⏰', 'Dernière semaine de mercato : profitez-en pour placer vos joueurs !', 'tab', 'clients');
+  if (win && (S.week === 6 || S.week === 23)) add(8, '⏰', 'Jour de clôture du mercato : les clubs font deux fois plus d\'offres, c\'est le moment de placer vos joueurs !', 'tab', 'clients');
+  if (S.week >= 15 && S.week <= 17 && S.players.some((p) => p.u19 === S.season && !p.mine)) add(5, '🏟️', 'Des pépites se sont révélées au tournoi des espoirs : allez les voir dans Recrutement (filtre 🏟️).', 'u19', '1');
   cl.forEach((p) => {
     if (p.free) add(9, '🆓', `${p.n} est libre : placez-le avant la fin du mercato d'été.`, 'open', p.id);
     else if (p.cy <= 1) add(6, '📝', `Le contrat de ${p.n} se termine : prolongez-le ou vendez-le.`, 'open', p.id);
@@ -133,4 +134,66 @@ function assistantTips() {
   if (cl.length >= office().maxClients && OFFICES[S.office + 1]) add(5, '🏢', 'Votre agence est pleine : agrandissez le bureau pour signer plus de joueurs.', 'tab', 'agence');
   if (S.actions > 0 && cl.length && !t.length) add(1, '⚡', `Il vous reste ${S.actions} action(s) cette semaine.`, 'tab', 'clients');
   return t.sort((a, b) => b.pr - a.pr).slice(0, 4);
+}
+
+/* ---------- Investissements de l'agence ---------- */
+const mkCost = () => [15000, 50000, 200000, 700000, 2500000][S.office];
+const galaCost = () => [5000, 20000, 80000, 300000, 1000000][S.office];
+const clubSponsorCost = (c) => Math.max(5000, Math.round(baseValue(c.rep - 15) * 0.05 / 1000) * 1000);
+function invMarketing() {
+  if (S.inv.mk === S.season) return { ok: false, msg: 'Une seule campagne par saison.' };
+  if (S.cash < mkCost()) return { ok: false, msg: 'Pas assez de liquidités.' };
+  S.cash -= mkCost(); S.ss.costs += mkCost(); S.inv.mk = S.season; addRep(3);
+  clients().forEach((p) => { p.fol = Math.round((p.fol || 0) * 1.08 + 500); });
+  news('📣', 'Grande campagne de communication : l\'agence fait parler d\'elle partout en Europe.');
+  save(); return { ok: true, msg: 'Campagne lancée : +3 de réputation et plus d\'abonnés pour vos clients.' };
+}
+function invGala() {
+  if (S.inv.gala === S.season) return { ok: false, msg: 'Un seul gala par saison.' };
+  if (!clients().length) return { ok: false, msg: 'Aucun client à inviter.' };
+  if (S.cash < galaCost()) return { ok: false, msg: 'Pas assez de liquidités.' };
+  S.cash -= galaCost(); S.ss.costs += galaCost(); S.inv.gala = S.season; addRep(1);
+  clients().forEach((p) => { p.morale = clamp(p.morale + 15, 0, 100); });
+  news('🥂', 'Soirée de gala de l\'agence : tous vos clients sont aux anges.');
+  save(); return { ok: true, msg: 'Gala réussi : +15 de moral pour tous vos clients.' };
+}
+function invClub(id) {
+  const c = CLUBS[id], cost = clubSponsorCost(c);
+  if (S.inv.cl[id] === S.season) return { ok: false, msg: 'Déjà partenaire de ce club cette saison.' };
+  if (S.cash < cost) return { ok: false, msg: 'Pas assez de liquidités.' };
+  S.cash -= cost; S.ss.costs += cost; S.inv.cl[id] = S.season; addRel(id, 20);
+  news('🤝', `Partenariat signé avec ${c.name} : vos relations se renforcent.`);
+  save(); return { ok: true, msg: `Partenariat avec ${c.name} : relation +20.` };
+}
+
+/* ---------- Tournoi des espoirs (semaine 15) ---------- */
+function youthTournament() {
+  const pool = S.players.filter((p) => !p.mine && p.age <= 19).sort((a, b) => b.pot - a.pot).slice(0, 25).sort(() => Math.random() - 0.5).slice(0, 5);
+  pool.forEach((p) => { p.sc = Math.max(p.sc, 1); setEstimate(p); p.u19 = S.season; p.fol = (p.fol || 0) + 3000; });
+  if (pool.length) news('🏟️', `Tournoi international des espoirs : ${pool.map((p) => `${p.n} (${COUNTRY_LABEL[p.nat].split(' ')[0]} ${p.pos}, pot. ${p.potLo}–${p.potHi})`).join(', ')} se révèlent !`);
+}
+
+/* ---------- Records de l'agence ---------- */
+function updateRecords(p, label) {
+  const set = (k, v, txt) => { if (!S.rec[k] || v > S.rec[k].v) S.rec[k] = { v, n: p.n, s: label, txt }; };
+  if (p.g > 0) set('goals', p.g, `${p.g} but${p.g > 1 ? 's' : ''}`);
+  if (p.a > 0) set('assists', p.a, `${p.a} passe${p.a > 1 ? 's' : ''} décisive${p.a > 1 ? 's' : ''}`);
+  if (p.m >= 15) set('avg', Math.round(p.rs / p.m * 100) / 100, `note moyenne ${(p.rs / p.m).toFixed(2)}`);
+  set('value', playerValue(p), fmt(playerValue(p)));
+  set('ovr', Math.floor(p.ovr), `niveau ${Math.floor(p.ovr)}`);
+  set('fol', p.fol || 0, `${fmtFol(p.fol || 0)} abonnés`);
+}
+
+/* ---------- Pourquoi ce moral ? ---------- */
+function moraleFactors(p) {
+  const f = [], pp = playProb(p);
+  if (pp < 0.3) f.push(['🪑', p.tr === 'amb' ? 'Joue très peu (et il est ambitieux)' : 'Joue très peu', 'bad']);
+  else if (pp > 0.6) f.push(['⚽', 'Titulaire régulier', 'ok']);
+  if (p.plan === 'int') f.push(['🔥', 'Entraînement intensif fatigant', 'bad']);
+  if (p.plan === 'rec') f.push(['🧘', 'Programme de récupération', 'ok']);
+  if (p.promise) f.push(['🤞', 'Attend le transfert promis', 'warn']);
+  if (p.dream && p.dream.done) f.push(['🌟', 'Rêve réalisé', 'ok']);
+  if (p.inj > 0) f.push(['🚑', 'Blessé', 'bad']);
+  if (p.tr === 'loy') f.push(['🤝', 'Loyal : ne partira pas', 'ok']);
+  return f;
 }

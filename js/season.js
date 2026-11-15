@@ -108,7 +108,7 @@ function buildCeremony(champs, label, cl) {
     const id = Object.keys(champs).find((c) => champs[c] === lg);
     return { i: LEAGUES[lg].flag, l: LEAGUES[lg].name, v: CLUBS[id].name, mine: cl.some((p) => p.club === id) };
   });
-  ['C1', 'C3'].forEach((k) => { if (S.eu[k].champ) rows.push({ i: EU[k].icon, l: EU[k].name, v: CLUBS[S.eu[k].champ].name, mine: cl.some((p) => p.club === S.eu[k].champ) }); });
+  ['C1', 'C3', 'BC'].forEach((k) => { if (S.eu[k].champ) rows.push({ i: EU[k].icon, l: EU[k].name, v: CLUBS[S.eu[k].champ].name, mine: cl.some((p) => p.club === S.eu[k].champ) }); });
   slides.push({ k: 'list', title: 'Le palmarès de la saison', icon: '🏟️', rows });
 
   // Révélation de l'année (progression de vos clients)

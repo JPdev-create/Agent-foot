@@ -27,7 +27,7 @@ const POS_SHORT = { GB: 'GB', DEF: 'DEF', MIL: 'MIL', ATT: 'ATT' };
 
 const UI = {
   tab: 'home', modal: null, toast: null, newsAll: false,
-  mk: { country: 'BE', pos: '', sort: 'ovr', fav: false, q: '' },
+  mk: { country: 'BE', pos: '', sort: 'ovr', fav: false, u19: false, q: '' }, com: 1,
   cs: 'ovr', jv: 'list', lg: 'BE1', mode: 'transfer',
   cmode: 'lg', clg: 'BE1', cview: 'table', eu: 'C1', av: 'dev',
   nw: { name: 'JP Sport Management', logo: '⚽', color: '#35d07f', diff: 1, city: 'Liège' },
@@ -46,7 +46,7 @@ const avgNote = (p) => (p.m ? (p.rs / p.m).toFixed(1) : '–');
 const noteClass = (n) => (n >= 7.5 ? 'pos' : n < 5.5 ? 'neg' : '');
 const scoreTxt = (x) => `${x.cup ? EU[x.cup].icon + ' ' + EU[x.cup].short : x.home ? 'Dom.' : 'Ext.'} ${esc(CLUBS[x.opp].name)} ${x.gf}-${x.ga}`;
 const resClass = (x) => (x.gf > x.ga ? 'w' : x.gf < x.ga ? 'l' : 'd');
-const forYou = (p) => p.sal * COMMISSION_SALARY + (p.sp ? p.sp.w : 0);
+const forYou = (p) => p.sal * comRate(p) + (p.sp ? p.sp.w : 0);
 const moralCls = (m) => (m < 35 ? 'bad' : m < 60 ? 'mid' : '');
 const seasonTxt = (s) => `${s}/${(s + 1) % 100}`;
 
@@ -96,7 +96,7 @@ function topbar() {
   const dots = Array.from({ length: o.actions }, (_, i) => `<i class="${i < S.actions ? 'on' : ''}"></i>`).join('');
   return `<header class="top">
     <div class="top-row">
-      <div class="brand"><span class="logo">${esc(S.agency.logo || '⚽')}</span><div style="min-width:0"><b>${esc(S.agency.name)}</b><small>Saison ${seasonTxt(S.season)} · semaine ${S.week}/${SEASON_WEEKS}</small></div></div>
+      <div class="brand"><span class="logo">${esc(S.agency.logo || '⚽')}</span><div style="min-width:0"><b>${esc(S.agency.name)}</b><small>${seasonTxt(S.season)} · Sem. ${S.week}/${SEASON_WEEKS}</small></div></div>
       <span class="mk ${win ? 'open' : ''}"><i></i>${win ? 'Mercato ouvert' : 'Mercato fermé'}</span>
     </div>
     <div class="kpis">
@@ -164,11 +164,12 @@ function missionsBlock() {
 
 function agendaBlock() {
   const w = S.week, out = [];
-  if (w <= 6) out.push(['🔓', 'Fin du mercato d\'été', 7 - w]);
+  if (w <= 6) out.push(['🔓', w === 6 ? 'Jour de clôture du mercato !' : 'Fin du mercato d\'été', 7 - w]);
   else if (w < 20) out.push(['📅', 'Ouverture du mercato d\'hiver', 20 - w]);
-  else if (w <= 23) out.push(['🔓', 'Fin du mercato d\'hiver', 24 - w]);
+  else if (w <= 23) out.push(['🔓', w === 23 ? 'Jour de clôture du mercato !' : 'Fin du mercato d\'hiver', 24 - w]);
   const r = EU_WEEKS.findIndex((x) => x > w);
-  if (r >= 0) out.push(['🏆', `${EU_ROUNDS[r]} européens`, EU_WEEKS[r] - w]);
+  if (r >= 0) out.push(['🏆', `${EU_ROUNDS[r]} de coupe`, EU_WEEKS[r] - w]);
+  if (w < 15) out.push(['🏟️', 'Tournoi des espoirs', 15 - w]);
   const t = tourName(S.season);
   out.push(['🎬', `Cérémonie des trophées${t ? ` + ${t} ${S.season + 1}` : ''}`, SEASON_WEEKS + 1 - w]);
   return sec('📆 À venir', `<div class="list">${out.map(([i, x, n]) => `<div class="row"><span class="ico">${i}</span><div class="main"><b style="font-weight:550">${x}</b></div><div class="side">${tag(`dans ${n} sem.`)}</div></div>`).join('')}</div>`);
@@ -252,13 +253,14 @@ function viewClients() {
   }
   h += pills('cs', UI.cs, [['ovr', 'Niveau'], ['inc', 'Revenus'], ['val', 'Valeur'], ['mor', 'Moral bas'], ['age', 'Âge']]);
   return h + `<div class="list">${cl.map(clientRow).join('')}</div>
-    <p class="hint">Vous touchez ${pct(COMMISSION_SALARY)} du salaire de vos clients chaque semaine et ${pct(commissionTransfer())} de chaque transfert.</p>`;
+    <p class="hint">Vous touchez 5 à 10 % du salaire de chaque client (selon son mandat) chaque semaine, et ${pct(commissionTransfer())} de chaque transfert.</p>`;
 }
 
 /* ============ Recrutement ============ */
 function marketRow(p) {
   const t = [];
   if (p.cov) t.push(tag('👀 Convoité', 'bad'));
+  if (p.u19 === S.season) t.push(tag('🏟️ Révélé', 'gold'));
   if (p.sc >= 2) t.push(tag('📋 Rapport complet', 'ok')); else if (p.sc === 1) t.push(tag('🔎 Observé', 'info'));
   if (!canRecruit(p)) t.push(tag('🔒'));
   return `<button class="row" data-act="open" data-id="${p.id}">${rt(ovrOf(p))}
@@ -269,6 +271,7 @@ function marketRow(p) {
 function viewScout() {
   const f = UI.mk, q = norm((f.q || '').trim()), locked = f.country !== 'BE' && S.office < INTL_OFFICE;
   let list = q ? S.players.filter((p) => !p.mine && norm(p.n).includes(q))
+    : f.u19 ? S.players.filter((p) => !p.mine && p.u19 === S.season)
     : S.players.filter((p) => !p.mine && p.nat === f.country && (!f.pos || p.pos === f.pos) && (!f.fav || p.fav));
   const sorters = {
     ovr: (a, b) => b.ovr - a.ovr, age: (a, b) => a.age - b.age || b.ovr - a.ovr,
@@ -281,11 +284,12 @@ function viewScout() {
     ${q ? '' : `<div class="filters">
       ${sel('pos', [['', 'Tous les postes'], ...Object.keys(POSITIONS).map((k) => [k, POSITIONS[k]])])}
       ${sel('sort', [['ovr', 'Trier : niveau'], ['pot', 'Trier : potentiel'], ['age', 'Trier : âge'], ['val', 'Trier : moins chers']])}
-      <button class="toggle ${f.fav ? 'on' : ''}" data-act="favFilter" title="Joueurs suivis">⭐</button></div>
+      <button class="toggle ${f.fav ? 'on' : ''}" data-act="favFilter" title="Joueurs suivis">⭐</button>
+      <button class="toggle ${f.u19 ? 'on' : ''}" data-act="u19" title="Révélés au tournoi des espoirs">🏟️</button></div>
     <div class="card" style="display:flex;align-items:center;gap:12px"><span style="font-size:26px">✈️</span><div style="flex:1"><b>Voyage de détection</b><small>Révèle 3 jeunes à fort potentiel en ${COUNTRY_LABEL[f.country].split(' ').slice(1).join(' ')}.</small></div>
       <button class="btn sm" data-act="trip" data-id="${f.country}" ${S.cash < tripCost(f.country) ? 'disabled' : ''}>${fmt(tripCost(f.country))}<small>· 1 action</small></button></div>
     ${locked ? `<div class="note warn">🔒 Recrutement à l'étranger débloqué avec le bureau « ${OFFICES[INTL_OFFICE].name} ». Vous pouvez déjà observer.</div>` : ''}`}
-    <div class="sec-h" style="margin-top:4px"><h2>${q ? `Résultats pour « ${esc(f.q)} »` : f.fav ? '⭐ Joueurs suivis' : 'Jeunes joueurs'}</h2><small>${list.length} joueur(s)</small></div>
+    <div class="sec-h" style="margin-top:4px"><h2>${q ? `Résultats pour « ${esc(f.q)} »` : f.u19 ? '🏟️ Révélés au tournoi des espoirs' : f.fav ? '⭐ Joueurs suivis' : 'Jeunes joueurs'}</h2><small>${list.length} joueur(s)</small></div>
     <div class="list">${list.slice(0, 80).map(marketRow).join('') || `<p class="empty">${f.fav ? 'Aucun joueur suivi. Ouvrez une fiche et touchez « Suivre ».' : 'Aucun joueur trouvé.'}</p>`}</div>`;
 }
 
@@ -332,7 +336,7 @@ function viewEurope(k, mine) {
     h += sec(`${EU_ROUNDS[r]} · semaine ${EU_WEEKS[r]}`, `<div class="card fixtures">${pairs.map(([a, b]) => `<div class="fx ${mine[a] || mine[b] ? 'me' : ''}"><span class="h">${esc(CLUBS[a].name)}</span><span class="sc">vs</span><span>${esc(CLUBS[b].name)}</span></div>`).join('')}</div>`);
   }
   h += cup.rounds.map((ties, i) => sec(EU_ROUNDS[i], `<div class="card fixtures">${ties.map(fx).join('')}</div>`)).reverse().join('');
-  return h + '<p class="hint">16 clubs qualifiés par les classements de la saison précédente · élimination directe sur un match.</p>';
+  return h + `<p class="hint">${k === 'BC' ? 'Les 16 clubs de Jupiler Pro League' : '16 clubs qualifiés par les classements de la saison précédente'} · élimination directe sur un match.</p>`;
 }
 
 function viewBdo() {
@@ -345,7 +349,7 @@ function viewBdo() {
 function viewCompet() {
   const mine = {};
   clients().forEach((p) => { mine[p.club] = (mine[p.club] || 0) + 1; });
-  const top = seg('cmode', UI.cmode, [['lg', '🏟️ Championnats'], ['eu', '🏆 Europe'], ['bdo', '⭐ Ballon d\'Or']]);
+  const top = seg('cmode', UI.cmode, [['lg', '🏟️ Championnats'], ['eu', '🏆 Coupes'], ['bdo', '⭐ Ballon d\'Or']]);
   if (UI.cmode === 'eu') return top + viewEurope(UI.eu, mine);
   if (UI.cmode === 'bdo') return top + viewBdo();
   return top + viewLeague(UI.clg, mine);
@@ -372,7 +376,7 @@ function upgradeCard(icon, title, levelTxt, desc, next, act, id) {
 
 function agencyDev() {
   const o = office(), nx = OFFICES[S.office + 1], cl = clients();
-  const salCom = cl.reduce((s, p) => s + p.sal * COMMISSION_SALARY, 0), spons = cl.reduce((s, p) => s + (p.sp ? p.sp.w : 0), 0);
+  const salCom = cl.reduce((s, p) => s + p.sal * comRate(p), 0), spons = cl.reduce((s, p) => s + (p.sp ? p.sp.w : 0), 0);
   const staffC = Object.keys(STAFF).reduce((s, k) => s + STAFF[k].weekly * S.stl[k], 0), planC = cl.reduce((s, p) => s + planCost(p), 0), acadC = ACADEMY[S.acad].weekly;
   const line = (l, v, cls) => `<div class="row" style="padding:8px 13px"><div class="main"><span style="font-size:13.5px">${l}</span></div><div class="side"><b class="${cls}">${v}</b></div></div>`;
   let h = sec('💶 Finances hebdomadaires', `<div class="list">
@@ -388,6 +392,12 @@ function agencyDev() {
       ${lv ? '<button class="btn sm ghost" data-act="fire" data-id="' + k + '">Licencier</button>' : ''}
       ${lv < 3 ? `<button class="btn sm" data-act="staff" data-id="${k}" ${S.cash < staffCost(k) ? 'disabled' : ''}>${lv ? `Niveau ${lv + 1}` : 'Engager'} · ${fmt(staffCost(k))}</button>` : tag('Max', 'gold')}</div></div>`;
   }).join(''));
+  h += sec('📈 Investissements', `<div class="list">
+    <div class="row wrap"><span class="ico">📣</span><div class="main"><b>Campagne de communication</b><small>+3 de réputation et plus d'abonnés pour vos clients · 1 fois par saison</small></div>
+      <button class="btn sm" data-act="invMk" ${S.inv.mk === S.season || S.cash < mkCost() ? 'disabled' : ''}>${S.inv.mk === S.season ? 'Fait ✓' : fmt(mkCost())}</button></div>
+    <div class="row wrap"><span class="ico">🥂</span><div class="main"><b>Gala de l'agence</b><small>+15 de moral pour tous vos clients · 1 fois par saison</small></div>
+      <button class="btn sm" data-act="invGala" ${S.inv.gala === S.season || S.cash < galaCost() || !cl.length ? 'disabled' : ''}>${S.inv.gala === S.season ? 'Fait ✓' : fmt(galaCost())}</button></div>
+    <div class="row wrap"><span class="ico">🤝</span><div class="main"><b>Partenariat avec un club</b><small>Ouvrez la page d'un club (depuis un classement) pour devenir son partenaire</small></div></div></div>`);
   const an = ACADEMY[S.acad + 1];
   h += sec('🏫 Académie de jeunes', upgradeCard('🏫', ACADEMY[S.acad].name, `Niv. ${S.acad}/3`,
     S.acad ? `${ACADEMY[S.acad].kids} jeune(s) de 16 ans par été · ${fmt(ACADEMY[S.acad].weekly)}/sem.` : 'Formez vos propres pépites : elles signent chez vous chaque été.',
@@ -411,6 +421,8 @@ function agencyPal() {
     <div class="stats">${stat('Trophées clients', S.stats.troph, 'gold')}${stat('Succès', `${Object.keys(S.ach).length}/${ACH.length}`)}${stat('Saison', S.season - 2025)}</div>
     ${S.stats.bestName ? `<small style="margin-top:8px">💸 Plus gros transfert : ${esc(S.stats.bestName)}</small>` : ''}</div>`);
   h += sec(`🏅 Succès`, `<div class="card"><div class="ach">${ACH.map((a) => `<button class="${S.ach[a.id] ? 'on' : ''}" data-act="achInfo" data-id="${a.id}"><span>${a.i}</span><small>${a.l}</small></button>`).join('')}</div></div>`, `<small>${Object.keys(S.ach).length}/${ACH.length}</small>`);
+  const R = S.rec || {}, recs = [['goals', '⚽', 'Buts en une saison'], ['assists', '🅰️', 'Passes en une saison'], ['avg', '📈', 'Meilleure note moyenne'], ['ovr', '💪', 'Plus haut niveau'], ['value', '💎', 'Plus grosse valeur'], ['fol', '📱', 'Plus suivi']].filter(([k]) => R[k]);
+  if (recs.length) h += sec('🥇 Records de l\'agence', `<div class="list">${recs.map(([k, i, l]) => `<div class="row"><span class="ico">${i}</span><div class="main"><b>${l}</b><small>${esc(R[k].n)} · ${R[k].s}</small></div><div class="side"><b>${esc(R[k].txt)}</b></div></div>`).join('')}</div>`);
   h += agencyCharts();
   h += sec('🎯 Objectifs de carrière', `<div class="list">${GOALS.map((g) => `<div class="row"><span class="ico">${S.goals[g.id] ? '✅' : '⬜'}</span><div class="main"><b style="white-space:normal;font-weight:550;${S.goals[g.id] ? 'color:var(--mut)' : ''}">${g.label}</b></div><div class="side"><small>${fmt(g.reward)}</small></div></div>`).join('')}</div>`);
   if (S.hist.length) h += sec('🗓️ Historique', `<div class="card flush"><table class="tbl"><tr><th class="l">Saison</th><th>Rang</th><th>Rép.</th><th>Transf.</th><th>Résultat</th></tr>
@@ -494,21 +506,25 @@ function marketSheet(p) {
     ${p.sc >= 2 ? '' : actBtn('scout', p.id, '🔎', p.sc ? 'Affiner le rapport' : 'Observer le joueur', p.sc ? 'Potentiel estimé plus précisément' : 'Révèle son potentiel, ses qualités et son caractère', 1)}
     <button class="btn sec" style="margin:0 0 4px" data-act="fav" data-id="${p.id}">${p.fav ? '⭐ Joueur suivi — ne plus suivre' : '☆ Suivre ce joueur'}</button>
     <h4>Proposer un mandat · 1 action</h4>
+    <div class="card" style="padding:12px"><div class="split"><b style="font-size:14px">Votre commission sur son salaire</b><small>${['Attractif', 'Standard', 'Gourmand'][UI.com]}</small></div>
+      <small>Plus elle est basse, plus il est facile de le convaincre.</small>
+      <div class="seg" style="margin:10px 0 0;position:static;box-shadow:none">${COMS.map((c, i) => `<button class="${UI.com === i ? 'on' : ''}" data-act="com" data-id="${i}">${Math.round(c * 100)} %</button>`).join('')}</div></div>
     ${cd ? `<div class="note warn">Il refuse de discuter encore ${p.cd - S.t} semaine(s).</div>` : ''}
     ${!can ? `<div class="note warn">🔒 Recrutement à l'étranger non débloqué (bureau « ${OFFICES[INTL_OFFICE].name} »).</div>` : ''}
     ${['🤝 Simple poignée de main', '💶 Avec prime à la signature', '💰 Avec grosse prime'].map((l, i) => {
-    const ch = signChance(p, i);
-    return `<button class="choice" data-act="sign" data-id="${p.id}" data-lv="${i}" ${cd || !can ? 'disabled' : ''}><div class="top2"><b>${l}</b><b>${pct(ch)}</b></div>
+    const ch = signChance(p, i, UI.com);
+    return `<button class="choice" data-act="sign" data-id="${p.id}" data-lv="${i}" data-ci="${UI.com}" ${cd || !can ? 'disabled' : ''}><div class="top2"><b>${l}</b><b>${pct(ch)}</b></div>
       <small>${i ? 'Coût : ' + fmt(signBonusCost(p, i)) : 'Gratuit'}</small>${bar(ch * 100, ch < 0.35 ? 'bad' : ch < 0.6 ? 'mid' : '')}</button>`;
   }).join('')}`;
 }
 
 function clientOverview(p) {
   const prog = Math.max(0, Math.floor(p.ovr) - Math.floor(p.o0));
-  return `<div class="stats">${stat('Valeur', fmt(playerValue(p)))}${stat('Potentiel', potTxt(p), 'gold')}${stat('Pour vous', fmt(forYou(p)) + '/s', 'pos')}</div>
+  return `<div class="stats">${stat('Valeur', fmt(playerValue(p)))}${stat('Potentiel', potTxt(p), 'gold')}${stat(`Pour vous · ${Math.round(comRate(p) * 100)} %`, fmt(forYou(p)) + '/s', 'pos')}</div>
     <div class="stats" style="margin-top:8px">${stat('Temps de jeu', pct(playProb(p)), playProb(p) < 0.35 ? 'neg' : '')}${stat('Contrat club', `${p.cy} an(s)`, p.cy <= 1 ? 'neg' : '')}${stat('Mandat', `${p.mandate} saison(s)`)}</div>
     <div class="stats" style="margin-top:8px">${stat('Salaire / sem.', fmt(p.sal))}${stat('Abonnés', fmtFol(p.fol || 0))}${stat('Progression', '+' + prog, 'pos')}</div>
     <div class="moral"><small style="width:52px">Moral</small>${bar(p.morale, moralCls(p.morale))}<b>${Math.round(p.morale)}</b></div>
+    ${moraleFactors(p).length ? `<div class="tags" style="margin:-4px 0 10px">${moraleFactors(p).map(([i, t, c]) => tag(`${i} ${t}`, c)).join('')}</div>` : ''}
     ${nextMatch(p).map((x) => `<div class="note nextm" data-act="club" data-id="${esc(x.opp)}">📅 <span>Prochain match · ${x.cup ? EU[x.cup].icon + ' ' : ''}${x.comp}</span><b>${x.home ? 'Dom.' : 'Ext.'} ${esc(CLUBS[x.opp].name)} ›</b></div>`).join('')}
     ${attrCard(p)}
     ${p.free ? '<div class="note warn">🆓 <b>Libre</b> : placez-le avant la fin du mercato d\'été (semaine 6). Pas d\'indemnité, mais une prime à la signature pour vous. Sinon il re-signera à la baisse.</div>' : ''}
@@ -547,7 +563,7 @@ function clientStats(p) {
   const def = p.pos === 'GB' || p.pos === 'DEF';
   return `<h4>Saison ${seasonTxt(S.season)}</h4>
     <div class="stats">${stat('Matchs', p.m)}${stat('Buts', p.g)}${stat('Passes déc.', p.a)}</div>
-    <div class="stats" style="margin-top:8px">${stat('Note moyenne', avgNote(p), p.m ? noteClass(p.rs / p.m) : '')}${stat(def ? 'Clean sheets' : 'Buts / match', def ? p.cs : p.m ? (p.g / p.m).toFixed(2).replace('.', ',') : '–')}${stat('Europe', `${p.em || 0} m · ${p.eg || 0} b`)}</div>
+    <div class="stats" style="margin-top:8px">${stat('Note moyenne', avgNote(p), p.m ? noteClass(p.rs / p.m) : '')}${stat(def ? 'Clean sheets' : 'Buts / match', def ? p.cs : p.m ? (p.g / p.m).toFixed(2).replace('.', ',') : '–')}${stat('Coupes', `${p.em || 0} m · ${p.eg || 0} b`)}</div>
     <h4>Derniers matchs</h4>
     ${p.log.length ? `<div class="list">${p.log.map((x, i) => `<div class="row" data-act="match" data-id="${p.id}" data-src="log" data-i="${i}"><span class="res ${resClass(x)}"></span>
       <div class="main"><b style="font-weight:550;font-size:13.5px">${scoreTxt(x)}</b><small>Semaine ${x.w}</small></div><div class="side"><b>${x.g ? '⚽'.repeat(x.g) : ''}${x.a ? '🅰️'.repeat(x.a) : ''} <span class="${noteClass(x.n)}">${x.n.toFixed(1)}</span></b></div><span class="chev">›</span></div>`).join('')}</div>`
@@ -555,7 +571,9 @@ function clientStats(p) {
 }
 
 function clientCareer(p) {
-  return `${p.aw.length ? `<h4>Palmarès</h4><div class="list">${p.aw.map((a) => `<div class="row" style="padding:9px 13px"><span class="ico" style="font-size:16px">🏅</span><div class="main"><span style="font-size:13.5px">${esc(a)}</span></div></div>`).join('')}</div>` : ''}
+  const tm = p.sh.reduce((s, x) => s + x.m, 0) + p.m, tg = p.sh.reduce((s, x) => s + x.g, 0) + p.g, ta = p.sh.reduce((s, x) => s + x.a, 0) + p.a;
+  return `<h4>Carrière avec l'agence</h4><div class="stats four">${stat('Matchs', tm)}${stat('Buts', tg)}${stat('Passes', ta)}${stat('Titres', p.aw.filter((a) => /champion|vainqueur|BALLON|SOULIER|GOLDEN/i.test(a)).length, 'gold')}</div>
+    ${p.aw.length ? `<h4>Palmarès</h4><div class="list">${p.aw.map((a) => `<div class="row" style="padding:9px 13px"><span class="ico" style="font-size:16px">🏅</span><div class="main"><span style="font-size:13.5px">${esc(a)}</span></div></div>`).join('')}</div>` : ''}
     <h4>Saisons précédentes</h4>
     ${p.sh.length ? `<div class="card flush"><table class="tbl"><tr><th class="l">Saison</th><th class="l">Club</th><th>M</th><th>B</th><th>PD</th><th>Note</th></tr>
       ${p.sh.map((x) => `<tr><td class="l">${x.s}</td><td class="l">${esc(x.club)}</td><td>${x.m}</td><td>${x.g}</td><td>${x.a}</td><td>${x.m ? x.avg.toFixed(1) : '–'}</td></tr>`).join('')}</table></div>` : '<div class="card"><p class="empty">Première saison avec l\'agence.</p></div>'}
@@ -642,6 +660,7 @@ function modalClub(id, m) {
       <div class="tags">${tag(`${pos + 1}ᵉ du classement`)}${cups.map((k) => tag(`${EU[k].icon} ${EU[k].short}`, 'gold')).join('')}${r >= 10 ? tag(`🤝 ${relLabel(r)}`, 'ok') : ''}</div></div></div>
     <div class="stats four">${stat('Points', pts(t))}${stat('Matchs', t[0])}${stat('Bilan', `${t[1]}-${t[2]}-${t[3]}`)}${stat('Buts', `${t[4]}:${t[5]}`)}</div>
     <div class="moral"><small style="width:70px">Relation</small>${bar(r, r >= 30 ? '' : 'dim')}<b>${r}</b></div>
+    ${actBtn('invClub', esc(id), '🤝', S.inv.cl[id] === S.season ? 'Partenaire cette saison ✓' : 'Devenir partenaire du club', S.inv.cl[id] === S.season ? 'Relation renforcée' : `${fmt(clubSponsorCost(c))} · relation +20`, 0, { disabled: S.inv.cl[id] === S.season || S.cash < clubSponsorCost(c) })}
     ${here.length ? `<h4>Vos joueurs ici</h4><div class="list">${here.map((p) => `<button class="row" data-act="open" data-id="${p.id}">${rt(ovrOf(p), 'sm')}<div class="main"><b>${esc(p.n)}</b><small>${POS_SHORT[p.pos]} · temps de jeu ${pct(playProb(p))}</small></div><span class="chev">›</span></button>`).join('')}</div>` : ''}
     <h4>Joueurs vedettes</h4><div class="list">${stars.map((x) => `<div class="row" style="padding:9px 13px"><span class="ico" style="font-size:16px">⭐</span><div class="main"><b style="font-weight:550">${esc(x.n)}</b></div><div class="side"><b>${x.g}</b><small>buts</small></div></div>`).join('')}</div>
     <h4>Proposer un de vos joueurs</h4>
@@ -799,7 +818,8 @@ const ACTIONS = {
   refuse(d) { actRefuse(+d.id); },
   // Listes et filtres
   jv(d) { UI.jv = d.id; }, cs(d) { UI.cs = d.id; },
-  country(d) { UI.mk.country = d.id; }, favFilter() { UI.mk.fav = !UI.mk.fav; },
+  country(d) { UI.mk.country = d.id; UI.mk.u19 = false; }, favFilter() { UI.mk.fav = !UI.mk.fav; UI.mk.u19 = false; },
+  u19() { UI.mk.u19 = !UI.mk.u19 || UI.tab !== 'scout'; UI.mk.fav = false; UI.mk.q = ''; UI.tab = 'scout'; UI.modal = null; },
   cmode(d) { UI.cmode = d.id; }, clg(d) { UI.clg = d.id; }, cview(d) { UI.cview = d.id; }, eu(d) { UI.eu = d.id; },
   av(d) { UI.av = d.id; },
   // Fiche joueur
@@ -807,7 +827,8 @@ const ACTIONS = {
   ptab(d) { UI.modal.ptab = d.id; },
   fav(d) { actFav(+d.id); keep(); },
   scout(d) { toast(actScout(+d.id)); keep(); },
-  sign(d) { const r = actSign(+d.id, +d.lv); toast(r); if (r.ok) { UI.modal = { type: 'player', id: +d.id, ptab: 'ov' }; play(CHIME); } else keep(); },
+  com(d) { UI.com = +d.id; keep(); },
+  sign(d) { const r = actSign(+d.id, +d.lv, +d.ci); toast(r); if (r.ok) { UI.modal = { type: 'player', id: +d.id, ptab: 'ov' }; play(CHIME); } else keep(); },
   propose(d) { UI.modal = { type: 'propose', id: +d.id }; UI.lg = CLUBS[getP(+d.id).club].league; },
   mode(d) { UI.mode = d.id; },
   lg(d) { UI.lg = d.id; keep(); },
@@ -830,6 +851,9 @@ const ACTIONS = {
   staff(d) { toast(hireStaff(d.id)); },
   fire(d) { if (confirm('Licencier ce membre du personnel ?')) toast(fireStaff(d.id)); },
   acad() { toast(buyAcademy()); },
+  invMk() { toast(invMarketing()); },
+  invGala() { toast(invGala()); },
+  invClub(d) { toast(invClub(d.id)); keep(); },
   achInfo(d) { const a = ACH.find((x) => x.id === d.id); toast({ ok: !!S.ach[a.id], msg: `${a.i} ${a.l} : ${a.d}${S.ach[a.id] ? ` (débloqué en ${S.ach[a.id]})` : ' — pas encore débloqué'}` }); },
   logo(d) { S.agency.logo = d.id; save(); },
   color(d) { S.agency.color = d.id; save(); },

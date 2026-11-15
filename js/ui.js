@@ -25,6 +25,14 @@ const COLORS = [['#35d07f', 'Vert'], ['#f2c14e', 'Or'], ['#5aa9ff', 'Bleu'], ['#
 const CITIES = ['Liège', 'Bruxelles', 'Charleroi', 'Namur', 'Anvers', 'Gand', 'Marche-en-Famenne', 'Mons'];
 const POS_SHORT = { GB: 'GB', DEF: 'DEF', MIL: 'MIL', ATT: 'ATT' };
 
+function buzz(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) { /* rien */ } }
+const THEME = { v: (() => { try { return localStorage.getItem('agentfoot_theme') || 'dark'; } catch (e) { return 'dark'; } })() };
+function applyTheme() {
+  const t = THEME.v === 'auto' ? (window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : THEME.v;
+  document.documentElement.dataset.theme = t;
+  const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = t === 'light' ? '#f3f6f4' : '#0c1a14';
+}
+
 const UI = {
   tab: 'home', modal: null, toast: null, newsAll: false,
   mk: { country: 'BE', pos: '', sort: 'ovr', fav: false, u19: false, q: '' }, com: 1,
@@ -73,11 +81,23 @@ function renderToast() {
 }
 
 /* ============ Écran d'accueil (nouvelle partie) ============ */
+function slotsBlock() {
+  const infos = [1, 2, 3].map((k) => [k, slotInfo(k)]);
+  if (!infos.some(([, x]) => x)) return '';
+  return sec('💾 Vos parties', `<div class="list">${infos.map(([k, x]) => x
+    ? `<div class="row ${UI.slot === k ? 'me' : ''}"><span class="ico" style="font-size:24px">${esc(x.logo)}</span><div class="main"><b>${esc(x.name)}</b><small>${x.over ? '💀 Faillite · ' : ''}Saison ${seasonTxt(x.season)} · sem. ${x.week} · rép. ${Math.floor(x.rep)} · ${x.clients} client(s)</small></div>
+      <button class="btn sm" data-act="slotLoad" data-id="${k}">Continuer</button><button class="btn sm ghost" data-act="slotDel" data-id="${k}" aria-label="Supprimer">🗑️</button></div>`
+    : `<button class="row ${UI.slot === k ? 'me' : ''}" data-act="slotNew" data-id="${k}"><span class="ico">➕</span><div class="main"><b>Emplacement ${k} libre</b><small>Démarrer une nouvelle carrière ici</small></div>${UI.slot === k ? tag('Sélectionné', 'ok') : ''}</button>`).join('')}</div>`);
+}
+
 function viewStart() {
   const n = UI.nw;
+  if (!UI.slot) UI.slot = [1, 2, 3].find((k) => !slotInfo(k)) || curSlot();
   return `<div class="hero" style="--acc:${n.color}"><div class="logo">${n.logo}</div><h1>Agent Foot</h1>
       <p>Fondez votre agence de joueurs en Belgique, dénichez des pépites dans les petits clubs et emmenez-les jusqu'aux 5 grands championnats européens.</p></div>
     <div class="start" style="--acc:${n.color}">
+      ${slotsBlock()}
+      <div class="sec-h"><h2>✨ Nouvelle carrière${slotInfo(UI.slot) ? ` · ⚠️ remplacera l'emplacement ${UI.slot}` : ` · emplacement ${UI.slot}`}</h2></div>
       <div class="card">
         <label class="field"><span>Nom de l'agence</span><input id="in-name" maxlength="24" value="${esc(n.name)}"></label>
         <div class="field"><span>Logo</span><div class="logos">${LOGOS.map((l) => `<button class="lg-pick ${n.logo === l ? 'on' : ''}" data-act="nwLogo" data-id="${l}">${l}</button>`).join('')}</div></div>
@@ -215,8 +235,10 @@ function viewHome() {
 function dock() {
   if (UI.tab !== 'home' || S.over) return '';
   const block = !!S.event;
-  return `<div class="dock"><button class="btn lg" data-act="week" ${block ? 'disabled' : ''}>${block ? '⚡ Décision en attente' : '▶ Semaine suivante'}</button>
-    <button class="btn lg sec icon" data-act="fast" ${block ? 'disabled' : ''} title="Avancer de 4 semaines">⏩ ×4</button></div>`;
+  const closed = !inWindow(S.week);
+  return `<div class="dock ${closed ? 'three' : ''}"><button class="btn lg" data-act="week" ${block ? 'disabled' : ''}>${block ? '⚡ Décision en attente' : '▶ Semaine'}</button>
+    <button class="btn lg sec icon" data-act="fast" ${block ? 'disabled' : ''} title="Avancer de 4 semaines">⏩ ×4</button>
+    ${closed ? `<button class="btn lg sec icon" data-act="toWindow" ${block ? 'disabled' : ''} title="Avancer jusqu'au prochain mercato">⏭ Mercato</button>` : ''}</div>`;
 }
 
 /* ============ Mes joueurs ============ */
@@ -230,7 +252,7 @@ function clientRow(p) {
   if (p.intl) t.push(tag('🌍 International', 'ok'));
   return `<button class="row" data-act="open" data-id="${p.id}">${rt(ovrOf(p))}
     <div class="main"><b>${esc(p.n)}</b><small>${POS_SHORT[p.pos]} · ${p.age} ans · ${clubTxt(p)}</small>${t.length ? `<div class="tags">${t.join('')}</div>` : ''}</div>
-    <div class="side"><b class="pos">${fmt(forYou(p))}<span class="mut" style="font-weight:500">/s</span></b><small>${p.m} m · ${p.g} b · ${avgNote(p)}</small><div class="mor"><i class="${moralCls(p.morale)}" style="width:${p.morale}%"></i></div></div>
+    <div class="side"><b class="pos">${fmt(forYou(p))}<span class="mut" style="font-weight:500">/s</span></b><small>${p.m} m · ${p.g} b · ${avgNote(p)}</small>${p.log.length ? `<div class="form">${p.log.slice(0, 5).reverse().map((x) => `<i class="${x.n >= 7.5 ? 'g' : x.n < 6 ? 'r' : 'o'}" title="${x.n.toFixed(1)}"></i>`).join('')}</div>` : ''}<div class="mor"><i class="${moralCls(p.morale)}" style="width:${p.morale}%"></i></div></div>
     <span class="chev">›</span></button>`;
 }
 
@@ -261,6 +283,7 @@ function marketRow(p) {
   const t = [];
   if (p.cov) t.push(tag('👀 Convoité', 'bad'));
   if (p.u19 === S.season) t.push(tag('🏟️ Révélé', 'gold'));
+  if (p.sc >= 1 && p.potLo >= ovrOf(p) + 12 && p.age <= 20) t.push(tag('💎 Bonne affaire', 'ok'));
   if (p.sc >= 2) t.push(tag('📋 Rapport complet', 'ok')); else if (p.sc === 1) t.push(tag('🔎 Observé', 'info'));
   if (!canRecruit(p)) t.push(tag('🔒'));
   return `<button class="row" data-act="open" data-id="${p.id}">${rt(ovrOf(p))}
@@ -407,7 +430,10 @@ function agencyDev() {
 
 function agencyNet() {
   const all = [{ n: S.agency.name, rep: S.rep, me: true }, ...S.rivals].sort((a, b) => b.rep - a.rep);
-  let h = sec('🏆 Classement des agences', `<div class="list">${all.map((a, i) => `<div class="row ${a.me ? 'me' : ''}"><span class="ico" style="font-weight:800;color:var(--mut);font-size:14px">${i + 1}</span>
+  const ti = tierIdx(S.rep), nt = TIERS[ti + 1];
+  let h = sec('🎖️ Statut de l\'agence', `<div class="card goldc"><div class="card-h" style="margin-bottom:${nt ? 10 : 0}px"><div style="display:flex;gap:12px;align-items:center"><span style="font-size:30px">${TIERS[ti][1]}</span><div><b>${TIERS[ti][2]}</b><small>Palier ${ti + 1}/${TIERS.length}</small></div></div></div>
+    ${nt ? `<div class="split" style="margin-bottom:6px"><small>Prochain : ${nt[1]} ${nt[2]}</small><small>${Math.floor(S.rep)} / ${nt[0]} rép.</small></div>${bar((S.rep - TIERS[ti][0]) / (nt[0] - TIERS[ti][0]) * 100, 'gold')}` : ''}</div>`);
+  h += sec('🏆 Classement des agences', `<div class="list">${all.map((a, i) => `<div class="row ${a.me ? 'me' : ''}"><span class="ico" style="font-weight:800;color:var(--mut);font-size:14px">${i + 1}</span>
     <div class="main rankbar"><b>${a.me ? esc(S.agency.logo) + ' ' : ''}${esc(a.n)}</b>${bar(a.rep, a.me ? '' : 'dim')}</div><div class="side"><b>${Math.floor(a.rep)}</b></div></div>`).join('')}</div>`);
   const part = Object.keys(S.rel).filter((id) => S.rel[id] >= 10).sort((a, b) => S.rel[b] - S.rel[a]);
   h += sec('🤝 Clubs partenaires', part.length ? `<div class="list">${part.slice(0, 10).map((id) => `<div class="row"><span class="ico">${LEAGUES[CLUBS[id].league].flag}</span><div class="main"><b>${esc(CLUBS[id].name)}</b><small>${relLabel(S.rel[id])}</small></div>
@@ -434,6 +460,7 @@ function agencyPal() {
 function agencySet() {
   let h = sec('🎨 Identité', `<div class="card"><div class="field"><span>Logo</span><div class="logos">${LOGOS.map((l) => `<button class="lg-pick ${S.agency.logo === l ? 'on' : ''}" data-act="logo" data-id="${l}">${l}</button>`).join('')}</div></div>
     <div class="field" style="margin:0"><span>Couleur</span><div class="swatches">${COLORS.map(([c, n]) => `<button class="sw ${S.agency.color === c ? 'on' : ''}" style="background:${c}" data-act="color" data-id="${c}" aria-label="${n}"></button>`).join('')}</div></div></div>`);
+  h += sec('🌓 Apparence', `<div class="card" style="padding:12px">${seg('theme', THEME.v, [['dark', '🌙 Sombre'], ['light', '☀️ Clair'], ['auto', '⚙️ Auto']]).replace('class="seg"', 'class="seg" style="margin:0"')}</div>`);
   h += sec('⚙️ Préférences', `<div class="list"><button class="row" data-act="sound"><span class="ico">${SND.on ? '🔊' : '🔇'}</span><div class="main"><b>Sons</b><small>Fanfare, carillons et buts en direct</small></div><div class="side">${tag(SND.on ? 'Activés' : 'Coupés', SND.on ? 'ok' : '')}</div></button>
     <button class="row" data-act="help"><span class="ico">❓</span><div class="main"><b>Comment jouer</b><small>Les règles en 2 minutes</small></div><span class="chev">›</span></button></div>`);
   h += sec('📲 Application', `<div class="card">${UI.standalone ? '<p style="margin:0">✅ Application installée. Elle se met à jour toute seule à chaque ouverture (connexion nécessaire).</p>'
@@ -442,7 +469,8 @@ function agencySet() {
   h += sec('💾 Sauvegarde', `<div class="card"><small>La partie est enregistrée automatiquement sur cet appareil. Exportez-la pour la garder en sécurité ou la continuer ailleurs.</small>
     <button class="btn sec" data-act="export">📤 Exporter la sauvegarde</button>
     <label class="btn sec file">📥 Importer une sauvegarde<input type="file" id="imp" accept=".json,application/json" hidden></label>
-    <button class="btn danger" data-act="reset">🗑️ Effacer et recommencer</button></div>`);
+    <button class="btn sec" data-act="switchGame">🔁 Changer de partie (3 emplacements)</button>
+    <button class="btn danger" data-act="reset">🗑️ Effacer cette partie</button></div>`);
   return h;
 }
 
@@ -590,12 +618,13 @@ function modalPlayer(p, m) {
 /* ============ Autres fenêtres ============ */
 function modalPropose(p) {
   const cur = CLUBS[p.club], loan = UI.mode === 'loan';
-  const list = clubsOf(UI.lg).sort((a, b) => b.rep - a.rep);
+  const rec = UI.lg === 'REC', list = rec ? recommendedClubs(p, loan) : clubsOf(UI.lg).sort((a, b) => b.rep - a.rep);
   return `<div class="ph" style="margin-bottom:10px">${rt(ovrOf(p))}<div><h3>${loan ? 'Prêter' : 'Transférer'} ${esc(p.n)}</h3><small>${clubTxt(p)} · valeur ${fmt(playerValue(p))}</small></div></div>
     ${seg('mode', UI.mode, [['transfer', '🤝 Transfert'], ['loan', '🔁 Prêt']])}
     <div class="note">${loan ? `Prêt jusqu'à la fin de la saison dans un club plus modeste, pour jouer et progresser. Temps de jeu actuel : <b>${pct(playProb(p))}</b>. Aucune commission.`
     : `Un club regarde le niveau actuel (${ovrOf(p)}), ou le potentiel (${potTxt(p)}) pour les jeunes. Une proposition coûte 1 action.`}</div>
-    ${pills('lg', UI.lg, Object.keys(LEAGUES).map((l) => [l, `${LEAGUES[l].flag} ${LEAGUES[l].name}`]))}
+    ${pills('lg', UI.lg, [['REC', '⭐ Recommandés'], ...Object.keys(LEAGUES).map((l) => [l, `${LEAGUES[l].flag} ${LEAGUES[l].name}`])])}
+    ${rec && !list.length ? `<div class="card"><p class="empty">Aucun club ne semble prêt à ${loan ? 'l\'accueillir en prêt' : 'faire une offre'} pour l'instant. Parcourez les championnats ou faites-le progresser.</p></div>` : ''}
     <div class="list">${list.map((c) => {
     const same = c.id === p.club, rej = p.rej[c.id] > S.t;
     let why = same ? 'Club actuel' : rej ? 'A déjà refusé récemment' : '', sub, extra = '';
@@ -608,7 +637,8 @@ function modalPropose(p) {
       if (dreamMatch(p.dream, c)) extra += tag('🌟 Son rêve', 'gold');
       if (rel(c.id) >= 10) extra += tag(`🤝 ${relLabel(rel(c.id))}`, 'ok');
     }
-    return `<div class="row">${rt(c.rep, 'sm')}<div class="main"><b>${esc(c.name)}</b><small>${why || sub}</small>${extra && !why ? `<div class="tags">${extra}</div>` : ''}</div>
+    if (!loan && !why) { const it = clubInterest(p, c); sub = `${it > 0.5 ? '🔥 Très intéressé' : it > 0.25 ? '🙂 Intérêt possible' : '❄️ Peu intéressé'} · ${sub}`; }
+    return `<div class="row">${rt(c.rep, 'sm')}<div class="main"><b>${rec ? LEAGUES[c.league].flag + ' ' : ''}${esc(c.name)}</b><small>${why || sub}</small>${extra && !why ? `<div class="tags">${extra}</div>` : ''}</div>
       <button class="btn sm" data-act="${loan ? 'doLoan' : 'doPropose'}" data-id="${p.id}" data-club="${esc(c.id)}" ${why ? 'disabled' : ''}>${loan ? 'Prêter' : 'Proposer'}</button></div>`;
   }).join('')}</div>
     <button class="btn ghost" data-act="open" data-id="${p.id}">← Retour à la fiche</button>`;
@@ -703,7 +733,7 @@ function autoCer() {
 }
 function cerNext() {
   const m = UI.modal, sl = S.cer.slides[m.i];
-  if (sl.k === 'award' && !m.open) { m.open = true; play(DRUM, 'square'); setTimeout(() => play(FANFARE), 650); return; }
+  if (sl.k === 'award' && !m.open) { m.open = true; play(DRUM, 'square'); setTimeout(() => { play(FANFARE); buzz([30, 40, 30, 40, 120]); }, 650); return; }
   if (m.i >= S.cer.slides.length - 1) { UI.modal = null; return; }
   m.i++; m.open = false;
 }
@@ -765,6 +795,7 @@ function renderModal() {
 
 function render() {
   const app = $('#app');
+  applyTheme();
   document.documentElement.style.setProperty('--acc', (S && S.agency.color) || UI.nw.color);
   if (!S) { app.className = ''; app.innerHTML = viewStart(); renderModal(); renderToast(); return; }
   const views = { home: viewHome, clients: viewClients, scout: viewScout, compet: viewCompet, agence: viewAgence };
@@ -785,9 +816,16 @@ function weekSum(a) {
 }
 const ACTIONS = {
   // Nouvelle partie
+  slotNew(d) { UI.slot = +d.id; },
+  slotLoad(d) { setSlot(+d.id); if (load()) { UI.tab = 'home'; UI.modal = null; UI.sum = null; window.scrollTo(0, 0); } else toast({ ok: false, msg: 'Sauvegarde illisible.' }); },
+  slotDel(d) { if (confirm('Supprimer définitivement cette partie ?')) { try { localStorage.removeItem(slotKey(+d.id)); } catch (e) { /* rien */ } if (UI.slot === +d.id) UI.slot = 0; } },
+  switchGame() { save(); S = null; UI.modal = null; UI.slot = 0; window.scrollTo(0, 0); },
+  theme(d) { THEME.v = d.id; try { localStorage.setItem('agentfoot_theme', d.id); } catch (e) { /* rien */ } },
   nwLogo(d) { UI.nw.logo = d.id; }, nwColor(d) { UI.nw.color = d.id; }, nwDiff(d) { UI.nw.diff = +d.id; },
   start() {
     const n = UI.nw;
+    if (slotInfo(UI.slot) && !confirm(`Remplacer la partie de l'emplacement ${UI.slot} ?`)) return;
+    setSlot(UI.slot);
     newGame(($('#in-name').value || '').trim() || n.name, $('#in-city').value, n.diff);
     S.agency.logo = n.logo; S.agency.color = n.color; save();
     UI.tab = 'home'; UI.modal = { type: 'help' };
@@ -807,12 +845,20 @@ const ACTIONS = {
     }
     weekSum(a); autoCer();
   },
+  toWindow() {
+    const a = snap();
+    for (let i = 0; i < 40 && !inWindow(S.week); i++) {
+      nextWeek();
+      if (S.over || S.event || S.offers.length || S.recap) break;
+    }
+    weekSum(a); autoCer();
+  },
   event(d) { toast(resolveEvent(+d.id)); },
   recap() { S.recap = null; save(); },
   sumClose() { UI.sum = null; },
   club(d) { const prev = UI.modal; UI.modal = { type: 'club', id: d.id, back: prev && prev.type === 'player' && getP(prev.id) ? prev.id : null }; },
   // Offres
-  accept(d) { const r = actAccept(+d.id); toast(r); if (r.ok) play(CHIME); },
+  accept(d) { const r = actAccept(+d.id); toast(r); if (r.ok) { play(CHIME); buzz([40, 60, 80]); } },
   negoOpen(d) { const o = S.offers.find((x) => x.id === +d.id); if (o) UI.modal = { type: 'nego', id: o.pid, oid: o.id }; },
   nego(d) { const r = actNegotiate(+d.id, +d.lv); toast(r); UI.modal = null; if (r.ok) play(CHIME); },
   refuse(d) { actRefuse(+d.id); },
@@ -828,8 +874,8 @@ const ACTIONS = {
   fav(d) { actFav(+d.id); keep(); },
   scout(d) { toast(actScout(+d.id)); keep(); },
   com(d) { UI.com = +d.id; keep(); },
-  sign(d) { const r = actSign(+d.id, +d.lv, +d.ci); toast(r); if (r.ok) { UI.modal = { type: 'player', id: +d.id, ptab: 'ov' }; play(CHIME); } else keep(); },
-  propose(d) { UI.modal = { type: 'propose', id: +d.id }; UI.lg = CLUBS[getP(+d.id).club].league; },
+  sign(d) { const r = actSign(+d.id, +d.lv, +d.ci); toast(r); if (r.ok) { UI.modal = { type: 'player', id: +d.id, ptab: 'ov' }; play(CHIME); buzz(60); } else keep(); },
+  propose(d) { UI.modal = { type: 'propose', id: +d.id }; UI.lg = 'REC'; },
   mode(d) { UI.mode = d.id; },
   lg(d) { UI.lg = d.id; keep(); },
   doPropose(d) { const r = actPropose(+d.id, d.club); toast(r); if (r.ok) { UI.modal = null; UI.tab = 'home'; play(CHIME); } else keep(); },
@@ -869,7 +915,7 @@ const ACTIONS = {
       toast({ ok: true, msg: 'Sauvegarde exportée.' });
     } catch (e) { toast({ ok: false, msg: 'Export impossible sur cet appareil.' }); }
   },
-  reset() { if (confirm('Effacer définitivement la partie ?')) { wipe(); UI.tab = 'home'; UI.modal = null; } },
+  reset() { if (confirm('Effacer définitivement la partie ?')) { wipe(); UI.tab = 'home'; UI.modal = null; UI.slot = 0; } },
   // Cérémonie
   cer() { UI.modal = { type: 'cer', i: 0, open: false }; },
   cerNext() { cerNext(); },
@@ -895,6 +941,7 @@ document.addEventListener('change', (e) => {
   if (e.target.id === 'imp' && e.target.files && e.target.files[0]) {
     const file = e.target.files[0];
     if (S && !confirm('Remplacer la partie en cours par cette sauvegarde ?')) return;
+    if (!S) { if (slotInfo(UI.slot) && !confirm(`Remplacer la partie de l'emplacement ${UI.slot} ?`)) return; setSlot(UI.slot || curSlot()); }
     file.text().then((t) => { toast(importSave(t)); UI.tab = 'home'; UI.modal = null; render(); });
   }
 });
@@ -911,5 +958,7 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   }).catch(() => { /* hors ligne ou non supporté */ });
 }
 
+setSlot(curSlot());
 load();
+if (window.matchMedia) matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => { if (THEME.v === 'auto') render(); });
 render();

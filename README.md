@@ -46,6 +46,9 @@ La partie est sauvegardée automatiquement dans le navigateur.
 - **Commission négociable** (5, 7 ou 10 %), **Coupe de Belgique**, **investissements** (campagne, gala, partenariats de clubs),
   **tournoi des espoirs**, **jour de clôture du mercato**, **records de l'agence**, attributs des joueurs et pages de clubs.
 
+- **Thème clair / sombre / auto**, **3 emplacements de sauvegarde**, **clubs recommandés** pour chaque transfert,
+  bouton **« jusqu'au mercato »**, **paliers de l'agence**, forme récente des joueurs, bonnes affaires et vibrations.
+
 ## Installer l'application
 
 Le jeu est une application web installable (PWA). Ouvrez le site sur le téléphone puis :

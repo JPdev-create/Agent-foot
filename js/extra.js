@@ -197,3 +197,26 @@ function moraleFactors(p) {
   if (p.tr === 'loy') f.push(['🤝', 'Loyal : ne partira pas', 'ok']);
   return f;
 }
+
+/* ---------- Paliers de l'agence ---------- */
+const TIERS = [[0, '🏠', 'Agence de quartier'], [15, '🏙️', 'Agence régionale'], [35, '🇧🇪', 'Agence nationale'], [55, '🇪🇺', 'Agence européenne'], [75, '🌍', 'Puissance mondiale'], [92, '👑', 'Empire du football']];
+const tierIdx = (rep) => TIERS.reduce((k, t, i) => (rep >= t[0] ? i : k), 0);
+function checkTier() {
+  const i = tierIdx(S.rep);
+  if (S.tier === undefined) { S.tier = i; return; }
+  if (i > S.tier) { S.tier = i; addRepSilent(); news('🎖️', `Nouveau palier : votre agence devient « ${TIERS[i][2]} » ${TIERS[i][1]} !`); }
+  else if (i < S.tier) S.tier = i;
+}
+function addRepSilent() { /* palier : pas de bonus de réputation, seulement la reconnaissance */ }
+
+/* ---------- Clubs recommandés pour un transfert ou un prêt ---------- */
+function recommendedClubs(p, loan) {
+  const cur = CLUBS[p.club];
+  const all = CLUB_IDS.map((id) => CLUBS[id]).filter((c) => c.id !== p.club && !(p.rej[c.id] > S.t));
+  if (loan) {
+    return all.filter((c) => loanOk(p, c)).map((c) => ({ c, s: clamp(0.5 + (p.ovr - (c.rep - 12)) / 16, 0.05, 0.97) }))
+      .filter((x) => x.s >= 0.55).sort((a, b) => b.c.rep - a.c.rep).slice(0, 12).map((x) => x.c);
+  }
+  return all.filter((c) => playerAccepts(p, c) && c.rep >= cur.rep - 2 && clubInterest(p, c) > 0.25)
+    .sort((a, b) => clubInterest(p, b) * relBoost(b.id) * (b.rep + 20) - clubInterest(p, a) * relBoost(a.id) * (a.rep + 20)).slice(0, 12);
+}

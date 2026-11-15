@@ -1,7 +1,18 @@
 /* Logique du jeu (aucun accès au DOM ici) */
 'use strict';
 
-const SAVE_KEY = 'agentfoot_save_v1';
+let SAVE_KEY = 'agentfoot_save_v1';
+/* Emplacements de sauvegarde (le 1 garde l'ancienne clé pour rester compatible) */
+const slotKey = (n) => (n === 1 ? 'agentfoot_save_v1' : 'agentfoot_save_v1_s' + n);
+function setSlot(n) { SAVE_KEY = slotKey(n); try { localStorage.setItem('agentfoot_slot', String(n)); } catch (e) { /* rien */ } }
+function curSlot() { try { return +localStorage.getItem('agentfoot_slot') || 1; } catch (e) { return 1; } }
+function slotInfo(n) {
+  try {
+    const d = JSON.parse(localStorage.getItem(slotKey(n)));
+    if (!d || d.v !== 1) return null;
+    return { name: d.agency.name, logo: d.agency.logo || '⚽', season: d.season, week: d.week, rep: d.rep, cash: d.cash, over: d.over, clients: d.players.filter((p) => p.mine).length };
+  } catch (e) { return null; }
+}
 let S = null; // état courant
 
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -196,6 +207,7 @@ function wipe() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* rien
 function checkGoals() {
   checkMissions();
   checkAch();
+  checkTier();
   const cl = clients();
   const done = {
     sign1: cl.length >= 1 || S.stats.transfers > 0, sign3: cl.length >= 3,

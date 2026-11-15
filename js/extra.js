@@ -290,3 +290,17 @@ function projectOvr(p) {
   }
   return Math.floor(o);
 }
+
+/* ---------- Agences rivales : spécialités et actualité du mercato ---------- */
+const RIVAL_STYLE = {
+  'Stellar Football Group': 'Superstars et Premier League', 'Gestifoot International': 'Péninsule ibérique et Amérique du Sud',
+  'Mundial Sports Agency': 'Gros transferts en Serie A', 'Rhein Sport Consulting': 'Bundesliga et jeunes Allemands',
+  'Lions Management': 'Ligue 1 et talents francophones', 'Benelux Talents': 'Jeunes Belges et Néerlandais',
+  'Ardennes Foot Conseil': 'Petits clubs wallons', 'Scheldt Sports': 'Flandre et Eredivisie',
+};
+function transferTicker() {
+  const from = pick(CLUB_IDS.filter((id) => CLUBS[id].rep >= 70)), up = CLUB_IDS.filter((id) => CLUBS[id].rep > CLUBS[from].rep + 3);
+  if (!up.length) return;
+  const to = pick(up), fee = Math.round(rnd(4, 20) * (CLUBS[to].rep / 60) ** 3) * 1e6, r = pick(S.rivals);
+  news('📰', `Mercato : ${starName(from, rint(0, 2))} quitte ${CLUBS[from].name} pour ${CLUBS[to].name} (${fmt(fee)}) · agent : ${r.n}.`);
+}

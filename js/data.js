@@ -10,6 +10,8 @@ const LEAGUES = {
   ITA: { name: 'Serie A', country: 'IT', flag: '🇮🇹', big: true },
   GER: { name: 'Bundesliga', country: 'DE', flag: '🇩🇪', big: true },
   FRA: { name: 'Ligue 1', country: 'FR', flag: '🇫🇷', big: true },
+  NED: { name: 'Eredivisie', country: 'NL', flag: '🇳🇱', big: false },
+  POR: { name: 'Liga Portugal', country: 'PT', flag: '🇵🇹', big: false },
 };
 
 const CLUB_LIST = {
@@ -43,6 +45,12 @@ const CLUB_LIST = {
     ["Borussia M'gladbach", 79], ['Wolfsburg', 79], ['Werder Brême', 79], ['Hoffenheim', 78],
     ['Augsbourg', 77], ['Union Berlin', 77], ['FC Cologne', 76], ['Hambourg SV', 76],
     ['Sankt Pauli', 75], ['Heidenheim', 74]],
+  NED: [['PSV Eindhoven', 84], ['Ajax', 83], ['Feyenoord', 83], ['AZ Alkmaar', 77], ['FC Twente', 76], ['FC Utrecht', 74],
+    ['Go Ahead Eagles', 70], ['NEC Nimègue', 70], ['SC Heerenveen', 69], ['Sparta Rotterdam', 68], ['FC Groningen', 68], ['Fortuna Sittard', 67],
+    ['Heracles Almelo', 66], ['PEC Zwolle', 66], ['NAC Breda', 65], ['Willem II', 65], ['Excelsior', 64], ['Telstar', 63]],
+  POR: [['Benfica', 85], ['Sporting CP', 85], ['FC Porto', 85], ['SC Braga', 80], ['Vitória Guimarães', 75], ['Famalicão', 72],
+    ['Moreirense', 70], ['Gil Vicente', 70], ['Rio Ave', 69], ['Estoril', 69], ['Casa Pia', 68], ['Arouca', 67],
+    ['Santa Clara', 67], ['Nacional', 66], ['Estrela Amadora', 65], ['Tondela', 64], ['AVS', 63], ['Alverca', 63]],
   FRA: [['Paris Saint-Germain', 94], ['Olympique de Marseille', 85], ['AS Monaco', 85], ['Lille OSC', 83],
     ['Olympique Lyonnais', 83], ['OGC Nice', 81], ['RC Lens', 81], ['Stade Rennais', 80],
     ['RC Strasbourg', 80], ['Toulouse FC', 77], ['Stade Brestois', 77], ['FC Nantes', 76],
@@ -106,10 +114,18 @@ const NAMES = {
     first: ['Leon', 'Jonas', 'Felix', 'Lukas', 'Maximilian', 'Paul', 'Niklas', 'Tim', 'Florian', 'Jamal', 'Kerem', 'Moritz', 'Jannik', 'Emre', 'Julian'],
     last: ['Müller', 'Schmidt', 'Wagner', 'Becker', 'Hoffmann', 'Schäfer', 'Koch', 'Richter', 'Klein', 'Wolf', 'Yilmaz', 'Neumann', 'Braun', 'Krüger', 'Demir'],
   },
+  NL: {
+    first: ['Daan', 'Sem', 'Thijs', 'Jesse', 'Milan', 'Bram', 'Luuk', 'Ruben', 'Xavi', 'Justin', 'Noa', 'Jurriën', 'Quinten', 'Calvin', 'Ryan'],
+    last: ['de Jong', 'Jansen', 'de Vries', 'van den Berg', 'Bakker', 'Visser', 'Smit', 'Meijer', 'Mulder', 'Bos', 'Vos', 'Dekker', 'Hendriks', 'van Dijk', 'Timber'],
+  },
+  PT: {
+    first: ['João', 'Rúben', 'Diogo', 'Gonçalo', 'Tiago', 'Rafael', 'Bernardo', 'Francisco', 'Nuno', 'Vitinha', 'Pedro', 'André', 'Rodrigo', 'Afonso', 'Martim'],
+    last: ['Silva', 'Santos', 'Ferreira', 'Pereira', 'Costa', 'Oliveira', 'Rodrigues', 'Martins', 'Sousa', 'Gomes', 'Carvalho', 'Lopes', 'Ramos', 'Neves', 'Leão'],
+  },
 };
 
-const COUNTRY_LABEL = { BE: '🇧🇪 Belgique', FR: '🇫🇷 France', EN: '🏴󠁧󠁢󠁥󠁮󠁧󠁿 Angleterre', ES: '🇪🇸 Espagne', IT: '🇮🇹 Italie', DE: '🇩🇪 Allemagne' };
-const COUNTRY_LEAGUES = { BE: ['BE1', 'BE2', 'BE3'], FR: ['FRA'], EN: ['ENG'], ES: ['ESP'], IT: ['ITA'], DE: ['GER'] };
+const COUNTRY_LABEL = { BE: '🇧🇪 Belgique', FR: '🇫🇷 France', EN: '🏴󠁧󠁢󠁥󠁮󠁧󠁿 Angleterre', ES: '🇪🇸 Espagne', IT: '🇮🇹 Italie', DE: '🇩🇪 Allemagne', NL: '🇳🇱 Pays-Bas', PT: '🇵🇹 Portugal' };
+const COUNTRY_LEAGUES = { BE: ['BE1', 'BE2', 'BE3'], FR: ['FRA'], EN: ['ENG'], ES: ['ESP'], IT: ['ITA'], DE: ['GER'], NL: ['NED'], PT: ['POR'] };
 
 const POSITIONS = { GB: 'Gardien', DEF: 'Défenseur', MIL: 'Milieu', ATT: 'Attaquant' };
 

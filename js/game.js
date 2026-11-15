@@ -103,7 +103,7 @@ function genPlayer(country, ageMin, ageMax, boost) {
   return p;
 }
 
-const MARKET_SIZE = { BE: 130, FR: 28, EN: 28, ES: 28, IT: 28, DE: 28 };
+const MARKET_SIZE = { BE: 130, FR: 28, EN: 28, ES: 28, IT: 28, DE: 28, NL: 22, PT: 22 };
 
 function newGame(name, city, diff) {
   S = {
@@ -182,6 +182,9 @@ function migrate() {
   if (!S.tab) newTables();
   if (!S.res) S.res = {};
   if (!S.gs) { S.gs = {}; CLUB_IDS.forEach((id) => { S.gs[id] = [0, 0, 0]; }); }
+  CLUB_IDS.forEach((id) => { if (!S.tab[id]) S.tab[id] = [0, 0, 0, 0, 0, 0]; if (S.form[id] === undefined) S.form[id] = rnd(-3, 3); if (!S.gs[id]) S.gs[id] = [0, 0, 0]; });
+  if (!S.amb) S.amb = [];
+  ['NL', 'PT'].forEach((c) => { if (S.players && S.players.length && !S.players.some((p) => p.nat === c)) for (let i = 0; i < MARKET_SIZE[c]; i++) S.players.push(genPlayer(c, 16, 21)); });
   if (!S.eu) newEurope(euQualified());
   if (S.eu && !S.eu.BC) S.eu.BC = { alive: clubsOf('BE1').map((c) => c.id).sort(() => Math.random() - 0.5), rounds: [], champ: null };
   if (!S.inv) S.inv = { mk: 0, gala: 0, cl: {} };
@@ -496,10 +499,12 @@ function maybeEvent() {
   if (playProb(p) < 0.4 && !p.promise && !p.loan) types.push('leave', 'leave');
   if (p.age >= 27 && p.ovr >= 65 && !p.loan) types.push('exotic');
   if (!p.free && !p.loan) types.push('cut');
+  if (playerValue(p) >= 2e6) types.push('buyout');
+  if (p.age >= 24 && LEAGUES[CLUBS[p.club].league].country !== p.nat && !p.promise && COUNTRY_LEAGUES[p.nat]) types.push('home');
   let k = pick(types), who = p;
   const hurt = clients().filter((x) => x.inj >= 4);
   if (hurt.length && Math.random() < 0.3) { k = 'clinic'; who = pick(hurt); }
-  S.event = { k, pid: who.id, c: Math.max(300, Math.round(playerValue(who) * 0.01 / 100) * 100) };
+  S.event = { k, pid: who.id, c: Math.max(300, Math.round(playerValue(who) * 0.01 / 100) * 100), by: pick(S.rivals).n };
 }
 
 function eventView() {
@@ -521,6 +526,10 @@ function eventView() {
       choices: [`Financer le gala (${fmt(c)})`, 'Décliner poliment'] };
     case 'exotic': return { title: 'Un pont d\'or exotique', text: `Un club d'un championnat lointain offre un salaire astronomique à ${p.n}. Il quitterait l'Europe… et votre agence.`,
       choices: [`Accepter : commission de ${fmt(c * 15)}`, 'Refuser, sa carrière est en Europe'] };
+    case 'buyout': return { title: 'Offre de rachat de mandat', text: `${e.by || 'Une agence rivale'} propose de vous racheter le mandat de ${p.n}. Il quitterait votre agence.`,
+      choices: [`Vendre le mandat (${fmt(c * 6)})`, 'Refuser : il reste chez nous'] };
+    case 'home': return { title: 'Le mal du pays', text: `Loin de chez lui, ${p.n} rêve de rentrer jouer en ${COUNTRY_LABEL[p.nat].split(' ').slice(1).join(' ')}.`,
+      choices: ['Lui promettre un retour au pays (6 mois)', 'Lui demander de patienter'] };
     case 'cut': return { title: 'Baisse de salaire demandée', text: `${CLUBS[p.club].name} traverse des difficultés et demande à ${p.n} de baisser son salaire de 15 %.`,
       choices: ['Accepter la baisse', 'Refuser fermement'] };
     case 'clinic': return { title: 'Blessure : quel traitement ?', text: `${p.n} est blessé pour ${p.inj} semaines. Une clinique privée réputée peut accélérer sa guérison.`,
@@ -577,6 +586,16 @@ function resolveEvent(i) {
       news('🌴', `${p.n} part pour un exil doré loin de l'Europe. Votre commission : ${fmt(e.c * 15)}.`);
       r = { ok: true, msg: `Jackpot : ${fmt(e.c * 15)} encaissés, mais ${p.n} quitte l'agence.` };
     } else { mor(-8); r = { ok: true, msg: `${p.n} reste en Europe, un peu à contrecœur.` }; }
+  } else if (e.k === 'buyout') {
+    if (i === 0) {
+      earn(e.c * 6); ledger('💼', `Mandat de ${p.n} revendu`, e.c * 6); toHof(p, 'Mandat revendu');
+      p.mine = false; p.mandate = 0; p.cd = S.t + 40; S.offers = S.offers.filter((o) => o.pid !== p.id);
+      news('💼', `Vous revendez le mandat de ${p.n} à ${e.by || 'une agence rivale'} pour ${fmt(e.c * 6)}.`);
+      r = { ok: true, msg: `Mandat vendu : ${fmt(e.c * 6)}.` };
+    } else { mor(5); r = { ok: true, msg: `${p.n} apprécie votre fidélité.` }; }
+  } else if (e.k === 'home') {
+    if (i === 0) { p.promise = S.t + 26; p.promH = true; mor(12); r = { ok: true, msg: `Promesse faite : trouvez-lui un club en ${COUNTRY_LABEL[p.nat].split(' ').slice(1).join(' ')} avant 6 mois.` }; }
+    else { mor(-12); r = { ok: false, msg: `${p.n} est triste, mais il patiente.` }; }
   } else if (e.k === 'cut') {
     if (i === 0) { p.sal = Math.round(p.sal * 0.85 / 10) * 10; addRel(p.club, 10); mor(-6); r = { ok: true, msg: `Le club vous remercie. Nouveau salaire : ${fmt(p.sal)}/sem.` }; }
     else if (Math.random() < 0.4) { addRel(p.club, -10); mor(-12); r = { ok: false, msg: `Le club se venge : ${p.n} est mis au placard quelques semaines.` }; }
@@ -593,25 +612,36 @@ function resolveEvent(i) {
 
 /* Négociation : plus on demande, plus le club risque de refuser ou de partir */
 const NEGO = [{ up: 0.1, ok: 0.75, walk: 0.15 }, { up: 0.25, ok: 0.5, walk: 0.35 }, { up: 0.5, ok: 0.25, walk: 0.6 }];
-const negoOk = (lv) => clamp(NEGO[lv].ok + 0.05 * S.stl.nego, 0.05, 0.95);
+const NEGO_ROUNDS = 3;
+const negoOk = (lv, o) => clamp(NEGO[lv].ok + 0.05 * S.stl.nego - 0.12 * ((o && o.nr) || 0), 0.05, 0.95);
 const negoWalk = (lv) => clamp(NEGO[lv].walk - 0.04 * S.stl.nego, 0, 0.9);
 function actNegotiate(oid, lv) {
   const o = S.offers.find((x) => x.id === oid);
   lv = lv || 0;
   if (!o || o.nego) return { ok: false, msg: 'Négociation impossible.' };
-  o.nego = true;
-  if (Math.random() >= negoOk(lv)) {
+  o.nr = (o.nr || 0) + 1; o.nh = o.nh || [];
+  if (o.nr >= NEGO_ROUNDS) o.nego = true;
+  const bump = (k) => { o.fee = Math.round(o.fee * k / 1000) * 1000; o.sal = Math.round(o.sal * (1 + (k - 1) / 2) / 10) * 10; if (o.free) o.bonus = Math.round(o.bonus * k / 100) * 100; };
+  const price = () => (o.free ? 'prime de ' + fmt(o.bonus) : fmt(o.fee));
+  if (Math.random() >= negoOk(lv, { nr: o.nr - 1 })) {
     if (Math.random() < negoWalk(lv)) {
       S.offers = S.offers.filter((x) => x.id !== oid); addRel(o.club, -8); save();
       return { ok: false, msg: `${CLUBS[o.club].name} claque la porte et retire son offre.` };
     }
-    save(); return { ok: false, msg: "Le club refuse d'aller plus haut. L'offre reste valable." };
+    if (Math.random() < 0.55) {
+      bump(1 + NEGO[lv].up * rnd(0.3, 0.5));
+      o.nh.push(`Tour ${o.nr} : contre-proposition à ${price()}`); save();
+      return { ok: true, msg: `${CLUBS[o.club].name} fait une contre-proposition : ${price()}.${o.nego ? '' : ' Vous pouvez encore négocier.'}` };
+    }
+    o.nh.push(`Tour ${o.nr} : refus, l'offre reste à ${price()}`); save();
+    return { ok: false, msg: `Le club refuse d'aller plus haut. L'offre reste valable${o.nego ? '' : ', vous pouvez retenter'}.` };
   }
   const up = 1 + NEGO[lv].up * rnd(0.85, 1.1);
   o.fee = Math.round(o.fee * up / 1000) * 1000; o.sal = Math.round(o.sal * (1 + (up - 1) / 2) / 10) * 10;
   if (o.free) o.bonus = Math.round(o.bonus * up / 100) * 100;
+  o.nh.push(`Tour ${o.nr} : accepté, ${price()}`);
   save();
-  return { ok: true, msg: `Bien joué ! Nouvelle offre : ${o.free ? 'prime de ' + fmt(o.bonus) : fmt(o.fee)}.` };
+  return { ok: true, msg: `Bien joué ! Nouvelle offre : ${price()}.${o.nego ? '' : ' Vous pouvez encore tenter votre chance.'}` };
 }
 
 function actAccept(oid) {
@@ -622,7 +652,7 @@ function actAccept(oid) {
   p.hist.push({ s: S.season, from: from.name, to: club.name, fee: o.fee, free: !!o.free });
   addRel(club.id, 15); if (!o.free) addRel(from.id, 6);
   if (o.free) S.flags.free = 1;
-  p.promise = null;
+  if (!p.promH || LEAGUES[club.league].country === p.nat) { p.promise = null; p.promH = false; }
   p.club = club.id; p.sal = o.sal; p.cy = rint(3, 5); p.morale = clamp(p.morale + 20, 0, 100); p.rej = {}; p.free = false;
   earn(com); S.stats.transfers++; ledger('🤝', `${o.free ? 'Prime transfert libre' : 'Commission transfert'} : ${p.n} → ${club.name}`, com);
   if (o.fee > S.stats.bestFee) { S.stats.bestFee = o.fee; S.stats.bestName = `${p.n} → ${club.name}`; }
@@ -786,10 +816,10 @@ function euQualified() {
   const q = { C1: [], C3: [] };
   ['ENG', 'ESP', 'ITA', 'GER', 'FRA'].forEach((lg) => {
     const st = standings(lg).map((x) => x.c.id);
-    q.C1.push(...st.slice(0, 3)); q.C3.push(...st.slice(3, 6));
+    q.C1.push(...st.slice(0, 3)); q.C3.push(...st.slice(3, 5));
   });
-  const be = standings('BE1').map((x) => x.c.id);
-  q.C1.push(be[0]); q.C3.push(be[1]);
+  const be = standings('BE1').map((x) => x.c.id), ned = standings('NED').map((x) => x.c.id), por = standings('POR').map((x) => x.c.id);
+  q.C1.push(be[0]); q.C3.push(be[1], be[2], ned[0], ned[1], por[0], por[1]);
   q.BC = be.slice();
   return q;
 }
@@ -938,6 +968,7 @@ function nextWeek() {
   }
   if (S.week === 20) clients().forEach(pushVal);
   if (S.recap && S.week > 6) S.recap = null;
+  if (inWindow(S.week) && Math.random() < 0.3) transferTicker();
   if (S.week === 6 || S.week === 23) news('⏰', 'Jour de clôture du mercato : les clubs s\'activent, dernière chance de conclure !');
   if (S.week === 15) youthTournament();
 
@@ -1044,6 +1075,7 @@ function moveClubs(cl) {
 
 function endSeason() {
   checkMissions();
+  if (S.amb && S.amb.length) addRep(Math.min(5, S.amb.length) * 0.4);
   const cl = clients();
   let repGain = 0;
   cl.forEach((p) => { repGain += p.ovr >= 85 ? 2 : p.ovr >= 75 ? 1 : p.ovr >= 65 ? 0.3 : 0; });
@@ -1065,7 +1097,7 @@ function endSeason() {
   // Champions et historique des saisons
   const label = `${S.season}/${(S.season + 1) % 100}`, champs = {};
   for (const lg in LEAGUES) champs[standings(lg)[0].c.id] = lg;
-  news('🏆', 'Champions : ' + ['BE1', 'ENG', 'ESP', 'ITA', 'GER', 'FRA'].map((lg) => `${LEAGUES[lg].flag} ${standings(lg)[0].c.name}`).join(' · ') + '.');
+  news('🏆', 'Champions : ' + ['BE1', 'NED', 'POR', 'ENG', 'ESP', 'ITA', 'GER', 'FRA'].map((lg) => `${LEAGUES[lg].flag} ${standings(lg)[0].c.name}`).join(' · ') + '.');
   cl.forEach((p) => {
     p.sh.unshift({ s: label, club: CLUBS[p.club].name, m: p.m, g: p.g, a: p.a, avg: p.m ? p.rs / p.m : 0 });
     pushVal(p);
@@ -1101,8 +1133,14 @@ function endSeason() {
       p.sp = null;
     }
     if (p.loan) {
+      const lc = p.club, h = p.sh && p.sh[0], good = p.mine && h && h.m >= 12 && h.avg >= 6.8;
       p.club = p.loan.back; p.loan = null;
       if (p.mine) news('🔁', `${p.n} rentre de prêt à ${CLUBS[p.club].name}.`);
+      if (good && Math.random() < 0.65) {
+        const o = Object.assign(makeOffer(p, CLUBS[lc], 1.05), { exp: S.t + 8, opt: true });
+        S.offers.push(o);
+        news('🔁', `${CLUBS[lc].name} a été conquis par ${p.n} pendant son prêt et lève l'option d'achat : ${fmt(o.fee)} !`);
+      }
     }
     if (p.cy <= 0 && p.mine) {
       p.cy = 0; p.free = true;
@@ -1119,6 +1157,7 @@ function endSeason() {
       p.mandate--;
       if (p.age >= 35) {
         toHof(p, 'Retraite'); p.mine = false; news('🎖️', `${p.n} prend sa retraite. Merci pour tout !`);
+        if (p.aw.length >= 3) { S.amb.unshift({ n: p.n, aw: p.aw.length, s: `${S.season}/${(S.season + 1) % 100}` }); news('🎖️', `Légende de l'agence, ${p.n} devient ambassadeur : il vous apportera de la réputation chaque saison.`); }
       } else if (p.mandate <= 0) {
         if (p.morale >= 40 || p.tr === 'loy') {
           p.mandate = 3;

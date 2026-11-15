@@ -147,13 +147,14 @@ function offerCard(o) {
       ${stat(o.free ? 'Votre prime' : 'Votre commission', fmt(o.free ? o.bonus : o.fee * commissionTransfer()), 'pos')}
       ${stat('Salaire / sem.', fmt(o.sal))}
     </div>
+    ${o.opt ? '<div class="note" style="margin:8px 0 0">🔁 Option d\'achat : son club de prêt veut le garder après une belle saison.</div>' : ''}
     <div class="tags" style="margin:8px 0 0">${o.free ? tag('🆓 Joueur libre : pas d\'indemnité', 'info') : (() => { const r = o.fee / Math.max(1, playerValue(p)); return r > 1.15 ? tag('💰 Au-dessus de sa valeur', 'ok') : r < 0.9 ? tag('📉 En dessous de sa valeur', 'bad') : tag('⚖️ Prix correct', ''); })()}
       ${c.rep > CLUBS[p.club].rep ? tag(`⬆️ Club plus prestigieux (+${c.rep - CLUBS[p.club].rep})`, 'ok') : c.rep < CLUBS[p.club].rep ? tag(`⬇️ Club moins prestigieux (${c.rep - CLUBS[p.club].rep})`, 'warn') : ''}
       ${o.sal > p.sal ? tag(`💶 Salaire +${Math.round((o.sal / p.sal - 1) * 100)} %`, 'ok') : ''}</div>
     ${dreamMatch(p.dream, c) ? '<div class="note warn">🌟 Ce club réaliserait son rêve de carrière.</div>' : ''}
     <div class="btns">
       <button class="btn" data-act="accept" data-id="${o.id}">✔ Accepter</button>
-      <button class="btn sec" data-act="negoOpen" data-id="${o.id}" ${o.nego ? 'disabled' : ''}>Négocier</button>
+      <button class="btn sec" data-act="negoOpen" data-id="${o.id}" ${o.nego ? 'disabled' : ''}>Négocier${o.nr ? ` ${o.nr}/${NEGO_ROUNDS}` : ''}</button>
       <button class="btn ghost" data-act="refuse" data-id="${o.id}">Refuser</button>
     </div></div>`;
 }
@@ -317,7 +318,7 @@ function viewScout() {
   const f = UI.mk, q = norm((f.q || '').trim()), locked = f.country !== 'BE' && S.office < INTL_OFFICE;
   let list = q ? S.players.filter((p) => !p.mine && norm(p.n).includes(q))
     : f.u19 ? S.players.filter((p) => !p.mine && p.u19 === S.season)
-    : S.players.filter((p) => !p.mine && p.nat === f.country && (!f.pos || p.pos === f.pos) && (!f.fav || p.fav));
+    : S.players.filter((p) => !p.mine && p.nat === f.country && (!f.pos || p.pos === f.pos) && (!f.fav || p.fav) && (!f.age || p.age <= +f.age) && (!f.minpot || (p.sc && p.potHi >= +f.minpot)));
   const sorters = {
     ovr: (a, b) => b.ovr - a.ovr, age: (a, b) => a.age - b.age || b.ovr - a.ovr,
     pot: (a, b) => (b.sc ? b.potHi : 0) - (a.sc ? a.potHi : 0) || b.ovr - a.ovr, val: (a, b) => playerValue(a) - playerValue(b),
@@ -331,6 +332,7 @@ function viewScout() {
       ${sel('sort', [['ovr', 'Trier : niveau'], ['pot', 'Trier : potentiel'], ['age', 'Trier : âge'], ['val', 'Trier : moins chers']])}
       <button class="toggle ${f.fav ? 'on' : ''}" data-act="favFilter" title="Joueurs suivis">⭐</button>
       <button class="toggle ${f.u19 ? 'on' : ''}" data-act="u19" title="Révélés au tournoi des espoirs">🏟️</button></div>
+    <div class="filters two-f">${sel('age', [['', 'Tous les âges'], ['17', '17 ans max'], ['18', '18 ans max'], ['19', '19 ans max'], ['20', '20 ans max']])}${sel('minpot', [['', 'Tout potentiel'], ['70', 'Potentiel 70+ (observés)'], ['75', 'Potentiel 75+ (observés)'], ['80', 'Potentiel 80+ (observés)'], ['85', 'Potentiel 85+ (observés)']])}</div>
     <div class="card" style="display:flex;align-items:center;gap:12px"><span style="font-size:26px">✈️</span><div style="flex:1"><b>Voyage de détection</b><small>Révèle 3 jeunes à fort potentiel en ${COUNTRY_LABEL[f.country].split(' ').slice(1).join(' ')}.</small></div>
       <button class="btn sm" data-act="trip" data-id="${f.country}" ${S.cash < tripCost(f.country) ? 'disabled' : ''}>${fmt(tripCost(f.country))}<small>· 1 action</small></button></div>
     ${locked ? `<div class="note warn">🔒 Recrutement à l'étranger débloqué avec le bureau « ${OFFICES[INTL_OFFICE].name} ». Vous pouvez déjà observer.</div>` : ''}`}
@@ -344,6 +346,7 @@ function zoneOf(lg, i, n) {
   if (LEAGUES[lg].big) return i < 3 ? 'z-c1' : i < 6 ? 'z-c3' : '';
   if (lg === 'BE1') return i === 0 ? 'z-c1' : i === 1 ? 'z-c3' : i >= n - 2 ? 'z-down' : '';
   if (lg === 'BE2') return i < 2 ? 'z-up' : i >= n - 2 ? 'z-down' : '';
+  if (lg === 'NED' || lg === 'POR') return i < 2 ? 'z-c3' : '';
   return i < 2 ? 'z-up' : '';
 }
 
@@ -354,7 +357,7 @@ function viewLeague(lg, mine) {
     body = `<div class="card flush"><table class="tbl"><tr><th>#</th><th class="l">Club</th><th>J</th><th>G</th><th>N</th><th>P</th><th>+/-</th><th>Pts</th></tr>
       ${st.map((x, i) => `<tr class="${mine[x.c.id] ? 'me' : ''} ${zoneOf(lg, i, st.length)}" data-act="club" data-id="${esc(x.c.id)}"><td class="pos-n">${i + 1}</td><td class="l">${S.owned.includes(x.c.id) ? '🏛️ ' : ''}${esc(x.c.name)}${mine[x.c.id] ? ` 👤${mine[x.c.id] > 1 ? mine[x.c.id] : ''}` : ''}</td>
         <td>${x.t[0]}</td><td>${x.t[1]}</td><td>${x.t[2]}</td><td>${x.t[3]}</td><td>${x.t[4] - x.t[5] > 0 ? '+' : ''}${x.t[4] - x.t[5]}</td><td class="pts">${pts(x.t)}</td></tr>`).join('')}</table>
-      <div class="legend" style="padding:0 0 10px">${LEAGUES[lg].big || lg === 'BE1' ? '<span><i style="background:var(--gold)"></i>Ligue des champions</span><span><i style="background:var(--info)"></i>Ligue Europa</span>' : ''}
+      <div class="legend" style="padding:0 0 10px">${LEAGUES[lg].big || lg === 'BE1' ? '<span><i style="background:var(--gold)"></i>Ligue des champions</span><span><i style="background:var(--info)"></i>Ligue Europa</span>' : ''}${lg === 'NED' || lg === 'POR' ? '<span><i style="background:var(--info)"></i>Ligue Europa</span>' : ''}
         ${lg === 'BE2' || lg === 'BE3' ? '<span><i style="background:var(--acc)"></i>Montée</span>' : ''}${lg === 'BE1' || lg === 'BE2' ? '<span><i style="background:var(--bad)"></i>Relégation</span>' : ''}<span>👤 vos clients</span></div></div>`;
   } else if (UI.cview === 'res') {
     const res = S.res[lg];
@@ -543,7 +546,8 @@ function agencyNet() {
     return `<button class="row" data-act="myclub" data-id="1">${rt(CLUBS[id].rep, 'sm')}<div class="main"><b>${esc(CLUBS[id].name)}</b><small>${LEAGUES[CLUBS[id].league].name} · ${pos}ᵉ · ${fmt(CLUBS[id].rep * 250)}/sem.</small></div><span class="chev">›</span></button>`; }).join('')}</div>`);
   else if (tierIdx(S.rep) >= OWN_TIER - 1) h += sec('🏛️ Devenir propriétaire', `<div class="card"><small>Au statut « ${TIERS[OWN_TIER][2]} », vous pourrez racheter un club belge (depuis sa page) et le faire grandir jusqu'à l'Europe.</small></div>`);
   h += sec('🏆 Classement des agences', `<div class="list">${all.map((a, i) => `<div class="row ${a.me ? 'me' : ''}"><span class="ico" style="font-weight:800;color:var(--mut);font-size:14px">${i + 1}</span>
-    <div class="main rankbar"><b>${a.me ? esc(S.agency.logo) + ' ' : ''}${esc(a.n)}</b>${bar(a.rep, a.me ? '' : 'dim')}</div><div class="side"><b>${Math.floor(a.rep)}</b></div></div>`).join('')}</div>`);
+    <div class="main rankbar"><b>${a.me ? esc(S.agency.logo) + ' ' : ''}${esc(a.n)}</b>${a.me ? '' : `<small>${esc(RIVAL_STYLE[a.n] || '')}</small>`}${bar(a.rep, a.me ? '' : 'dim')}</div><div class="side"><b>${Math.floor(a.rep)}</b></div></div>`).join('')}</div>`);
+  if (S.amb && S.amb.length) h += sec('🎖️ Ambassadeurs de l\'agence', `<div class="list">${S.amb.map((x) => `<div class="row"><span class="ico">🎖️</span><div class="main"><b>${esc(x.n)}</b><small>Retraité en ${x.s} · ${x.aw} distinction(s)</small></div></div>`).join('')}</div><p class="hint">Chaque ambassadeur rapporte de la réputation à chaque fin de saison (jusqu'à 5).</p>`);
   const part = Object.keys(S.rel).filter((id) => S.rel[id] >= 10).sort((a, b) => S.rel[b] - S.rel[a]);
   h += sec('🤝 Clubs partenaires', part.length ? `<div class="list">${part.slice(0, 10).map((id) => `<div class="row"><span class="ico">${LEAGUES[CLUBS[id].league].flag}</span><div class="main"><b>${esc(CLUBS[id].name)}</b><small>${relLabel(S.rel[id])}</small></div>
     <div class="side" style="width:90px"><b>❤️ ${S.rel[id]}</b>${bar(S.rel[id])}</div></div>`).join('')}</div><p class="hint">Plus la relation est forte, plus vos propositions aboutissent dans ce club.</p>`
@@ -682,7 +686,7 @@ function clientOverview(p) {
     ${attrCard(p)}
     ${p.free ? '<div class="note warn">🆓 <b>Libre</b> : placez-le avant la fin du mercato d\'été (semaine 6). Pas d\'indemnité, mais une prime à la signature pour vous. Sinon il re-signera à la baisse.</div>' : ''}
     ${!p.free && p.cy <= 1 ? '<div class="note warn">📝 Dernière année de contrat : les acheteurs paieront 40 % de moins. Prolongez-le ou laissez-le partir libre l\'été prochain.</div>' : ''}
-    ${p.promise ? `<div class="note warn">🤞 Vous lui avez promis un transfert : encore ${Math.max(0, p.promise - S.t)} semaine(s).</div>` : ''}
+    ${p.promise ? `<div class="note warn">🤞 ${p.promH ? `Promis : un retour en ${COUNTRY_LABEL[p.nat].split(' ').slice(1).join(' ')}` : 'Vous lui avez promis un transfert'} · encore ${Math.max(0, p.promise - S.t)} semaine(s).</div>` : ''}
     ${p.inj > 0 ? `<div class="note bad">🚑 Blessé encore ${p.inj} semaine(s).</div>` : ''}
     <div class="info">${traitLine(p)}
       ${p.dream ? `<div><span>🌟</span><p><b>Rêve :</b> ${esc(dreamText(p.dream))}${p.dream.done ? ' ✅' : ''}</p></div>` : ''}
@@ -874,9 +878,10 @@ function modalNego(p, m) {
   if (!o) return '<p class="empty">Offre expirée.</p>';
   const c = CLUBS[o.club], base = o.free ? o.bonus : o.fee;
   return `<h3>Négocier avec ${esc(c.name)}</h3>
-    <div class="note">Offre actuelle pour ${esc(p.n)} : <b>${o.free ? 'prime de ' + fmt(o.bonus) : fmt(o.fee)}</b>. Une seule tentative.${S.stl.nego ? ` Votre négociateur (niv. ${S.stl.nego}) améliore vos chances.` : ''}</div>
-    ${NEGO.map((n, i) => `<button class="choice" data-act="nego" data-id="${o.id}" data-lv="${i}"><div class="top2"><b>${['🙂 Demande raisonnable', '😤 Demande ferme', '🎲 Coup de poker'][i]} · +${Math.round(n.up * 100)} %</b><b>${pct(negoOk(i))}</b></div>
-      <small>≈ ${fmt(base * (1 + n.up))} · en cas de refus, ${pct(negoWalk(i))} de risque qu'il retire son offre</small>${bar(negoOk(i) * 100, negoOk(i) < 0.35 ? 'bad' : negoOk(i) < 0.6 ? 'mid' : '')}</button>`).join('')}
+    <div class="note">Offre actuelle pour ${esc(p.n)} : <b>${o.free ? 'prime de ' + fmt(o.bonus) : fmt(o.fee)}</b> · tour ${(o.nr || 0) + 1}/${NEGO_ROUNDS}. Le club peut accepter, refuser, faire une contre-proposition… ou partir.${S.stl.nego ? ` Votre négociateur (niv. ${S.stl.nego}) améliore vos chances.` : ''}</div>
+    ${o.nh && o.nh.length ? `<div class="info">${o.nh.map((x) => `<div><span>💬</span><p>${esc(x)}</p></div>`).join('')}</div>` : ''}
+    ${NEGO.map((n, i) => `<button class="choice" data-act="nego" data-id="${o.id}" data-lv="${i}"><div class="top2"><b>${['🙂 Demande raisonnable', '😤 Demande ferme', '🎲 Coup de poker'][i]} · +${Math.round(n.up * 100)} %</b><b>${pct(negoOk(i, o))}</b></div>
+      <small>≈ ${fmt(base * (1 + n.up))} · en cas de refus, ${pct(negoWalk(i))} de risque qu'il retire son offre</small>${bar(negoOk(i, o) * 100, negoOk(i, o) < 0.35 ? 'bad' : negoOk(i, o) < 0.6 ? 'mid' : '')}</button>`).join('')}
     <button class="btn ghost" data-act="close">Garder l'offre actuelle</button>`;
 }
 
@@ -929,7 +934,7 @@ function viewCer() {
   const top = `<div class="cer-top"><small>🎬 ${esc(c.label)}${sl.k === 'award' ? ` · prix ${aNum}/${awards.length}` : ''}</small>
     <div class="cer-tools">${last ? '' : '<button class="cer-chip" data-act="cerSkip">Passer ⏭</button>'}<button class="cer-x" data-act="cerClose" aria-label="Fermer">✕</button></div></div>
     <div class="dots">${c.slides.map((_, i) => `<i class="${i === m.i ? 'on' : i < m.i ? 'past' : ''}"></i>`).join('')}</div>`;
-  const rows = (list) => `<div class="cer-list ${list.length > 6 ? 'compact' : ''}">${list.map((r) => `<div class="${r.mine ? 'me' : ''}"><span>${r.i}</span><p>${r.l ? `<small>${esc(r.l)}</small>` : ''}<b>${esc(r.v)}</b></p></div>`).join('')}</div>`;
+  const rows = (list) => `<div class="cer-list ${list.length > 9 ? 'grid2' : list.length > 6 ? 'compact' : ''}">${list.map((r) => `<div class="${r.mine ? 'me' : ''}"><span>${r.i}</span><p>${r.l ? `<small>${esc(r.l)}</small>` : ''}<b>${esc(r.v)}</b></p></div>`).join('')}</div>`;
   let body = '', btn = '';
   if (sl.k === 'intro') {
     const agencyNom = awards.some((a) => a.noms.some((x) => x.mine && x.n === S.agency.name));
@@ -1075,7 +1080,7 @@ const ACTIONS = {
   // Offres
   accept(d) { const r = actAccept(+d.id); toast(r); if (r.ok) { play(CHIME); buzz([40, 60, 80]); } },
   negoOpen(d) { const o = S.offers.find((x) => x.id === +d.id); if (o) UI.modal = { type: 'nego', id: o.pid, oid: o.id }; },
-  nego(d) { const r = actNegotiate(+d.id, +d.lv); toast(r); UI.modal = null; if (r.ok) play(CHIME); },
+  nego(d) { const r = actNegotiate(+d.id, +d.lv); toast(r); const o = S.offers.find((x) => x.id === +d.id); if (!o || o.nego) UI.modal = null; else keep(); if (r.ok) play(CHIME); },
   refuse(d) { actRefuse(+d.id); },
   // Listes et filtres
   jv(d) { UI.jv = d.id; }, cs(d) { UI.cs = d.id; },

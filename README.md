@@ -62,6 +62,10 @@ La partie est sauvegardée automatiquement dans le navigateur.
   stade / centre d'entraînement / centre de formation sur 5 niveaux, supporters, prix des billets,
   objectif de saison, historique et revente du club.
 
+- **Eredivisie et Liga Portugal** (championnats tremplins, qualificatifs pour la Ligue Europa), recrutement aux Pays-Bas et au Portugal,
+  négociation en plusieurs tours, option d'achat après un prêt réussi, rachat de mandats par les rivaux,
+  promesse de retour au pays, filtres âge/potentiel, actualité du mercato et ambassadeurs de l'agence.
+
 ## Installer l'application
 
 Le jeu est une application web installable (PWA). Ouvrez le site sur le téléphone puis :

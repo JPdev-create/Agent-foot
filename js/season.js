@@ -105,7 +105,7 @@ function buildCeremony(champs, label, cl) {
     sub: `En direct du Palais des Sports. ${cl.length} client(s) de ${S.agency.name} sont dans la salle…` });
 
   // Palmarès des compétitions
-  const rows = ['BE1', 'ENG', 'ESP', 'ITA', 'GER', 'FRA'].map((lg) => {
+  const rows = ['BE1', 'NED', 'POR', 'ENG', 'ESP', 'ITA', 'GER', 'FRA'].map((lg) => {
     const id = Object.keys(champs).find((c) => champs[c] === lg);
     return { i: LEAGUES[lg].flag, l: LEAGUES[lg].name, v: (isMyClub(id) ? '🏛️ ' : '') + CLUBS[id].name, mine: cl.some((p) => p.club === id) || isMyClub(id) };
   });

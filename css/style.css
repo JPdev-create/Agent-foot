@@ -404,3 +404,9 @@ button, .row, [data-act] { touch-action: manipulation; -webkit-user-select: none
 
 .winner, .cer-box, .cer-mini { position: relative; z-index: 1; }
 .winner { background: linear-gradient(135deg, rgba(60, 48, 14, .92), rgba(20, 30, 22, .92)); }
+
+.filters.two-f { grid-template-columns: 1fr 1fr; margin-top: -4px; }
+
+.cer-list.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.cer-list.grid2 > div { margin: 0; padding: 6px 8px; gap: 6px; min-width: 0; }
+.cer-list.grid2 span { font-size: 15px; } .cer-list.grid2 b { font-size: 12.5px; } .cer-list.grid2 small { font-size: 10.5px; }

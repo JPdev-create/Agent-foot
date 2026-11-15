@@ -62,7 +62,7 @@ const playerAccepts = (p, club) => club.rep >= CLUBS[p.club].rep - (playProb(p) 
 
 function signChance(p, bonusLevel, ci) {
   const req = (p.ovr - 42) * 1.6 + Math.max(0, p.pot - 70) * 0.8 + (p.nat !== 'BE' ? 10 : 0);
-  return clamp(0.5 + (S.rep - req) / 40 + [0, 0.15, 0.3][bonusLevel] + DIFFS[S.diff].sign + (ci === undefined ? 0 : COM_BONUS[ci]), 0.03, 0.95);
+  return clamp(0.5 + (S.rep - req) / 40 + [0, 0.15, 0.3][bonusLevel] + (p.hg && S.cm && p.hg === S.cm.id && p.club === S.cm.id ? 0.25 : 0) + DIFFS[S.diff].sign + (ci === undefined ? 0 : COM_BONUS[ci]), 0.03, 0.95);
 }
 function signBonusCost(p, level) {
   const v = playerValue(p);
@@ -186,6 +186,7 @@ function migrate() {
   if (S.eu && !S.eu.BC) S.eu.BC = { alive: clubsOf('BE1').map((c) => c.id).sort(() => Math.random() - 0.5), rounds: [], champ: null };
   if (!S.inv) S.inv = { mk: 0, gala: 0, cl: {} };
   if (!S.intl) S.intl = { nl: null, last: null };
+  if (S.owned && S.owned.length && !S.cm) newClubMgmt(S.owned[0]);
   if (!S.owned) S.owned = [];
   if (!S.inv.own) S.inv.own = {};
   if (!S.rec) S.rec = {};
@@ -800,7 +801,7 @@ function playEuRound(k, silent) {
   const cup = S.eu[k], r = cup.rounds.length, a = cup.alive, ties = [], win = [];
   if (a.length < 2) return;
   for (let i = 0; i < a.length; i += 2) {
-    const h = a[i], w = a[i + 1], d = (CLUBS[h].rep + S.form[h]) - (CLUBS[w].rep + S.form[w]);
+    const h = a[i], w = a[i + 1], d = (CLUBS[h].rep + S.form[h] + clubBonus(h)) - (CLUBS[w].rep + S.form[w] + clubBonus(w));
     const gh = poisson(clamp(1.3 * Math.exp(d / 22), 0.3, 3.4)), ga = poisson(clamp(1.3 * Math.exp(-d / 22), 0.3, 3.4));
     let pen = 0;
     if (gh === ga) pen = Math.random() < 0.5 + d / 100 ? 1 : 2;
@@ -843,7 +844,7 @@ function playMatchday() {
   for (const lg in LEAGUES) {
     if (md < 0 || md >= leagueRounds(lg)) { S.res[lg] = null; continue; }
     S.res[lg] = fixtures(lg, md).map(([h, a]) => {
-      const d = (CLUBS[h].rep + S.form[h]) - (CLUBS[a].rep + S.form[a]);
+      const d = (CLUBS[h].rep + S.form[h] + clubBonus(h)) - (CLUBS[a].rep + S.form[a] + clubBonus(a));
       const gh = poisson(clamp(1.5 * Math.exp(d / 22), 0.3, 3.6)), ga = poisson(clamp(1.15 * Math.exp(-d / 22), 0.25, 3.2));
       const th = S.tab[h], ta = S.tab[a];
       th[0]++; ta[0]++; th[4] += gh; th[5] += ga; ta[4] += ga; ta[5] += gh;
@@ -900,7 +901,7 @@ function simPlayer(p, res) {
   const pp = playProb(p);
   const k = GROWTH_K[p.age] || 0;
   if (k > 0 && p.ovr < p.pot) {
-    const boost = (p.mine ? (1 + 0.12 * S.stl.coach) * PLANS[p.plan || 'std'].g : 1) * ({ pro: 1.15, amb: 1.08, fet: 0.9 }[p.tr] || 1);
+    const boost = (S.cm && p.club === S.cm.id ? 1 + (S.cm.training - 1) * 0.05 : 1) * (p.mine ? (1 + 0.12 * S.stl.coach) * PLANS[p.plan || 'std'].g : 1) * ({ pro: 1.15, amb: 1.08, fet: 0.9 }[p.tr] || 1);
     p.ovr = Math.min(p.pot, p.ovr + (p.pot - p.ovr) * k / 38 * (0.45 + 0.9 * pp) * rnd(0.4, 1.6) * boost);
   } else if (p.age >= 31) {
     p.ovr = Math.max(30, p.ovr - rnd(0.01, 0.08));
@@ -914,6 +915,7 @@ function nextWeek() {
   const results = playMatchday();
   playEurope();
   intlWeek();
+  clubWeek(results);
   S.players.forEach((p) => simPlayer(p, p.free ? null : results[p.club]));
 
   const inc = weeklyIncome(), costs = weeklyCosts();
@@ -1084,6 +1086,7 @@ function endSeason() {
     }
   }
   buildCeremony(champs, label, cl);
+  clubSeasonEnd(label);
   const euq = euQualified();
   moveClubs(cl);
   ownedClubsSeason();
@@ -1136,5 +1139,6 @@ function endSeason() {
   Object.keys(S.rel).forEach((id) => { S.rel[id] = Math.floor(S.rel[id] * 0.85); });
   academyIntake();
   newMissions();
+  if (S.cm) setObjective();
   news('📅', `Début de la saison ${S.season}/${(S.season + 1) % 100}. Le mercato d'été est ouvert (6 semaines).`);
 }

@@ -78,6 +78,8 @@ const ACH = [
   { id: 'acad3', i: '🎓', l: 'Centre d\'élite', d: 'Académie au niveau maximum', t: () => S.acad >= 3 },
   { id: 'owner', i: '🏛️', l: 'Président', d: 'Racheter un club belge', t: () => (S.owned || []).length >= 1 },
   { id: 'ownEu', i: '🚀', l: 'De la Belgique à l\'Europe', d: 'Votre club dispute la Ligue des champions', t: () => (S.owned || []).some((id) => S.eu.C1.alive.includes(id) || S.eu.C1.rounds.some((r) => r.some((x) => x[0] === id || x[1] === id))) },
+  { id: 'stad5', i: '🏟️', l: 'Bâtisseur de stade', d: 'Stade de votre club au niveau maximum', t: () => !!(S.cm && S.cm.stadium >= 5) },
+  { id: 'ownChamp', i: '🏛️', l: 'Président champion', d: 'Votre club est champion de Belgique', t: () => S.flags.ownChamp },
   { id: 'cl25', i: '🏟️', l: 'Empire complet', d: 'Gérer 25 clients en même temps', t: () => clients().length >= 25 },
 ];
 function checkAch() {
@@ -147,6 +149,10 @@ function assistantTips() {
     if (!p.sp && p.ovr >= 60 && !(p.spT > S.t)) add(2, '👟', `${p.n} est assez connu pour décrocher un sponsor.`, 'open', p.id);
   });
   S.players.filter((p) => !p.mine && p.cov && (p.fav || p.sc)).forEach((p) => add(7, '👀', `${p.cov.by} va signer ${p.n} dans ${Math.max(1, p.cov.t - S.t)} sem. : à vous de jouer !`, 'open', p.id));
+  if (S.cm) {
+    if (S.cm.fans < 30) add(6, '📢', `Les supporters de ${CLUBS[S.cm.id].name} sont mécontents (${Math.round(S.cm.fans)}/100) : baissez le prix des billets ou renforcez l'équipe.`, 'myclub', '1');
+    if (S.week >= 20 && S.cm.obj && clubPos() > S.cm.obj.target + 2) add(5, '🎯', `${CLUBS[S.cm.id].name} est ${clubPos()}ᵉ, loin de son objectif (${S.cm.obj.label}). Un meilleur entraîneur ?`, 'myclub', '1');
+  }
   if (cl.length >= office().maxClients && OFFICES[S.office + 1]) add(5, '🏢', 'Votre agence est pleine : agrandissez le bureau pour signer plus de joueurs.', 'tab', 'agence');
   if (S.actions > 0 && cl.length && !t.length) add(1, '⚡', `Il vous reste ${S.actions} action(s) cette semaine.`, 'tab', 'clients');
   return t.sort((a, b) => b.pr - a.pr).slice(0, 4);
@@ -244,7 +250,6 @@ const OWN_TIER = 4; // palier « Puissance mondiale »
 const canOwn = (c) => ['BE1', 'BE2', 'BE3'].includes(CLUB_DEFAULT[c.id].league);
 const clubPrice = (c) => Math.round(20e6 * Math.pow(c.rep / 60, 4) / 1e6) * 1e6;
 const clubInvestCost = (c) => Math.round(3e6 * Math.pow(c.rep / 60, 3) / 1e5) * 1e5;
-const ownedIncome = () => (S.owned || []).reduce((s, id) => s + CLUBS[id].rep * 250, 0);
 function buyClub(id) {
   const c = CLUBS[id], price = clubPrice(c);
   if (!canOwn(c)) return { ok: false, msg: 'Seuls les clubs belges sont à vendre.' };
@@ -253,7 +258,7 @@ function buyClub(id) {
   if (tierIdx(S.rep) < OWN_TIER) return { ok: false, msg: `Il faut le statut « ${TIERS[OWN_TIER][2]} » pour racheter un club.` };
   if (S.cash < price) return { ok: false, msg: 'Pas assez de liquidités.' };
   ledger('🏛️', `Rachat de ${c.name}`, -price);
-  S.cash -= price; S.ss.costs += price; S.owned.push(id); addRel(id, 100); addRep(3);
+  S.cash -= price; S.ss.costs += price; S.owned.push(id); addRel(id, 100); addRep(3); newClubMgmt(id);
   news('🏛️', `HISTORIQUE : ${S.agency.name} rachète ${c.name} pour ${fmt(price)} ! Objectif : l'Europe.`);
   save(); return { ok: true, msg: `Vous êtes le nouveau propriétaire de ${c.name} !` };
 }
@@ -262,13 +267,13 @@ function investClub(id) {
   if (!S.owned.includes(id)) return { ok: false, msg: 'Ce club ne vous appartient pas.' };
   if (S.inv.own[id] === S.season) return { ok: false, msg: 'Un seul grand investissement par saison.' };
   if (S.cash < cost) return { ok: false, msg: 'Pas assez de liquidités.' };
-  S.cash -= cost; S.ss.costs += cost; S.inv.own[id] = S.season; setClub(id, c.rep + 2); ledger('🏗️', `Investissement : ${c.name}`, -cost);
+  S.cash -= cost; S.ss.costs += cost; S.inv.own[id] = S.season; setClub(id, c.rep + 2 * growthFactor(c.rep)); ledger('🏗️', `Investissement : ${c.name}`, -cost);
   news('🏗️', `Investissement massif à ${c.name} (stade, centre d'entraînement, recrues) : prestige ${c.rep}.`);
-  save(); return { ok: true, msg: `${c.name} gagne 2 points de prestige.` };
+  save(); return { ok: true, msg: `Renforts arrivés : ${c.name} passe à ${CLUBS[id].rep} de prestige.` };
 }
 /* Chaque été, votre club grandit un peu et vos clients y sont choyés */
 function ownedClubsSeason() {
-  (S.owned || []).forEach((id) => { setClub(id, CLUBS[id].rep + 1); S.rel[id] = 100; });
+  (S.owned || []).forEach((id) => { S.rel[id] = 100; });
 }
 
 /* ---------- Projection : niveau attendu dans un an ---------- */

@@ -304,6 +304,7 @@ function marketRow(p) {
   const t = [];
   if (p.cov) t.push(tag('👀 Convoité', 'bad'));
   if (p.u19 === S.season) t.push(tag('🏟️ Révélé', 'gold'));
+  if (p.hg && S.cm && p.hg === S.cm.id && p.club === S.cm.id) t.push(tag('🎓 Formé à votre club', 'gold'));
   if (p.sc >= 1 && p.potLo >= ovrOf(p) + 12 && p.age <= 20) t.push(tag('💎 Bonne affaire', 'ok'));
   if (p.sc >= 2) t.push(tag('📋 Rapport complet', 'ok')); else if (p.sc === 1) t.push(tag('🔎 Observé', 'info'));
   if (!canRecruit(p)) t.push(tag('🔒'));
@@ -453,6 +454,52 @@ function upgradeCard(icon, title, levelTxt, desc, next, act, id) {
       <button class="btn sm" data-act="${act}" ${id ? `data-id="${id}"` : ''} ${next.disabled ? 'disabled' : ''}>${next.price}</button></div>` : '<small>✅ Niveau maximum atteint.</small>'}</div>`;
 }
 
+/* ---------- Mon club (président) ---------- */
+function viewMyClub() {
+  const cm = S.cm, c = CLUBS[cm.id], f = clubFinance(), pos = clubPos(), st = standings(c.league), t = S.tab[cm.id];
+  const objOk = cm.obj && pos <= cm.obj.target;
+  const nm = nextMatch({ club: cm.id, inj: 0, id: -1 });
+  const line = (l, v, cls) => `<div class="row" style="padding:8px 13px"><div class="main"><span style="font-size:13.5px">${l}</span></div><div class="side"><b class="${cls}">${v}</b></div></div>`;
+  let h = `<div class="card goldc"><div class="card-h" style="margin-bottom:10px"><div style="display:flex;gap:12px;align-items:center">${rt(c.rep, 'xl')}<div><b style="font-size:18px">${esc(c.name)}</b>
+      <small>${LEAGUES[c.league].flag} ${LEAGUES[c.league].name} · ${pos}ᵉ sur ${st.length} · ${pts(t)} pts</small><small>Président depuis ${seasonTxt(cm.since)}</small></div></div></div>
+    <div class="note ${objOk ? '' : 'warn'}" style="margin:0 0 10px">🎯 <b>Objectif :</b> ${esc(cm.obj ? cm.obj.label : '—')} · ${objOk ? '✅ en bonne voie' : `⚠️ actuellement ${pos}ᵉ`}</div>
+    <div class="moral" style="margin:0"><small style="width:76px">Supporters</small>${bar(cm.fans, moralCls(cm.fans))}<b>${Math.round(cm.fans)}</b></div></div>`;
+  // Résultats
+  h += sec('⚽ Résultats', `<div class="card">${cm.res.length ? `<div class="form" style="justify-content:flex-start;gap:5px;margin:0 0 8px">${cm.res.slice(0, 6).reverse().map((r) => `<i class="${r.gf > r.ga ? 'g' : r.gf < r.ga ? 'r' : 'o'}" style="width:12px;height:12px"></i>`).join('')}</div>
+    <div class="fixtures">${cm.res.slice(0, 4).map((r) => { const L = r.home ? cm.id : r.opp, R = r.home ? r.opp : cm.id, gl = r.home ? r.gf : r.ga, gr = r.home ? r.ga : r.gf, nm = (id) => `<span style="${id === cm.id ? 'color:var(--acc)' : ''}">${esc(CLUBS[id].name)}</span>`;
+      return `<div class="fx"><span class="h ${gl > gr ? 'w' : ''}">${nm(L)}</span><span class="sc">${gl} - ${gr}</span><span class="${gr > gl ? 'w' : ''}">${nm(R)}</span></div>`; }).join('')}</div>`
+    : '<p class="empty" style="padding:6px">Pas encore de match depuis le rachat.</p>'}
+    ${nm.length ? `<div class="note nextm" data-act="club" data-id="${esc(nm[0].opp)}" style="margin-bottom:0">📅 <span>Prochain · ${nm[0].comp}</span><b>${nm[0].home ? 'Dom.' : 'Ext.'} ${esc(CLUBS[nm[0].opp].name)} ›</b></div>` : ''}</div>`);
+  // Finances
+  h += sec('💶 Finances hebdomadaires du club', `<div class="list">
+    ${line(`Billetterie (${Math.round(f.fill * 100)} % de remplissage)`, '+' + fmt(f.tickets), 'pos')}${line('Droits TV', '+' + fmt(f.tv), 'pos')}${f.eu ? line('Primes européennes', '+' + fmt(f.eu), 'pos') : ''}${line('Sponsors', '+' + fmt(f.spons), 'pos')}
+    ${line('Masse salariale', '-' + fmt(f.wages), 'neg')}${line('Entraîneur', '-' + fmt(f.coach), 'neg')}${f.upkeep ? line('Entretien des infrastructures', '-' + fmt(f.upkeep), 'neg') : ''}
+    ${line('<b>Résultat du club</b>', (f.net >= 0 ? '+' : '') + fmt(f.net), f.net >= 0 ? 'pos' : 'neg')}</div>
+    <div class="card" style="padding:12px"><b style="font-size:14px">Prix des billets</b><small>Billets chers : plus de recettes, mais les supporters râlent. Bon marché : stade plein et ambiance.</small>
+      <div class="seg" style="margin:10px 0 0">${Object.keys(TICKETS).map((k) => `<button class="${cm.ticket === k ? 'on' : ''}" data-act="ticket" data-id="${k}">${TICKETS[k][0]}</button>`).join('')}</div></div>`);
+  // Entraîneur
+  h += sec('🧥 Entraîneur', `<div class="card"><div class="card-h" style="margin:0"><div><b>${esc(cm.coach.n)}</b><small>${fmt(cm.coach.sal)}/sem. · +${(cm.coach.lvl * 0.7).toFixed(1)} de force en match</small></div><span class="gold" style="letter-spacing:1px">${'★'.repeat(cm.coach.lvl)}${'☆'.repeat(5 - cm.coach.lvl)}</span></div>
+    <button class="btn sec" data-act="coachOpen">${UI.coachOpen ? 'Masquer les candidats' : 'Changer d\'entraîneur'}</button>
+    ${UI.coachOpen ? `<div class="list" style="margin:10px 0 0">${coachCands().map((x, i) => `<div class="row"><span class="gold" style="flex:none;letter-spacing:1px">${'★'.repeat(x.lvl)}${'☆'.repeat(5 - x.lvl)}</span><div class="main"><b>${esc(x.n)}</b><small>${fmt(x.sal)}/sem. · indemnité ${fmt(coachFee(x))}</small></div>
+      <button class="btn sm" data-act="hireCoach" data-id="${i}" ${S.cash < coachFee(x) ? 'disabled' : ''}>Engager</button></div>`).join('')}</div>` : ''}</div>`);
+  // Infrastructures
+  h += sec('🏗️ Infrastructures', Object.keys(INFRA).map((k) => { const I = INFRA[k], lv = cm[k];
+    return `<div class="card"><div class="card-h" style="margin-bottom:${lv < 5 ? 10 : 0}px"><div style="display:flex;gap:12px;align-items:center"><span style="font-size:26px">${I.icon}</span><div><b>${I.name}</b><small>${I.desc(lv)}</small></div></div>${tag(`Niv. ${lv}/5`)}</div>
+      ${lv < 5 ? `<div class="note" style="display:flex;align-items:center;gap:10px;margin:0"><div style="flex:1"><b style="color:var(--txt);font-size:13.5px">→ Niveau ${lv + 1}</b><small>${I.desc(lv + 1)}</small></div><button class="btn sm" data-act="infra" data-id="${k}" ${S.cash < I.cost[lv - 1] ? 'disabled' : ''}>${fmt(I.cost[lv - 1])}</button></div>` : ''}</div>`; }).join('')
+    + actBtn('investClub', esc(cm.id), '✍️', S.inv.own[cm.id] === S.season ? 'Renforts recrutés cette saison ✓' : 'Recruter des renforts', S.inv.own[cm.id] === S.season ? 'Revenez la saison prochaine' : `${fmt(clubInvestCost(c))} · jusqu'à +2 de prestige (1 fois par saison)`, 0, { disabled: S.inv.own[cm.id] === S.season || S.cash < clubInvestCost(c) }));
+  // Effectif
+  const mine = clients().filter((p) => p.club === cm.id), hg = S.players.filter((p) => !p.mine && p.hg === cm.id && p.club === cm.id);
+  const stars = S.gs[cm.id].map((g, i) => ({ n: starName(cm.id, i), g }));
+  h += sec('👥 Effectif', `<div class="list">${stars.map((x) => `<div class="row" style="padding:9px 13px"><span class="ico" style="font-size:16px">⭐</span><div class="main"><b style="font-weight:550">${esc(x.n)}</b><small>Joueur vedette</small></div><div class="side"><b>${x.g}</b><small>buts</small></div></div>`).join('')}
+    ${mine.map((p) => `<button class="row" data-act="open" data-id="${p.id}">${rt(ovrOf(p), 'sm')}<div class="main"><b>${esc(p.n)}</b><small>👤 Votre client · ${POS_SHORT[p.pos]}</small></div><span class="chev">›</span></button>`).join('')}
+    ${hg.map((p) => `<button class="row" data-act="open" data-id="${p.id}">${rt(ovrOf(p), 'sm')}<div class="main"><b>${esc(p.n)}</b><small>🎓 Formé au club · ${p.age} ans · pot. ${potTxt(p)}</small></div><span class="chev">›</span></button>`).join('')}</div>
+    <p class="hint">Les jeunes formés au club signent plus facilement avec votre agence (+25 %).</p>`);
+  if (cm.hist.length) h += sec('🗓️ Historique', `<div class="card flush"><table class="tbl"><tr><th class="l">Saison</th><th class="l">Division</th><th>Rang</th><th>Objectif</th></tr>
+    ${cm.hist.map((x) => `<tr><td class="l">${x.s}</td><td class="l">${LEAGUES[x.lg].name}</td><td><b>${x.pos}ᵉ</b></td><td>${x.ok ? '✅' : '❌'}</td></tr>`).join('')}</table></div>`);
+  h += `<div class="danger-zone"><button class="btn danger" data-act="sellClub">💼 Revendre le club (${fmt(clubSaleValue())})</button></div>`;
+  return h;
+}
+
 function agencyDev() {
   const o = office(), nx = OFFICES[S.office + 1], cl = clients();
   const salCom = cl.reduce((s, p) => s + p.sal * comRate(p), 0), spons = cl.reduce((s, p) => s + (p.sp ? p.sp.w : 0), 0);
@@ -460,7 +507,7 @@ function agencyDev() {
   const line = (l, v, cls) => `<div class="row" style="padding:8px 13px"><div class="main"><span style="font-size:13.5px">${l}</span></div><div class="side"><b class="${cls}">${v}</b></div></div>`;
   let h = sec('💶 Finances hebdomadaires', `<div class="list">
     ${line('Commissions sur salaires', '+' + fmt(salCom), 'pos')}${spons ? line('Contrats de sponsoring', '+' + fmt(spons), 'pos') : ''}
-    ${line('Loyer du bureau', '-' + fmt(o.weekly), 'neg')}${staffC ? line('Personnel', '-' + fmt(staffC), 'neg') : ''}${planC ? line('Entraînements intensifs', '-' + fmt(planC), 'neg') : ''}${acadC ? line('Académie', '-' + fmt(acadC), 'neg') : ''}${ownedIncome() ? line('Revenus de votre club', '+' + fmt(ownedIncome()), 'pos') : ''}
+    ${line('Loyer du bureau', '-' + fmt(o.weekly), 'neg')}${staffC ? line('Personnel', '-' + fmt(staffC), 'neg') : ''}${planC ? line('Entraînements intensifs', '-' + fmt(planC), 'neg') : ''}${acadC ? line('Académie', '-' + fmt(acadC), 'neg') : ''}${S.cm ? line('Résultat de votre club', (ownedIncome() >= 0 ? '+' : '') + fmt(ownedIncome()), ownedIncome() >= 0 ? 'pos' : 'neg') : ''}
     ${line('<b>Solde</b>', fmt(weeklyIncome() - weeklyCosts()), weeklyIncome() - weeklyCosts() < 0 ? 'neg' : 'pos')}</div>`);
   const lg = (S.ledger || []).slice(0, UI.ledAll ? 80 : 8);
   h += sec('🧾 Journal des opérations', lg.length ? `<div class="list">${lg.map((x) => `<div class="row wrap" style="padding:9px 13px"><span class="ico" style="font-size:16px">${x.i}</span><div class="main"><b style="font-weight:550;font-size:13.5px">${esc(x.l)}</b><small>Sem. ${x.w} · ${seasonTxt(x.s)}</small></div><div class="side"><b class="${x.a >= 0 ? 'pos' : 'neg'}">${x.a >= 0 ? '+' : ''}${fmt(x.a)}</b></div></div>`).join('')}</div>`
@@ -493,7 +540,7 @@ function agencyNet() {
   let h = sec('🎖️ Statut de l\'agence', `<div class="card goldc"><div class="card-h" style="margin-bottom:${nt ? 10 : 0}px"><div style="display:flex;gap:12px;align-items:center"><span style="font-size:30px">${TIERS[ti][1]}</span><div><b>${TIERS[ti][2]}</b><small>Palier ${ti + 1}/${TIERS.length}</small></div></div></div>
     ${nt ? `<div class="split" style="margin-bottom:6px"><small>Prochain : ${nt[1]} ${nt[2]}</small><small>${Math.floor(S.rep)} / ${nt[0]} rép.</small></div>${bar((S.rep - TIERS[ti][0]) / (nt[0] - TIERS[ti][0]) * 100, 'gold')}` : ''}</div>`);
   if (S.owned.length) h += sec('🏛️ Votre club', `<div class="list">${S.owned.map((id) => { const st = standings(CLUBS[id].league), pos = st.findIndex((x) => x.c.id === id) + 1;
-    return `<button class="row" data-act="club" data-id="${esc(id)}">${rt(CLUBS[id].rep, 'sm')}<div class="main"><b>${esc(CLUBS[id].name)}</b><small>${LEAGUES[CLUBS[id].league].name} · ${pos}ᵉ · ${fmt(CLUBS[id].rep * 250)}/sem.</small></div><span class="chev">›</span></button>`; }).join('')}</div>`);
+    return `<button class="row" data-act="myclub" data-id="1">${rt(CLUBS[id].rep, 'sm')}<div class="main"><b>${esc(CLUBS[id].name)}</b><small>${LEAGUES[CLUBS[id].league].name} · ${pos}ᵉ · ${fmt(CLUBS[id].rep * 250)}/sem.</small></div><span class="chev">›</span></button>`; }).join('')}</div>`);
   else if (tierIdx(S.rep) >= OWN_TIER - 1) h += sec('🏛️ Devenir propriétaire', `<div class="card"><small>Au statut « ${TIERS[OWN_TIER][2]} », vous pourrez racheter un club belge (depuis sa page) et le faire grandir jusqu'à l'Europe.</small></div>`);
   h += sec('🏆 Classement des agences', `<div class="list">${all.map((a, i) => `<div class="row ${a.me ? 'me' : ''}"><span class="ico" style="font-weight:800;color:var(--mut);font-size:14px">${i + 1}</span>
     <div class="main rankbar"><b>${a.me ? esc(S.agency.logo) + ' ' : ''}${esc(a.n)}</b>${bar(a.rep, a.me ? '' : 'dim')}</div><div class="side"><b>${Math.floor(a.rep)}</b></div></div>`).join('')}</div>`);
@@ -537,8 +584,9 @@ function agencySet() {
 }
 
 function viewAgence() {
-  const tabs = { dev: agencyDev, net: agencyNet, pal: agencyPal, set: agencySet };
-  return seg('av', UI.av, [['dev', 'Développement'], ['net', 'Réseau'], ['pal', 'Palmarès'], ['set', 'Réglages']]) + tabs[UI.av]();
+  const tabs = { club: viewMyClub, dev: agencyDev, net: agencyNet, pal: agencyPal, set: agencySet };
+  if (UI.av === 'club' && !S.cm) UI.av = 'dev';
+  return seg('av', UI.av, [...(S.cm ? [['club', '🏛️ Club']] : []), ['dev', S.cm ? 'Gestion' : 'Développement'], ['net', 'Réseau'], ['pal', 'Palmarès'], ['set', 'Réglages']]) + tabs[UI.av]();
 }
 
 /* ============ Fiche joueur ============ */
@@ -775,8 +823,8 @@ function modalClub(id, m) {
     ${S.owned.includes(id) ? '' : actBtn('invClub', esc(id), '🤝', S.inv.cl[id] === S.season ? 'Partenaire cette saison ✓' : 'Devenir partenaire du club', S.inv.cl[id] === S.season ? 'Relation renforcée' : `${fmt(clubSponsorCost(c))} · relation +20`, 0, { disabled: S.inv.cl[id] === S.season || S.cash < clubSponsorCost(c) })}
     ${here.length ? `<h4>Vos joueurs ici</h4><div class="list">${here.map((p) => `<button class="row" data-act="open" data-id="${p.id}">${rt(ovrOf(p), 'sm')}<div class="main"><b>${esc(p.n)}</b><small>${POS_SHORT[p.pos]} · temps de jeu ${pct(playProb(p))}</small></div><span class="chev">›</span></button>`).join('')}</div>` : ''}
     ${canOwn(c) ? `<h4>🏛️ Propriété</h4>${S.owned.includes(id)
-      ? `<div class="card goldc" style="padding:12px"><b>Vous êtes le propriétaire</b><small>Revenus du club : ${fmt(c.rep * 250)}/sem. · +1 de prestige chaque été · relation maximale</small></div>
-        ${actBtn('investClub', esc(id), '🏗️', S.inv.own[id] === S.season ? 'Investi cette saison ✓' : 'Investir massivement', S.inv.own[id] === S.season ? 'Revenez la saison prochaine' : `${fmt(clubInvestCost(c))} · +2 de prestige (1 fois par saison)`, 0, { disabled: S.inv.own[id] === S.season || S.cash < clubInvestCost(c) })}`
+      ? `<div class="card goldc" style="padding:12px"><b>Vous êtes le président</b><small>Entraîneur ${S.cm ? esc(S.cm.coach.n) + ' ' + '★'.repeat(S.cm.coach.lvl) : ''} · supporters ${S.cm ? Math.round(S.cm.fans) : '-'}/100</small></div>
+        ${actBtn('myclub', '1', '🏛️', 'Gérer mon club', 'Finances, entraîneur, stade, formation, objectifs', 0, { primary: true })}`
       : actBtn('buyClub', esc(id), '🏛️', 'Racheter le club', tierIdx(S.rep) < OWN_TIER ? `Statut « ${TIERS[OWN_TIER][2]} » requis · ${fmt(clubPrice(c))}` : S.owned.length ? 'Vous possédez déjà un club' : `${fmt(clubPrice(c))} · objectif : l'emmener en Europe`, 0,
         { disabled: tierIdx(S.rep) < OWN_TIER || S.owned.length > 0 || S.cash < clubPrice(c) })}` : ''}
     <h4>Joueurs vedettes</h4><div class="list">${stars.map((x) => `<div class="row" style="padding:9px 13px"><span class="ico" style="font-size:16px">⭐</span><div class="main"><b style="font-weight:550">${esc(x.n)}</b></div><div class="side"><b>${x.g}</b><small>buts</small></div></div>`).join('')}</div>
@@ -1078,6 +1126,12 @@ const ACTIONS = {
   invMk() { toast(invMarketing()); },
   invGala() { toast(invGala()); },
   invClub(d) { toast(invClub(d.id)); keep(); },
+  myclub() { UI.modal = null; UI.tab = 'agence'; UI.av = 'club'; window.scrollTo(0, 0); },
+  coachOpen() { UI.coachOpen = !UI.coachOpen; },
+  hireCoach(d) { const c = coachCands()[+d.id]; if (c && confirm(`Engager ${c.n} (${c.lvl}★) pour ${fmt(coachFee(c))} ?`)) { const r = hireCoach(+d.id); toast(r); if (r.ok) UI.coachOpen = false; } },
+  infra(d) { const k = d.id; if (confirm(`Améliorer : ${INFRA[k].name} pour ${fmt(INFRA[k].cost[S.cm[k] - 1])} ?`)) { const r = upgradeInfra(k); toast(r); if (r.ok) play(CHIME); } },
+  ticket(d) { toast(setTicket(d.id)); },
+  sellClub() { if (confirm(`Revendre ${CLUBS[S.cm.id].name} pour ${fmt(clubSaleValue())} ? Vous n'en serez plus le président.`)) { toast(sellClub()); UI.av = 'dev'; } },
   buyClub(d) { if (confirm(`Racheter ${CLUBS[d.id].name} pour ${fmt(clubPrice(CLUBS[d.id]))} ?`)) { const r = buyClub(d.id); toast(r); if (r.ok) { play(FANFARE); buzz([60, 40, 120]); } } keep(); },
   investClub(d) { toast(investClub(d.id)); keep(); },
   achInfo(d) { const a = ACH.find((x) => x.id === d.id); toast({ ok: !!S.ach[a.id], msg: `${a.i} ${a.l} : ${a.d}${S.ach[a.id] ? ` (débloqué en ${S.ach[a.id]})` : ' — pas encore débloqué'}` }); },

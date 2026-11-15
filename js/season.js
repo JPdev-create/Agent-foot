@@ -107,7 +107,7 @@ function buildCeremony(champs, label, cl) {
   // Palmarès des compétitions
   const rows = ['BE1', 'ENG', 'ESP', 'ITA', 'GER', 'FRA'].map((lg) => {
     const id = Object.keys(champs).find((c) => champs[c] === lg);
-    return { i: LEAGUES[lg].flag, l: LEAGUES[lg].name, v: CLUBS[id].name, mine: cl.some((p) => p.club === id) };
+    return { i: LEAGUES[lg].flag, l: LEAGUES[lg].name, v: (isMyClub(id) ? '🏛️ ' : '') + CLUBS[id].name, mine: cl.some((p) => p.club === id) || isMyClub(id) };
   });
   if (S.intl && S.intl.nl && S.intl.nl.season === S.season && S.intl.nl.champ) rows.push({ i: NATIONS[S.intl.nl.champ][1], l: 'Ligue des nations', v: NATIONS[S.intl.nl.champ][0], mine: cl.some((p) => p.intl && p.nat === S.intl.nl.champ) });
   ['C1', 'C3', 'BC'].forEach((k) => { if (S.eu[k].champ) rows.push({ i: EU[k].icon, l: EU[k].name, v: CLUBS[S.eu[k].champ].name, mine: cl.some((p) => p.club === S.eu[k].champ) }); });

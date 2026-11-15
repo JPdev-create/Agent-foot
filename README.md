@@ -58,6 +58,10 @@ La partie est sauvegardée automatiquement dans le navigateur.
 - **Sélections nationales** : Ligue des nations chaque saison (groupes + Final Four), matchs amicaux,
   Coupe du monde et Euro à 16 nations ; sélections et buts internationaux de vos clients.
 
+- **Président de club** : finances détaillées (billetterie, TV, sponsors, salaires), entraîneur à recruter,
+  stade / centre d'entraînement / centre de formation sur 5 niveaux, supporters, prix des billets,
+  objectif de saison, historique et revente du club.
+
 ## Installer l'application
 
 Le jeu est une application web installable (PWA). Ouvrez le site sur le téléphone puis :
@@ -74,5 +78,6 @@ L'appli récupère la dernière version à chaque ouverture et reste jouable hor
 - `js/season.js` — cérémonie, tournois internationaux, missions, panthéon
 - `js/extra.js` — relations avec les clubs, académie, succès
 - `js/intl.js` — sélections nationales, Ligue des nations
+- `js/club.js` — gestion du club racheté
 - `js/ui.js` — interface
 - `sw.js`, `manifest.webmanifest`, `icons/` — application installable

@@ -130,7 +130,7 @@ const office = () => OFFICES[S.office];
 const weeklyCosts = () => office().weekly + Object.keys(STAFF).reduce((s, k) => s + STAFF[k].weekly * (S.stl ? S.stl[k] : S.staff[k] ? 1 : 0), 0)
   + clients().reduce((s, p) => s + planCost(p), 0) + ACADEMY[S.acad || 0].weekly;
 const planCost = (p) => (p.plan === 'int' ? Math.max(40, Math.round(p.sal * 0.2 / 10) * 10) : 0);
-const weeklyIncome = () => Math.round(clients().reduce((s, p) => s + p.sal * comRate(p) + (p.sp ? p.sp.w : 0), 0));
+const weeklyIncome = () => Math.round(clients().reduce((s, p) => s + p.sal * comRate(p) + (p.sp ? p.sp.w : 0), 0) + ownedIncome());
 const canRecruit = (p) => p.nat === 'BE' || S.office >= INTL_OFFICE;
 /* Plus l'agence est réputée, plus il est difficile de gagner encore en réputation */
 function addRep(x) { S.rep = clamp(S.rep + (x > 0 ? x * clamp((115 - S.rep) / 100, 0.15, 1) : x), 0, 100); }
@@ -178,6 +178,8 @@ function migrate() {
   if (!S.eu) newEurope(euQualified());
   if (S.eu && !S.eu.BC) S.eu.BC = { alive: clubsOf('BE1').map((c) => c.id).sort(() => Math.random() - 0.5), rounds: [], champ: null };
   if (!S.inv) S.inv = { mk: 0, gala: 0, cl: {} };
+  if (!S.owned) S.owned = [];
+  if (!S.inv.own) S.inv.own = {};
   if (!S.rec) S.rec = {};
   if (!S.wk) S.wk = [];
   S.players.forEach((p) => {
@@ -461,7 +463,7 @@ function ballonDor(champs, label) {
     if (!x.mine) return;
     const p = getP(x.pid);
     if (i === 0) {
-      S.flags.bdo = 1; p.aw.unshift(`${label} : BALLON D'OR`); addRep(6); S.stats.troph++; p.morale = 100;
+      S.flags.bdo = 1; S.flags.bdoN = (S.flags.bdoN || 0) + 1; p.aw.unshift(`${label} : BALLON D'OR`); addRep(6); S.stats.troph++; p.morale = 100;
       news('🏆', `INCROYABLE : votre client ${p.n} remporte le Ballon d'Or !`);
     } else {
       p.aw.unshift(`${label} : ${i + 1}ᵉ au Ballon d'Or`); addRep(i < 3 ? 2 : 0.8);
@@ -1014,7 +1016,9 @@ function endSeason() {
   cl.forEach((p) => { repGain += p.ovr >= 85 ? 2 : p.ovr >= 75 ? 1 : p.ovr >= 65 ? 0.3 : 0; });
   repGain = Math.min(6, repGain);
   addRep(repGain);
-  S.rivals.forEach((r) => { r.rep = clamp(r.rep + rnd(-1.5, 2), 10, 97); });
+  const top3 = agencyRank() <= 3;
+  S.rivals.forEach((r) => { r.rep = clamp(r.rep + rnd(-1.5, 2) + (top3 && r.rep < S.rep ? rnd(0, 2.5) : 0), 10, 99); });
+  if (S.rep > 80) { const loss = (S.rep - 80) * 0.2; S.rep = Math.max(80, S.rep - loss); news('📉', `L'exigence du très haut niveau : -${loss.toFixed(1)} de réputation. Restez au sommet grâce aux titres et aux trophées !`); }
   const best = cl.slice().sort((a, b) => (b.ovr - b.o0) - (a.ovr - a.o0))[0];
   S.recap = {
     label: `${S.season}/${(S.season + 1) % 100}`, inc: S.ss.inc, costs: S.ss.costs,
@@ -1052,6 +1056,7 @@ function endSeason() {
   buildCeremony(champs, label, cl);
   const euq = euQualified();
   moveClubs(cl);
+  ownedClubsSeason();
   newTables();
   newEurope(euq);
 

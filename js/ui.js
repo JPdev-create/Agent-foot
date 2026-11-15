@@ -404,7 +404,7 @@ function agencyDev() {
   const line = (l, v, cls) => `<div class="row" style="padding:8px 13px"><div class="main"><span style="font-size:13.5px">${l}</span></div><div class="side"><b class="${cls}">${v}</b></div></div>`;
   let h = sec('💶 Finances hebdomadaires', `<div class="list">
     ${line('Commissions sur salaires', '+' + fmt(salCom), 'pos')}${spons ? line('Contrats de sponsoring', '+' + fmt(spons), 'pos') : ''}
-    ${line('Loyer du bureau', '-' + fmt(o.weekly), 'neg')}${staffC ? line('Personnel', '-' + fmt(staffC), 'neg') : ''}${planC ? line('Entraînements intensifs', '-' + fmt(planC), 'neg') : ''}${acadC ? line('Académie', '-' + fmt(acadC), 'neg') : ''}
+    ${line('Loyer du bureau', '-' + fmt(o.weekly), 'neg')}${staffC ? line('Personnel', '-' + fmt(staffC), 'neg') : ''}${planC ? line('Entraînements intensifs', '-' + fmt(planC), 'neg') : ''}${acadC ? line('Académie', '-' + fmt(acadC), 'neg') : ''}${ownedIncome() ? line('Revenus de votre club', '+' + fmt(ownedIncome()), 'pos') : ''}
     ${line('<b>Solde</b>', fmt(weeklyIncome() - weeklyCosts()), weeklyIncome() - weeklyCosts() < 0 ? 'neg' : 'pos')}</div>`);
   h += sec('🏢 Locaux', upgradeCard('🏢', o.name, `Niv. ${S.office + 1}/${OFFICES.length}`, `${o.maxClients} clients · ${o.actions} actions/sem. · ${fmt(o.weekly)}/sem.`,
     nx && { title: nx.name, desc: `${nx.maxClients} clients · ${nx.actions} actions · ${fmt(nx.weekly)}/sem.${S.office + 1 === INTL_OFFICE ? ' · recrutement à l\'étranger' : ''}`, price: fmt(nx.cost), disabled: S.cash < nx.cost }, 'office'));
@@ -433,6 +433,9 @@ function agencyNet() {
   const ti = tierIdx(S.rep), nt = TIERS[ti + 1];
   let h = sec('🎖️ Statut de l\'agence', `<div class="card goldc"><div class="card-h" style="margin-bottom:${nt ? 10 : 0}px"><div style="display:flex;gap:12px;align-items:center"><span style="font-size:30px">${TIERS[ti][1]}</span><div><b>${TIERS[ti][2]}</b><small>Palier ${ti + 1}/${TIERS.length}</small></div></div></div>
     ${nt ? `<div class="split" style="margin-bottom:6px"><small>Prochain : ${nt[1]} ${nt[2]}</small><small>${Math.floor(S.rep)} / ${nt[0]} rép.</small></div>${bar((S.rep - TIERS[ti][0]) / (nt[0] - TIERS[ti][0]) * 100, 'gold')}` : ''}</div>`);
+  if (S.owned.length) h += sec('🏛️ Votre club', `<div class="list">${S.owned.map((id) => { const st = standings(CLUBS[id].league), pos = st.findIndex((x) => x.c.id === id) + 1;
+    return `<button class="row" data-act="club" data-id="${esc(id)}">${rt(CLUBS[id].rep, 'sm')}<div class="main"><b>${esc(CLUBS[id].name)}</b><small>${LEAGUES[CLUBS[id].league].name} · ${pos}ᵉ · ${fmt(CLUBS[id].rep * 250)}/sem.</small></div><span class="chev">›</span></button>`; }).join('')}</div>`);
+  else if (tierIdx(S.rep) >= OWN_TIER - 1) h += sec('🏛️ Devenir propriétaire', `<div class="card"><small>Au statut « ${TIERS[OWN_TIER][2]} », vous pourrez racheter un club belge (depuis sa page) et le faire grandir jusqu'à l'Europe.</small></div>`);
   h += sec('🏆 Classement des agences', `<div class="list">${all.map((a, i) => `<div class="row ${a.me ? 'me' : ''}"><span class="ico" style="font-weight:800;color:var(--mut);font-size:14px">${i + 1}</span>
     <div class="main rankbar"><b>${a.me ? esc(S.agency.logo) + ' ' : ''}${esc(a.n)}</b>${bar(a.rep, a.me ? '' : 'dim')}</div><div class="side"><b>${Math.floor(a.rep)}</b></div></div>`).join('')}</div>`);
   const part = Object.keys(S.rel).filter((id) => S.rel[id] >= 10).sort((a, b) => S.rel[b] - S.rel[a]);
@@ -690,8 +693,13 @@ function modalClub(id, m) {
       <div class="tags">${tag(`${pos + 1}ᵉ du classement`)}${cups.map((k) => tag(`${EU[k].icon} ${EU[k].short}`, 'gold')).join('')}${r >= 10 ? tag(`🤝 ${relLabel(r)}`, 'ok') : ''}</div></div></div>
     <div class="stats four">${stat('Points', pts(t))}${stat('Matchs', t[0])}${stat('Bilan', `${t[1]}-${t[2]}-${t[3]}`)}${stat('Buts', `${t[4]}:${t[5]}`)}</div>
     <div class="moral"><small style="width:70px">Relation</small>${bar(r, r >= 30 ? '' : 'dim')}<b>${r}</b></div>
-    ${actBtn('invClub', esc(id), '🤝', S.inv.cl[id] === S.season ? 'Partenaire cette saison ✓' : 'Devenir partenaire du club', S.inv.cl[id] === S.season ? 'Relation renforcée' : `${fmt(clubSponsorCost(c))} · relation +20`, 0, { disabled: S.inv.cl[id] === S.season || S.cash < clubSponsorCost(c) })}
+    ${S.owned.includes(id) ? '' : actBtn('invClub', esc(id), '🤝', S.inv.cl[id] === S.season ? 'Partenaire cette saison ✓' : 'Devenir partenaire du club', S.inv.cl[id] === S.season ? 'Relation renforcée' : `${fmt(clubSponsorCost(c))} · relation +20`, 0, { disabled: S.inv.cl[id] === S.season || S.cash < clubSponsorCost(c) })}
     ${here.length ? `<h4>Vos joueurs ici</h4><div class="list">${here.map((p) => `<button class="row" data-act="open" data-id="${p.id}">${rt(ovrOf(p), 'sm')}<div class="main"><b>${esc(p.n)}</b><small>${POS_SHORT[p.pos]} · temps de jeu ${pct(playProb(p))}</small></div><span class="chev">›</span></button>`).join('')}</div>` : ''}
+    ${canOwn(c) ? `<h4>🏛️ Propriété</h4>${S.owned.includes(id)
+      ? `<div class="card goldc" style="padding:12px"><b>Vous êtes le propriétaire</b><small>Revenus du club : ${fmt(c.rep * 250)}/sem. · +1 de prestige chaque été · relation maximale</small></div>
+        ${actBtn('investClub', esc(id), '🏗️', S.inv.own[id] === S.season ? 'Investi cette saison ✓' : 'Investir massivement', S.inv.own[id] === S.season ? 'Revenez la saison prochaine' : `${fmt(clubInvestCost(c))} · +2 de prestige (1 fois par saison)`, 0, { disabled: S.inv.own[id] === S.season || S.cash < clubInvestCost(c) })}`
+      : actBtn('buyClub', esc(id), '🏛️', 'Racheter le club', tierIdx(S.rep) < OWN_TIER ? `Statut « ${TIERS[OWN_TIER][2]} » requis · ${fmt(clubPrice(c))}` : S.owned.length ? 'Vous possédez déjà un club' : `${fmt(clubPrice(c))} · objectif : l'emmener en Europe`, 0,
+        { disabled: tierIdx(S.rep) < OWN_TIER || S.owned.length > 0 || S.cash < clubPrice(c) })}` : ''}
     <h4>Joueurs vedettes</h4><div class="list">${stars.map((x) => `<div class="row" style="padding:9px 13px"><span class="ico" style="font-size:16px">⭐</span><div class="main"><b style="font-weight:550">${esc(x.n)}</b></div><div class="side"><b>${x.g}</b><small>buts</small></div></div>`).join('')}</div>
     <h4>Proposer un de vos joueurs</h4>
     ${!win ? `<div class="note">🔒 Mercato fermé : ${nextWindowTxt()}.</div>` : !cands.length ? '<div class="note">Aucun client disponible.</div>'
@@ -722,6 +730,7 @@ function modalHelp() {
     <div><p><b>Faites-le jouer.</b> Un jeune progresse surtout s'il joue : surveillez son temps de jeu et prêtez-le si besoin. Choisissez son plan d'entraînement.</p></div>
     <div><p><b>Transférez.</b> Pendant le mercato (semaines 1–6 et 20–23), proposez vos clients à de plus grands clubs ou mettez-les aux enchères. Vous touchez 10 % de l'indemnité puis 7 % du salaire chaque semaine.</p></div>
     <div><p><b>Développez l'agence.</b> Bureau, personnel, académie, sponsors, relations avec les clubs : grimpez au classement des agences.</p></div>
+    <div><p><b>Fin de partie.</b> Au statut « Puissance mondiale », rachetez un club belge et menez-le jusqu'à la Ligue des champions. Au sommet, la réputation s'use : gagnez des trophées pour y rester.</p></div>
     <div><p><b>Chaque saison.</b> Remplissez les missions 🎯 et assistez à la cérémonie des trophées. Une saison sur deux : Coupe du monde ou Euro.</p></div>
   </div><div class="note warn">Attention au moral de vos joueurs et à votre caisse : faillite si les dettes dépassent ${fmt(DIFFS[S ? S.diff : 1].bank)}.</div>
   <button class="btn" data-act="close">C'est parti !</button>`;
@@ -900,6 +909,8 @@ const ACTIONS = {
   invMk() { toast(invMarketing()); },
   invGala() { toast(invGala()); },
   invClub(d) { toast(invClub(d.id)); keep(); },
+  buyClub(d) { if (confirm(`Racheter ${CLUBS[d.id].name} pour ${fmt(clubPrice(CLUBS[d.id]))} ?`)) { const r = buyClub(d.id); toast(r); if (r.ok) { play(FANFARE); buzz([60, 40, 120]); } } keep(); },
+  investClub(d) { toast(investClub(d.id)); keep(); },
   achInfo(d) { const a = ACH.find((x) => x.id === d.id); toast({ ok: !!S.ach[a.id], msg: `${a.i} ${a.l} : ${a.d}${S.ach[a.id] ? ` (débloqué en ${S.ach[a.id]})` : ' — pas encore débloqué'}` }); },
   logo(d) { S.agency.logo = d.id; save(); },
   color(d) { S.agency.color = d.id; save(); },
@@ -945,7 +956,16 @@ document.addEventListener('change', (e) => {
     file.text().then((t) => { toast(importSave(t)); UI.tab = 'home'; UI.modal = null; render(); });
   }
 });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && UI.modal && UI.modal.type !== 'cer') { UI.modal = null; render(); } });
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && UI.modal && UI.modal.type !== 'cer') { UI.modal = null; render(); return; }
+  // Raccourcis clavier (ordinateur) : Entrée = semaine suivante, 1 à 5 = onglets
+  if (!S || /INPUT|SELECT|TEXTAREA/.test((e.target.tagName || '')) || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (UI.modal && UI.modal.type === 'cer' && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); cerNext(); render(); return; }
+  if (UI.modal) return;
+  const tabs = { 1: 'home', 2: 'clients', 3: 'scout', 4: 'compet', 5: 'agence' };
+  if (tabs[e.key]) { UI.tab = tabs[e.key]; window.scrollTo(0, 0); render(); return; }
+  if (e.key === 'Enter' && !S.event && !S.over) { e.preventDefault(); ACTIONS.week(); render(); }
+});
 
 /* ---------- Application installable (PWA) ---------- */
 UI.standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;

@@ -49,6 +49,9 @@ La partie est sauvegardée automatiquement dans le navigateur.
 - **Thème clair / sombre / auto**, **3 emplacements de sauvegarde**, **clubs recommandés** pour chaque transfert,
   bouton **« jusqu'au mercato »**, **paliers de l'agence**, forme récente des joueurs, bonnes affaires et vibrations.
 
+- **Fin de partie** : rachat d'un club belge à mener jusqu'en Europe, réputation à entretenir au sommet,
+  rivaux qui réagissent, succès de long terme. Raccourcis clavier sur ordinateur (Entrée, 1 à 5).
+
 ## Installer l'application
 
 Le jeu est une application web installable (PWA). Ouvrez le site sur le téléphone puis :

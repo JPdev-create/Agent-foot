@@ -69,6 +69,16 @@ const ACH = [
   { id: 'n1', i: '👑', l: 'Numéro un', d: 'Être l\'agence n°1', t: () => agencyRank() === 1 },
   { id: 'rep100', i: '💯', l: 'Légende des agents', d: 'Atteindre 100 de réputation', t: () => S.rep >= 99.5 },
   { id: 's10', i: '📅', l: 'Fidèle au poste', d: 'Jouer 10 saisons', t: () => S.season >= 2036 },
+  { id: 's20', i: '🗓️', l: 'Une vie d\'agent', d: 'Jouer 20 saisons', t: () => S.season >= 2046 },
+  { id: 'tr100', i: '🏭', l: 'Usine à transferts', d: 'Réaliser 100 transferts', t: () => S.stats.transfers >= 100 },
+  { id: 'troph25', i: '🏆', l: 'Collectionneur', d: '25 trophées pour vos clients', t: () => S.stats.troph >= 25 },
+  { id: 'earn100', i: '🏦', l: 'Cent millions', d: 'Encaisser 100 M€ au total', t: () => S.stats.earned >= 1e8 },
+  { id: 'bdo3', i: '🌟', l: 'Faiseur de Ballons d\'Or', d: '3 Ballons d\'Or pour vos clients', t: () => (S.flags.bdoN || 0) >= 3 },
+  { id: 'n1x5', i: '👑', l: 'Dynastie', d: 'Finir 5 saisons n°1 du classement', t: () => S.hist.filter((h) => h.rank === 1).length >= 5 },
+  { id: 'acad3', i: '🎓', l: 'Centre d\'élite', d: 'Académie au niveau maximum', t: () => S.acad >= 3 },
+  { id: 'owner', i: '🏛️', l: 'Président', d: 'Racheter un club belge', t: () => (S.owned || []).length >= 1 },
+  { id: 'ownEu', i: '🚀', l: 'De la Belgique à l\'Europe', d: 'Votre club dispute la Ligue des champions', t: () => (S.owned || []).some((id) => S.eu.C1.alive.includes(id) || S.eu.C1.rounds.some((r) => r.some((x) => x[0] === id || x[1] === id))) },
+  { id: 'cl25', i: '🏟️', l: 'Empire complet', d: 'Gérer 25 clients en même temps', t: () => clients().length >= 25 },
 ];
 function checkAch() {
   if (!S.ach) S.ach = {};
@@ -219,4 +229,35 @@ function recommendedClubs(p, loan) {
   }
   return all.filter((c) => playerAccepts(p, c) && c.rep >= cur.rep - 2 && clubInterest(p, c) > 0.25)
     .sort((a, b) => clubInterest(p, b) * relBoost(b.id) * (b.rep + 20) - clubInterest(p, a) * relBoost(a.id) * (a.rep + 20)).slice(0, 12);
+}
+
+/* ---------- Propriétaire de club (fin de partie) ---------- */
+const OWN_TIER = 4; // palier « Puissance mondiale »
+const canOwn = (c) => ['BE1', 'BE2', 'BE3'].includes(CLUB_DEFAULT[c.id].league);
+const clubPrice = (c) => Math.round(20e6 * Math.pow(c.rep / 60, 4) / 1e6) * 1e6;
+const clubInvestCost = (c) => Math.round(3e6 * Math.pow(c.rep / 60, 3) / 1e5) * 1e5;
+const ownedIncome = () => (S.owned || []).reduce((s, id) => s + CLUBS[id].rep * 250, 0);
+function buyClub(id) {
+  const c = CLUBS[id], price = clubPrice(c);
+  if (!canOwn(c)) return { ok: false, msg: 'Seuls les clubs belges sont à vendre.' };
+  if (S.owned.includes(id)) return { ok: false, msg: 'Ce club vous appartient déjà.' };
+  if (S.owned.length >= 1) return { ok: false, msg: 'Vous possédez déjà un club : concentrez-vous sur lui.' };
+  if (tierIdx(S.rep) < OWN_TIER) return { ok: false, msg: `Il faut le statut « ${TIERS[OWN_TIER][2]} » pour racheter un club.` };
+  if (S.cash < price) return { ok: false, msg: 'Pas assez de liquidités.' };
+  S.cash -= price; S.ss.costs += price; S.owned.push(id); addRel(id, 100); addRep(3);
+  news('🏛️', `HISTORIQUE : ${S.agency.name} rachète ${c.name} pour ${fmt(price)} ! Objectif : l'Europe.`);
+  save(); return { ok: true, msg: `Vous êtes le nouveau propriétaire de ${c.name} !` };
+}
+function investClub(id) {
+  const c = CLUBS[id], cost = clubInvestCost(c);
+  if (!S.owned.includes(id)) return { ok: false, msg: 'Ce club ne vous appartient pas.' };
+  if (S.inv.own[id] === S.season) return { ok: false, msg: 'Un seul grand investissement par saison.' };
+  if (S.cash < cost) return { ok: false, msg: 'Pas assez de liquidités.' };
+  S.cash -= cost; S.ss.costs += cost; S.inv.own[id] = S.season; setClub(id, c.rep + 2);
+  news('🏗️', `Investissement massif à ${c.name} (stade, centre d'entraînement, recrues) : prestige ${c.rep}.`);
+  save(); return { ok: true, msg: `${c.name} gagne 2 points de prestige.` };
+}
+/* Chaque été, votre club grandit un peu et vos clients y sont choyés */
+function ownedClubsSeason() {
+  (S.owned || []).forEach((id) => { setClub(id, CLUBS[id].rep + 1); S.rel[id] = 100; });
 }

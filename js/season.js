@@ -17,7 +17,7 @@ const MISSIONS = {
 const missionReward = () => [5000, 20000, 100000, 400000, 1500000][S.office];
 
 function newMissions() {
-  const keys = Object.keys(MISSIONS).filter((k) => !(MISSIONS[k].min > S.office)).sort(() => Math.random() - 0.5).slice(0, 3);
+  const keys = Object.keys(MISSIONS).filter((k) => !(MISSIONS[k].min > S.office) && !(k === 'rep' && S.rep > 88)).sort(() => Math.random() - 0.5).slice(0, 3);
   S.mis = keys.map((k) => ({ k, n: MISSIONS[k].n(S.office), r: missionReward(), done: false }));
 }
 

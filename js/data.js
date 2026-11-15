@@ -141,6 +141,7 @@ const INTL_OFFICE = 3; // niveau de bureau requis pour recruter hors Belgique
 const STAFF = {
   scout: { name: 'Scout', desc: 'Rapports complets dès la 1re observation et pépites recommandées (plus souvent à chaque niveau).', cost: 5000, weekly: 400 },
   nego: { name: 'Négociateur', desc: '+8 % par niveau sur les indemnités et primes, négociations plus sûres.', cost: 30000, weekly: 1500 },
+  junior: { name: 'Agent associé', desc: 'Gère seul la routine sans utiliser vos actions : 1 tâche par semaine et par niveau (moral, prolongations hors mercato, sponsors, salaires).', cost: 20000, weekly: 1200 },
   coach: { name: 'Préparateur individuel', desc: '+12 % de progression par niveau et moins de blessures.', cost: 60000, weekly: 2500 },
 };
 

@@ -191,6 +191,18 @@ function missionsBlock() {
   }).join('')}</div>`, `<small>${done}/${S.mis.length}</small>`);
 }
 
+function duelCard() {
+  const d = S.duel, p = getP(d.pid), tot = Math.max(d.me, d.them, 12), played = d.last === S.t, left = 3 - d.w;
+  return `<div class="card warnc duel"><span class="kicker">⚔️ Duel d'agents · encore ${left} semaine${left > 1 ? 's' : ''}</span>
+    <div class="row" data-act="open" data-id="${p.id}" style="padding:0 0 10px;border:0">${rt(ovrOf(p))}<div class="main"><b>${esc(p.n)}</b><small>${p.pos} · ${p.age} ans · ${clubTxt(p)} · potentiel ${potTxt(p)}</small></div><span class="chev">›</span></div>
+    <div class="duel-bar"><small>Vous</small>${bar(d.me / tot * 100)}<b>${d.me.toFixed(1)}</b></div>
+    <div class="duel-bar"><small>${esc(d.by)}</small>${bar(d.them / tot * 100, 'bad')}<b>${d.them.toFixed(1)}</b></div>
+    <small style="margin:8px 0">${p.sc ? (p.tr ? `Caractère : ${TRAITS[p.tr].icon} ${TRAITS[p.tr].name}. Choisissez l'approche qui lui parle.` : 'Aucun trait marqué : toutes les approches se valent.') : '🔎 Observez-le (sa fiche) pour découvrir son caractère et choisir la bonne approche.'}${clients().length >= office().maxClients ? ' <b class="neg">Agence pleine : libérez une place avant la fin du duel !</b>' : ''}</small>
+    ${played ? '<div class="note">Approche jouée cette semaine. Le rival avance aussi : passez à la semaine suivante.</div>' : Object.keys(APPROACH).map((k) => { const A = APPROACH[k], used = d.used[k], no = used || (A.cash ? S.cash < duelCash(p) : S.actions < 1) || (A.star && !duelStar());
+      return `<button class="act" data-act="duel" data-id="${k}" ${no ? 'disabled' : ''}><span class="ic">${A.i}</span><span class="tx"><b>${A.n}${used ? ' ✓' : ''}</b><small>${A.d}</small></span><span class="cost">${A.cash ? fmt(duelCash(p)) : '1 action'}</span></button>`; }).join('')}
+    <small>Une approche par semaine. Celui qui a le plus de points au bout de 3 semaines signe le joueur.</small></div>`;
+}
+
 function briefsBlock() {
   if (!S.briefs || !S.briefs.length || !inWindow(S.week)) return '';
   const cl = clients();
@@ -236,6 +248,7 @@ function viewHome() {
   let h = '';
   if (S.over) h += `<div class="card badc"><span class="kicker">Partie terminée</span><h3>💀 Faillite</h3><p>Les dettes de l'agence ont dépassé ${fmt(DIFFS[S.diff].bank)}.</p><button class="btn" data-act="reset">Recommencer une partie</button></div>`;
   if (S.event) h += eventCard();
+  if (S.duel && getP(S.duel.pid)) h += duelCard();
   if (S.offers.length) h += sec(`📨 Offres sur la table (${S.offers.length})`, S.offers.map(offerCard).join(''));
   if (S.cer && S.week <= 6) h += `<div class="card goldc cer-cta" data-act="cer"><span>🎬</span><div><b>Cérémonie des trophées ${S.cer.label}</b><small>Golden Boy, Soulier d'or, Ballon d'Or… Revoir la soirée</small></div><b class="gold">▶</b></div>`;
   if (S.recap) h += recapCard();
@@ -526,11 +539,15 @@ function agencyDev() {
   const line = (l, v, cls) => `<div class="row" style="padding:8px 13px"><div class="main"><span style="font-size:13.5px">${l}</span></div><div class="side"><b class="${cls}">${v}</b></div></div>`;
   let h = sec('💶 Finances hebdomadaires', `<div class="list">
     ${line('Commissions sur salaires', '+' + fmt(salCom), 'pos')}${spons ? line('Contrats de sponsoring', '+' + fmt(spons), 'pos') : ''}
-    ${line('Loyer du bureau', '-' + fmt(o.weekly), 'neg')}${staffC ? line('Personnel', '-' + fmt(staffC), 'neg') : ''}${planC ? line('Entraînements intensifs', '-' + fmt(planC), 'neg') : ''}${acadC ? line('Académie', '-' + fmt(acadC), 'neg') : ''}${S.cm ? line('Résultat de votre club', (ownedIncome() >= 0 ? '+' : '') + fmt(ownedIncome()), ownedIncome() >= 0 ? 'pos' : 'neg') : ''}
+    ${line('Loyer du bureau', '-' + fmt(o.weekly), 'neg')}${staffC ? line('Personnel', '-' + fmt(staffC), 'neg') : ''}${planC ? line('Entraînements intensifs', '-' + fmt(planC), 'neg') : ''}${acadC ? line('Académie', '-' + fmt(acadC), 'neg') : ''}${S.loan ? line(`Emprunt (encore ${S.loan.left} sem.)`, '-' + fmt(S.loan.w), 'neg') : ''}${S.cm ? line('Résultat de votre club', (ownedIncome() >= 0 ? '+' : '') + fmt(ownedIncome()), ownedIncome() >= 0 ? 'pos' : 'neg') : ''}
     ${line('<b>Solde</b>', fmt(weeklyIncome() - weeklyCosts()), weeklyIncome() - weeklyCosts() < 0 ? 'neg' : 'pos')}</div>`);
   const lg = (S.ledger || []).slice(0, UI.ledAll ? 80 : 8);
   h += sec('🧾 Journal des opérations', lg.length ? `<div class="list">${lg.map((x) => `<div class="row wrap" style="padding:9px 13px"><span class="ico" style="font-size:16px">${x.i}</span><div class="main"><b style="font-weight:550;font-size:13.5px">${esc(x.l)}</b><small>Sem. ${x.w} · ${seasonTxt(x.s)}</small></div><div class="side"><b class="${x.a >= 0 ? 'pos' : 'neg'}">${x.a >= 0 ? '+' : ''}${fmt(x.a)}</b></div></div>`).join('')}</div>`
     : '<div class="card"><p class="empty">Les grosses rentrées et dépenses (transferts, primes, achats…) apparaîtront ici.</p></div>', (S.ledger || []).length > 8 ? `<button class="link" data-act="ledAll">${UI.ledAll ? 'Réduire' : 'Tout voir'}</button>` : '');
+  h += sec('🏦 Banque', S.loan ? `<div class="card"><div class="card-h"><div><b>Emprunt de ${fmt(S.loan.amt)}</b><small>${fmt(S.loan.w)}/sem. · encore ${S.loan.left} semaine(s)</small></div></div>
+      <button class="btn sec" style="margin:0" data-act="bankRepay" ${S.cash < bankPayoff() ? 'disabled' : ''}>Solder maintenant · ${fmt(bankPayoff())}</button></div>`
+    : `<div class="card" style="display:flex;align-items:center;gap:12px"><span style="font-size:26px">🏦</span><div style="flex:1"><b>Emprunter ${fmt(bankAmount())}</b><small>${fmt(bankWeekly(bankAmount()))}/sem. pendant ${BANK_WEEKS} sem. (intérêts ${Math.round(BANK_RATE * 100)} %). Le montant grandit avec vos locaux.</small></div>
+      <button class="btn sm" data-act="bank">Emprunter</button></div>`);
   h += sec('🏢 Locaux', upgradeCard('🏢', o.name, `Niv. ${S.office + 1}/${OFFICES.length}`, `${o.maxClients} clients · ${o.actions} actions/sem. · ${fmt(o.weekly)}/sem.`,
     nx && { title: nx.name, desc: `${nx.maxClients} clients · ${nx.actions} actions · ${fmt(nx.weekly)}/sem.${S.office + 1 === INTL_OFFICE ? ' · recrutement à l\'étranger' : ''}`, price: fmt(nx.cost), disabled: S.cash < nx.cost }, 'office'));
   h += sec('🧑‍💼 Personnel', Object.keys(STAFF).map((k) => {
@@ -659,6 +676,8 @@ function playerHead(p) {
   if (p.fav && !p.mine) t.push(tag('⭐ Suivi', 'gold'));
   if (p.mine && hasSellOn(p)) t.push(tag('📈 Clause de revente', 'gold'));
   if (p.mine && p.pf) t.push(tag(`🎯 ${fmt(p.pf.a)} / match`, 'gold'));
+  if (p.mine && p.pr2) t.push(tag(`🤞 Promesse : ${Math.max(1, p.pr2.t - S.t)} sem.`, p.pr2.t - S.t <= 20 ? 'bad' : 'warn'));
+  if (p.duel) t.push(tag('⚔️ Duel d\'agents', 'bad'));
   if (hyped(p)) t.push(tag('🔥 Cote en hausse', 'warn'));
   return `<div class="ph"><div class="av-wrap">${avatar(p)}${rt(ovrOf(p))}</div><div style="min-width:0"><h3>${esc(p.n)}</h3><small>${POSITIONS[p.pos]} · ${p.age} ans · ${COUNTRY_LABEL[p.nat]}</small>
     <small class="clublink" data-act="club" data-id="${esc(p.club)}">${clubTxt(p)} · prestige ${c.rep} ›</small>${t.length ? `<div class="tags">${t.join('')}</div>` : ''}</div></div>`;
@@ -686,12 +705,13 @@ function marketSheet(p) {
     <div class="card" style="padding:12px"><div class="split"><b style="font-size:14px">Votre commission sur son salaire</b><small>${['Attractif', 'Standard', 'Gourmand'][UI.com]}</small></div>
       <small>Plus elle est basse, plus il est facile de le convaincre.</small>
       <div class="seg" style="margin:10px 0 0;position:static;box-shadow:none">${COMS.map((c, i) => `<button class="${UI.com === i ? 'on' : ''}" data-act="com" data-id="${i}">${Math.round(c * 100)} %</button>`).join('')}</div></div>
+    <button class="act" data-act="prom" style="margin-top:8px"><span class="ic">${UI.prom ? '✅' : '🤞'}</span><span class="tx"><b>Promettre un meilleur club avant 2 saisons</b><small>+15 % de chances. Promesse non tenue : moral −30 et réputation −1.</small></span></button>
     ${cd ? `<div class="note warn">Il refuse de discuter encore ${p.cd - S.t} semaine(s).</div>` : ''}
     ${full ? `<div class="note warn">👥 Agence pleine (${office().maxClients} clients) : agrandissez le bureau ou libérez une place.</div>` : ''}
     ${noAct && !full ? '<div class="note warn">⚡ Plus d\'action cette semaine : revenez la semaine prochaine.</div>' : ''}
     ${!can ? `<div class="note warn">🔒 Recrutement à l'étranger non débloqué (bureau « ${OFFICES[INTL_OFFICE].name} »).</div>` : ''}
     ${['🤝 Simple poignée de main', '💶 Avec prime à la signature', '💰 Avec grosse prime'].map((l, i) => {
-    const ch = signChance(p, i, UI.com);
+    const ch = signChance(p, i, UI.com, UI.prom);
     return `<button class="choice" data-act="sign" data-id="${p.id}" data-lv="${i}" data-ci="${UI.com}" ${cd || !can || full || noAct ? 'disabled' : ''}><div class="top2"><b>${l}</b><b>${pct(ch)}</b></div>
       <small>${i ? 'Coût : ' + fmt(signBonusCost(p, i)) : 'Gratuit'}</small>${bar(ch * 100, ch < 0.35 ? 'bad' : ch < 0.6 ? 'mid' : '')}</button>`;
   }).join('')}`;
@@ -925,7 +945,7 @@ function modalHelp() {
     <div><p><b>Faites-le jouer.</b> Un jeune progresse surtout s'il joue : surveillez son temps de jeu et prêtez-le si besoin. Choisissez son plan d'entraînement.</p></div>
     <div><p><b>Transférez.</b> Pendant le mercato (semaines 1–6 et 20–23), proposez vos clients à de plus grands clubs ou mettez-les aux enchères. Vous touchez 10 % de l'indemnité puis 7 % du salaire chaque semaine.</p></div>
     <div><p><b>Développez l'agence.</b> Bureau, personnel, académie, sponsors, relations avec les clubs : grimpez au classement des agences.</p></div>
-    <div><p><b>Progressez.</b> Chaque opération rapporte de l'expérience : à chaque niveau d'agent, choisissez un talent (Agence → Agent). Pendant le mercato, répondez aux 📋 demandes des clubs et choisissez la formule de chaque transfert : comptant, clause de revente ou primes de performance.</p></div>
+    <div><p><b>Progressez.</b> Chaque opération rapporte de l'expérience : à chaque niveau d'agent, choisissez un talent (Agence → Agent). Deux fois par saison, un ⚔️ duel vous oppose à une agence rivale pour un phénomène. Pendant le mercato, répondez aux 📋 demandes des clubs et choisissez la formule de chaque transfert : comptant, clause de revente ou primes de performance.</p></div>
     <div><p><b>Fin de partie.</b> Au statut « Puissance mondiale », rachetez un club belge et menez-le jusqu'à la Ligue des champions. Au sommet, la réputation s'use : gagnez des trophées pour y rester.</p></div>
     <div><p><b>Chaque saison.</b> Remplissez les missions 🎯 et assistez à la cérémonie des trophées. Une saison sur deux : Coupe du monde ou Euro.</p></div>
   </div><div class="note warn">Attention au moral de vos joueurs et à votre caisse : faillite si les dettes dépassent ${fmt(DIFFS[S ? S.diff : 1].bank)}.</div>
@@ -1134,7 +1154,11 @@ const ACTIONS = {
   fav(d) { actFav(+d.id); keep(); },
   scout(d) { toast(actScout(+d.id)); keep(); },
   com(d) { UI.com = +d.id; keep(); },
-  sign(d) { const r = actSign(+d.id, +d.lv, +d.ci); toast(r); if (r.ok) { UI.modal = { type: 'player', id: +d.id, ptab: 'ov' }; play(CHIME); buzz(60); } else keep(); },
+  prom() { UI.prom = !UI.prom; keep(); },
+  duel(d) { const r = duelStep(d.id); toast(r); if (r.ok) play(CHIME); },
+  bank() { if (confirm(`Emprunter ${fmt(bankAmount())} ? Remboursement : ${fmt(bankWeekly(bankAmount()))} par semaine pendant ${BANK_WEEKS} semaines.`)) toast(takeLoan()); },
+  bankRepay() { toast(repayLoan()); },
+  sign(d) { const r = actSign(+d.id, +d.lv, +d.ci, UI.prom); toast(r); if (r.ok) { UI.prom = false; UI.modal = { type: 'player', id: +d.id, ptab: 'ov' }; play(CHIME); buzz(60); } else keep(); },
   propose(d) { UI.modal = { type: 'propose', id: +d.id }; UI.lg = 'REC'; },
   mode(d) { UI.mode = d.id; },
   lg(d) { UI.lg = d.id; keep(); },

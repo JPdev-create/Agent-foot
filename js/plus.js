@@ -239,3 +239,121 @@ function avatar(p) {
     <circle cx="26.5" cy="27.5" r="1.7" fill="#1c1c1c"/><circle cx="37.5" cy="27.5" r="1.7" fill="#1c1c1c"/>
     <path d="M27 35q5 ${p.morale < 35 ? -3 : p.morale >= 60 ? 4 : 1} 10 0" stroke="#3a2218" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>`;
 }
+
+/* ---------- Agent associé : la routine se fait toute seule ---------- */
+function juniorWork() {
+  let n = (S.stl && S.stl.junior) || 0;
+  if (!n) return;
+  const run = (fn, p) => {
+    const a0 = S.actions; S.actions = 1;
+    const r = fn(p.id); S.actions = a0; n--;
+    news('🧑‍💼', `Agent associé · ${p.n} : ${r.msg}`);
+  };
+  const cl = clients(), win = inWindow(S.week);
+  const jobs = [
+    [actTalk, (p) => p.morale < 45],
+    [actRenew, (p) => !win && p.cy <= 1 && !p.free && !p.loan && !(p.raiseT > S.t)],
+    [actSponsor, (p) => !p.sp && p.ovr >= 58 && !(p.spT > S.t)],
+    [actRaise, (p) => !p.free && !(p.raiseT > S.t) && fairSalary(p, CLUBS[p.club]) > p.sal * 1.08],
+  ];
+  jobs.forEach(([fn, ok]) => cl.forEach((p) => { if (n > 0 && p.mine && ok(p)) run(fn, p); }));
+}
+
+/* ---------- Banque : un emprunt à la fois, remboursé sur une saison ---------- */
+const BANK_AMOUNT = [15000, 60000, 300000, 1500000, 6000000];
+const BANK_RATE = 0.15, BANK_WEEKS = 38;
+const bankAmount = () => BANK_AMOUNT[S.office];
+const bankWeekly = (amt) => Math.round(amt * (1 + BANK_RATE) / BANK_WEEKS);
+const bankPayoff = () => (S.loan ? Math.round(S.loan.w * S.loan.left * 0.95) : 0);
+function takeLoan() {
+  if (S.loan) return { ok: false, msg: 'Vous avez déjà un emprunt en cours.' };
+  const amt = bankAmount();
+  S.loan = { amt, w: bankWeekly(amt), left: BANK_WEEKS };
+  S.cash += amt; ledger('🏦', 'Emprunt bancaire', amt);
+  news('🏦', `La banque vous prête ${fmt(amt)} : remboursement de ${fmt(S.loan.w)} par semaine pendant ${BANK_WEEKS} semaines.`);
+  save();
+  return { ok: true, msg: `${fmt(amt)} versés sur le compte de l'agence.` };
+}
+function repayLoan() {
+  if (!S.loan) return { ok: false, msg: 'Aucun emprunt en cours.' };
+  const x = bankPayoff();
+  if (S.cash < x) return { ok: false, msg: 'Pas assez de liquidités pour solder l\'emprunt.' };
+  S.cash -= x; S.ss.costs += x; ledger('🏦', 'Remboursement anticipé', -x); S.loan = null; save();
+  return { ok: true, msg: 'Emprunt soldé : vous ne devez plus rien à la banque.' };
+}
+function bankWeek() {
+  if (!S.loan) return;
+  if (--S.loan.left <= 0) { S.loan = null; news('🏦', 'Emprunt intégralement remboursé.'); }
+}
+
+/* ---------- Promesse à la signature : un meilleur club avant 2 saisons ---------- */
+const PROMISE_WEEKS = 76;
+function promiseKept(p, club) {
+  if (!p.pr2 || club.rep <= p.pr2.rep) return;
+  p.pr2 = null; p.morale = clamp(p.morale + 10, 0, 100); addRep(0.5);
+  news('🤞', `Promesse tenue : ${p.n} rejoint un club plus prestigieux, comme convenu à sa signature.`);
+}
+function promiseWeek(p) {
+  if (!p.pr2 || S.t <= p.pr2.t) return;
+  p.pr2 = null; p.morale = clamp(p.morale - 30, 0, 100); addRep(-1);
+  news('😡', `Promesse non tenue : vous aviez promis un meilleur club à ${p.n}. Son moral s'effondre et votre réputation en souffre.`);
+}
+
+/* ---------- Duel pour un phénomène : trois semaines pour convaincre ---------- */
+const DUEL_WEEKS = [9, 27];
+const APPROACH = {
+  fam: { i: '🍽️', n: 'Dîner avec la famille', d: 'Rassure les joueurs loyaux ou fragiles.', tr: ['loy', 'fra'], base: 1.5 },
+  proj: { i: '🗺️', n: 'Plan de carrière', d: 'Séduit les travailleurs et les leaders.', tr: ['pro', 'lea'], base: 1.5 },
+  vip: { i: '🎟️', n: 'Soirée VIP au stade', d: 'Fait rêver les fêtards et les ambitieux.', tr: ['fet', 'amb'], base: 1.5 },
+  med: { i: '🩺', n: 'Suivi médical sur mesure', d: 'Convainc les fragiles et les travailleurs.', tr: ['fra', 'pro'], base: 1.5 },
+  cash: { i: '💰', n: 'Grosse prime à la signature', d: 'Parle aux ambitieux et aux fêtards.', tr: ['amb', 'fet'], base: 2.5, cash: true },
+  star: { i: '🌟', n: 'Appel d\'un client vedette', d: 'Un client de niveau 68+ vante l\'agence. Touche les leaders et les loyaux.', tr: ['lea', 'loy'], base: 2.5, star: true },
+};
+const duelCash = (p) => signBonusCost(p, 2);
+const duelStar = () => clients().some((p) => p.ovr >= 68);
+function startDuel() {
+  if (S.duel || S.rep < 6) return;
+  const nat = S.office >= INTL_OFFICE && Math.random() < 0.5 ? pick(Object.keys(MARKET_SIZE)) : 'BE';
+  const p = genPlayer(nat, 16, 17, 0);
+  p.pot = Math.round(clamp(rint(78, 84) + S.rep * 0.1, p.ovr + 8, 94));
+  p.tr = Math.random() < 0.9 ? pick(TRAIT_KEYS) : '';
+  p.fav = true; p.duel = true; S.players.push(p);
+  const by = S.rivals.slice().sort((a, b) => Math.abs(a.rep - S.rep) - Math.abs(b.rep - S.rep))[0].n;
+  S.duel = { pid: p.id, by, me: 0, them: 2.5 + S.diff, w: 0, used: {}, last: -1 };
+  news('⚔️', `Un phénomène de ${p.age} ans affole le marché : ${p.n} (${POSITIONS[p.pos].toLowerCase()}, ${CLUBS[p.club].name}). ${by} est sur le coup : vous avez 3 semaines pour le convaincre.`);
+}
+function duelStep(k) {
+  const d = S.duel, A = APPROACH[k], p = d && getP(d.pid);
+  if (!d || !A || !p) return { ok: false, msg: 'Le duel est terminé.' };
+  if (d.used[k]) return { ok: false, msg: 'Vous avez déjà joué cette carte.' };
+  if (d.last === S.t) return { ok: false, msg: 'Une seule approche par semaine : laissez-lui le temps de réfléchir.' };
+  if (A.star && !duelStar()) return { ok: false, msg: 'Aucun de vos clients n\'est assez connu (niveau 68 requis).' };
+  if (A.cash) {
+    const c = duelCash(p);
+    if (S.cash < c) return { ok: false, msg: 'Pas assez de liquidités pour cette prime.' };
+    S.cash -= c; ledger('⚔️', `Prime promise à ${p.n}`, -c);
+  } else if (!useAction()) return { ok: false, msg: "Plus d'action cette semaine." };
+  const hit = A.tr.includes(p.tr);
+  d.me += A.base + (hit ? 3.5 : 0) + rnd(0, 1) + 0.5 * tal('charme');
+  d.used[k] = 1; d.last = S.t; save();
+  return { ok: true, msg: hit ? `${p.n} est très sensible à cette attention : vous marquez de gros points !` : `${p.n} écoute poliment. Vous marquez quelques points.` };
+}
+function duelWeek() {
+  const d = S.duel;
+  if (!d) return;
+  const p = getP(d.pid);
+  if (!p) { S.duel = null; return; }
+  d.w++; d.them += rnd(2.2, 3.8);
+  if (d.w < 3) return;
+  S.duel = null; p.duel = false;
+  if (d.me > d.them && clients().length < office().maxClients) {
+    p.mine = true; p.mandate = 3; p.morale = 85; p.o0 = p.ovr; p.com = COMMISSION_SALARY; p.vh = [{ v: playerValue(p) }]; p.dream = newDream(p); p.cov = null;
+    if (p.sc < 1) { p.sc = 1; setEstimate(p); }
+    if (p.pot >= 88) S.flags.gem = 1;
+    S.flags.duel = (S.flags.duel || 0) + 1; S.ss.sign = (S.ss.sign || 0) + 1; addRep(1.5); addXp(70);
+    news('⚔️', `DUEL GAGNÉ : ${p.n} choisit votre agence plutôt que ${d.by} ! Il signe un mandat de 3 saisons.`);
+  } else {
+    S.players = S.players.filter((x) => x.id !== p.id);
+    news('⚔️', d.me > d.them ? `${p.n} voulait vous rejoindre, mais votre agence est pleine : il signe chez ${d.by}.` : `Duel perdu : ${p.n} signe finalement chez ${d.by}.`);
+  }
+}

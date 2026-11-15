@@ -60,9 +60,9 @@ function clubInterest(p, club) {
 /* Un joueur qui ne joue pas accepte de redescendre pour avoir du temps de jeu */
 const playerAccepts = (p, club) => club.rep >= CLUBS[p.club].rep - (playProb(p) < 0.3 ? 15 : p.free ? 10 : 4);
 
-function signChance(p, bonusLevel, ci) {
+function signChance(p, bonusLevel, ci, prom) {
   const req = (p.ovr - 42) * 1.6 + Math.max(0, p.pot - 70) * 0.8 + (p.nat !== 'BE' ? 10 : 0);
-  return clamp(0.5 + (S.rep - req) / 40 + [0, 0.15, 0.3][bonusLevel] + 0.06 * tal('charme') + (p.hg && S.cm && p.hg === S.cm.id && p.club === S.cm.id ? 0.25 : 0) + DIFFS[S.diff].sign + (ci === undefined ? 0 : COM_BONUS[ci]), 0.03, 0.95);
+  return clamp(0.5 + (S.rep - req) / 40 + [0, 0.15, 0.3][bonusLevel] + (prom ? 0.15 : 0) + 0.06 * tal('charme') + (p.hg && S.cm && p.hg === S.cm.id && p.club === S.cm.id ? 0.25 : 0) + DIFFS[S.diff].sign + (ci === undefined ? 0 : COM_BONUS[ci]), 0.03, 0.95);
 }
 function signBonusCost(p, level) {
   const v = playerValue(p);
@@ -136,7 +136,7 @@ const getP = (id) => S.players.find((p) => p.id === id);
 const clients = () => S.players.filter((p) => p.mine);
 const office = () => OFFICES[S.office];
 const weeklyCosts = () => Math.round((office().weekly + Object.keys(STAFF).reduce((s, k) => s + STAFF[k].weekly * (S.stl ? S.stl[k] : S.staff[k] ? 1 : 0), 0)
-  + clients().reduce((s, p) => s + planCost(p), 0) + ACADEMY[S.acad || 0].weekly) * (1 - 0.08 * tal('gestion')));
+  + clients().reduce((s, p) => s + planCost(p), 0) + ACADEMY[S.acad || 0].weekly) * (1 - 0.08 * tal('gestion'))) + (S.loan ? S.loan.w : 0);
 const planCost = (p) => (p.plan === 'int' ? Math.max(40, Math.round(p.sal * 0.2 / 10) * 10) : 0);
 const weeklyIncome = () => Math.round(clients().reduce((s, p) => s + p.sal * comRate(p) + (p.sp ? p.sp.w : 0), 0) + ownedIncome());
 const canRecruit = (p) => p.nat === 'BE' || S.office >= INTL_OFFICE;
@@ -168,6 +168,9 @@ function migrate() {
   if (!S.cs) S.cs = {};
   if (S.diff === undefined) S.diff = 1;
   if (!S.stl) { S.stl = {}; Object.keys(STAFF).forEach((k) => { S.stl[k] = S.staff[k] ? 1 : 0; }); }
+  Object.keys(STAFF).forEach((k) => { if (S.stl[k] === undefined) S.stl[k] = 0; });
+  if (S.loan === undefined) S.loan = null;
+  if (S.duel === undefined) S.duel = null;
   if (!S.hof) S.hof = [];
   if (!S.rel) S.rel = {};
   if (S.acad === undefined) S.acad = 0;
@@ -262,17 +265,18 @@ function setEstimate(p) {
   p.potLo = Math.max(Math.floor(p.ovr), c - w); p.potHi = Math.min(99, c + w);
 }
 
-function actSign(id, bonusLevel, ci) {
+function actSign(id, bonusLevel, ci, prom) {
   if (ci === undefined || isNaN(ci)) ci = 1;
   const p = getP(id);
   if (p.mine) return { ok: false, msg: 'Déjà client.' };
+  if (p.duel) return { ok: false, msg: 'Il est au cœur d\'un duel d\'agents : convainquez-le depuis l\'accueil.' };
   if (!canRecruit(p)) return { ok: false, msg: `Il faut le bureau « ${OFFICES[INTL_OFFICE].name} » pour recruter hors de Belgique.` };
   if (clients().length >= office().maxClients) return { ok: false, msg: 'Nombre maximum de clients atteint. Agrandissez votre bureau.' };
   if (p.cd > S.t) return { ok: false, msg: `Il ne veut plus vous parler pour l'instant (encore ${p.cd - S.t} sem.).` };
   const cost = signBonusCost(p, bonusLevel);
   if (cost > 0 && cost > S.cash) return { ok: false, msg: 'Pas assez de liquidités pour cette prime.' };
   if (!useAction()) return { ok: false, msg: "Plus d'action cette semaine." };
-  const ok = Math.random() < signChance(p, bonusLevel, ci);
+  const ok = Math.random() < signChance(p, bonusLevel, ci, prom);
   if (ok) {
     if (p.pot >= 88) S.flags.gem = 1;
     p.com = COMS[ci];
@@ -280,6 +284,7 @@ function actSign(id, bonusLevel, ci) {
     S.cash -= cost; p.mine = true; p.mandate = 3; p.morale = 75; p.o0 = p.ovr; p.vh = [{ v: playerValue(p) }]; p.dream = newDream(p);
     if (p.sc < 1) { p.sc = 1; setEstimate(p); }
     p.cov = null; S.ss.sign = (S.ss.sign || 0) + 1;
+    if (prom) p.pr2 = { t: S.t + PROMISE_WEEKS, rep: CLUBS[p.club].rep };
     news('✍️', `${p.n} (${p.age} ans, ${p.pos}) signe un mandat de 3 saisons avec l'agence (commission ${Math.round(p.com * 100)} %).`);
     addRep(0.3); addXp(25); checkGoals(); save();
     return { ok: true, msg: `${p.n} rejoint l'agence !` };
@@ -454,7 +459,7 @@ function rivalsMove() {
   });
   S.players = S.players.filter((p) => !p.gone);
   if (Math.random() < DIFFS[S.diff].rivals) {
-    const c = S.players.filter((p) => !p.mine && !p.cov && p.pot >= 72);
+    const c = S.players.filter((p) => !p.mine && !p.cov && !p.duel && p.pot >= 72);
     if (c.length) {
       const p = pick(c), r = pick(S.rivals);
       p.cov = { by: r.n, t: S.t + rint(3, 5) };
@@ -666,7 +671,7 @@ function actAccept(oid) {
   if (o.free) S.flags.free = 1;
   if (!p.promH || LEAGUES[club.league].country === p.nat) { p.promise = null; p.promH = false; }
   p.club = club.id; p.sal = o.sal; p.cy = rint(3, 5); p.morale = clamp(p.morale + 20, 0, 100); p.rej = {}; p.free = false;
-  applyDeal(o, p); if (o.brief) briefDone(o, p);
+  applyDeal(o, p); if (o.brief) briefDone(o, p); promiseKept(p, club);
   addXp(40 + 15 * Math.log10(Math.max(1, (o.free ? o.bonus * 10 : o.fee) / 1e4)));
   earn(com); S.stats.transfers++; ledger('🤝', `${o.free ? 'Prime transfert libre' : 'Commission transfert'} : ${p.n} → ${club.name}`, com);
   if (o.fee > S.stats.bestFee) { S.stats.bestFee = o.fee; S.stats.bestName = `${p.n} → ${club.name}`; }
@@ -965,6 +970,8 @@ function nextWeek() {
 
   const inc = weeklyIncome(), costs = weeklyCosts();
   earn(inc); S.cash -= costs; S.ss.costs += costs;
+  bankWeek(); duelWeek();
+  if (DUEL_WEEKS.includes(S.week)) startDuel();
 
   S.offers = S.offers.filter((o) => {
     if (o.exp > S.t) return true;
@@ -993,7 +1000,7 @@ function nextWeek() {
   clients().forEach((p) => {
     if (!p.dream) p.dream = newDream(p);
     if (p.promise && S.t > p.promise) { p.promise = null; p.morale = clamp(p.morale - 25, 0, 100); news('😡', `Promesse non tenue : ${p.n} n'a pas été transféré et vous en veut énormément.`); }
-    checkDream(p);
+    checkDream(p); promiseWeek(p);
     const pp = playProb(p);
     p.morale = clamp(p.morale + (pp < 0.3 ? (p.tr === 'amb' ? -2 : -1.2) : pp > 0.6 ? 0.5 : 0) + PLANS[p.plan || 'std'].mor + 0.12 * tal('mentor'), 0, 100);
 
@@ -1038,6 +1045,7 @@ function nextWeek() {
 
   if (S.week > SEASON_WEEKS) endSeason(); else maybeEvent();
   S.actions = maxActions(); S.ag.fs = tal('oeil');
+  juniorWork();
   checkGoals();
   if (S.cash < -DIFFS[S.diff].bank) {
     S.over = true;

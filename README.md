@@ -71,6 +71,9 @@ La partie est sauvegardée automatiquement dans le navigateur.
 - **Demandes des clubs** à chaque mercato (offre garantie et majorée pour le bon profil), **clauses de transfert**
   (comptant, intéressement à la revente, primes de performance), 6 nouveaux événements, portraits des joueurs et 5 succès de plus.
 
+- **Duel d'agents** deux fois par saison pour un phénomène (6 approches, à choisir selon son caractère), **agent associé** qui gère la routine,
+  **emprunt bancaire**, **promesse à la signature** (un meilleur club avant 2 saisons) et succès « Duelliste ».
+
 ## Installer l'application
 
 Le jeu est une application web installable (PWA). Ouvrez le site sur le téléphone puis :

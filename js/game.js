@@ -115,7 +115,7 @@ const getP = (id) => S.players.find((p) => p.id === id);
 const clients = () => S.players.filter((p) => p.mine);
 const office = () => OFFICES[S.office];
 const weeklyCosts = () => office().weekly + Object.keys(STAFF).reduce((s, k) => s + STAFF[k].weekly * (S.stl ? S.stl[k] : S.staff[k] ? 1 : 0), 0)
-  + clients().reduce((s, p) => s + planCost(p), 0);
+  + clients().reduce((s, p) => s + planCost(p), 0) + ACADEMY[S.acad || 0].weekly;
 const planCost = (p) => (p.plan === 'int' ? Math.max(40, Math.round(p.sal * 0.2 / 10) * 10) : 0);
 const weeklyIncome = () => Math.round(clients().reduce((s, p) => s + p.sal * COMMISSION_SALARY + (p.sp ? p.sp.w : 0), 0));
 const canRecruit = (p) => p.nat === 'BE' || S.office >= INTL_OFFICE;
@@ -148,6 +148,11 @@ function migrate() {
   if (S.diff === undefined) S.diff = 1;
   if (!S.stl) { S.stl = {}; Object.keys(STAFF).forEach((k) => { S.stl[k] = S.staff[k] ? 1 : 0; }); }
   if (!S.hof) S.hof = [];
+  if (!S.rel) S.rel = {};
+  if (S.acad === undefined) S.acad = 0;
+  if (!S.flags) S.flags = {};
+  if (!S.ach) S.ach = {};
+  if (!S.agency.logo) { S.agency.logo = '⚽'; S.agency.color = '#35d07f'; }
   if (!S.mis && S.players) newMissions();
   if (S.cer === undefined) S.cer = null;
   if (S.bdo === undefined) S.bdo = null;
@@ -185,6 +190,7 @@ function wipe() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* rien
 
 function checkGoals() {
   checkMissions();
+  checkAch();
   const cl = clients();
   const done = {
     sign1: cl.length >= 1 || S.stats.transfers > 0, sign3: cl.length >= 3,
@@ -232,6 +238,7 @@ function actSign(id, bonusLevel) {
   if (!useAction()) return { ok: false, msg: "Plus d'action cette semaine." };
   const ok = Math.random() < signChance(p, bonusLevel);
   if (ok) {
+    if (p.pot >= 88) S.flags.gem = 1;
     S.cash -= cost; p.mine = true; p.mandate = 3; p.morale = 75; p.o0 = p.ovr; p.vh = [{ v: playerValue(p) }]; p.dream = newDream(p);
     if (p.sc < 1) { p.sc = 1; setEstimate(p); }
     p.cov = null; S.ss.sign = (S.ss.sign || 0) + 1;
@@ -263,7 +270,7 @@ function actPropose(id, clubId) {
   if (S.offers.some((o) => o.pid === id && o.club === clubId)) return { ok: false, msg: 'Une offre de ce club est déjà sur la table.' };
   if (!playerAccepts(p, club)) return { ok: false, msg: `${p.n} refuse de descendre à ce niveau.` };
   if (!useAction()) return { ok: false, msg: "Plus d'action cette semaine." };
-  const chance = clubInterest(p, club) * (1 + S.rep / 250) * (p.free ? 1.3 : 1);
+  const chance = clubInterest(p, club) * (1 + S.rep / 250) * (p.free ? 1.3 : 1) * relBoost(club.id);
   if (Math.random() < chance) {
     const o = makeOffer(p, club);
     S.offers.push(o); save();
@@ -289,6 +296,7 @@ function actLoan(id, clubId) {
     const from = CLUBS[p.club];
     p.loan = { back: p.club }; p.club = clubId; p.morale = clamp(p.morale + 8, 0, 100);
     S.offers = S.offers.filter((o) => o.pid !== id);
+    addRel(clubId, 5);
     news('🔁', `PRÊT : ${p.n} est prêté par ${from.name} à ${club.name} jusqu'à la fin de la saison.`);
     save();
     return { ok: true, msg: `${p.n} est prêté à ${club.name}. Temps de jeu estimé : ${Math.round(playProb(p) * 100)} %.` };
@@ -310,7 +318,7 @@ function actAuction(id) {
     .sort(() => Math.random() - 0.5).slice(0, 8);
   const got = [];
   cands.forEach((c) => {
-    if (got.length < 3 && Math.random() < clubInterest(p, c) * (1 + S.rep / 250) * 0.7 * (p.free ? 1.3 : 1)) got.push(c);
+    if (got.length < 3 && Math.random() < clubInterest(p, c) * (1 + S.rep / 250) * 0.7 * (p.free ? 1.3 : 1) * relBoost(c.id)) got.push(c);
   });
   if (!got.length) { save(); return { ok: false, msg: 'Aucun club ne se manifeste. Réessayez plus tard.' }; }
   got.forEach((c) => S.offers.push(makeOffer(p, c, 1 + (got.length - 1) * 0.06)));
@@ -434,7 +442,7 @@ function ballonDor(champs, label) {
     if (!x.mine) return;
     const p = getP(x.pid);
     if (i === 0) {
-      p.aw.unshift(`${label} : BALLON D'OR`); addRep(6); S.stats.troph++; p.morale = 100;
+      S.flags.bdo = 1; p.aw.unshift(`${label} : BALLON D'OR`); addRep(6); S.stats.troph++; p.morale = 100;
       news('🏆', `INCROYABLE : votre client ${p.n} remporte le Ballon d'Or !`);
     } else {
       p.aw.unshift(`${label} : ${i + 1}ᵉ au Ballon d'Or`); addRep(i < 3 ? 2 : 0.8);
@@ -450,10 +458,14 @@ function maybeEvent() {
   const cl = clients().filter((p) => p.inj === 0);
   if (S.event || !cl.length || Math.random() > 0.07) return;
   const p = pick(cl);
-  const types = ['rival', 'ecart', 'stage', 'presse'];
+  const types = ['rival', 'ecart', 'stage', 'presse', 'conflict', 'gala'];
   if (p.tr === 'fet') types.push('ecart', 'ecart', 'ecart');
   if (LEAGUES[CLUBS[p.club].league].country !== p.nat) types.push('mal');
-  S.event = { k: pick(types), pid: p.id, c: Math.max(300, Math.round(playerValue(p) * 0.01 / 100) * 100) };
+  if (playProb(p) < 0.4 && !p.promise && !p.loan) types.push('leave', 'leave');
+  let k = pick(types), who = p;
+  const hurt = clients().filter((x) => x.inj >= 4);
+  if (hurt.length && Math.random() < 0.3) { k = 'clinic'; who = pick(hurt); }
+  S.event = { k, pid: who.id, c: Math.max(300, Math.round(playerValue(who) * 0.01 / 100) * 100) };
 }
 
 function eventView() {
@@ -467,6 +479,14 @@ function eventView() {
       choices: [`Financer le stage (${fmt(c * 3)})`, 'Refuser'] };
     case 'presse': return { title: 'Demande d\'interview', text: `Un journaliste propose un grand portrait de ${p.n}. Bon coup de pub... ou dérapage.`,
       choices: ['Accepter l\'interview', 'Refuser, il reste concentré'] };
+    case 'leave': return { title: 'Demande de départ', text: `${p.n} ne joue pas assez à ${CLUBS[p.club].name} et veut partir au plus vite.`,
+      choices: ['Lui promettre un transfert d\'ici 6 mois', 'Le convaincre de rester et de se battre'] };
+    case 'conflict': return { title: 'Clash avec l\'entraîneur', text: `${p.n} s'est accroché avec son entraîneur à ${CLUBS[p.club].name}. Le vestiaire attend votre réaction.`,
+      choices: ['Soutenir publiquement votre joueur', 'Rester neutre', 'Donner raison au club'] };
+    case 'gala': return { title: 'Gala de charité', text: `${p.n} aimerait organiser un gala au profit d'une association de son quartier.`,
+      choices: [`Financer le gala (${fmt(c)})`, 'Décliner poliment'] };
+    case 'clinic': return { title: 'Blessure : quel traitement ?', text: `${p.n} est blessé pour ${p.inj} semaines. Une clinique privée réputée peut accélérer sa guérison.`,
+      choices: [`Clinique privée (${fmt(c * 2)})`, 'Suivre le protocole du club'] };
     default: return { title: 'Mal du pays', text: `${p.n} vit mal l'éloignement à ${CLUBS[p.club].name}.`,
       choices: [`Faire venir sa famille (${fmt(c)})`, 'Lui dire de serrer les dents'] };
   }
@@ -501,6 +521,21 @@ function resolveEvent(i) {
     if (i === 1) r = { ok: true, msg: 'Pas de vagues.' };
     else if (Math.random() < 0.65) { addRep(1); mor(5); r = { ok: true, msg: 'Très bel article : l\'agence gagne en notoriété.' }; }
     else { addRep(-0.5); mor(-8); r = { ok: false, msg: `${p.n} dérape en interview. Son club est furieux.` }; }
+  } else if (e.k === 'leave') {
+    if (i === 0) { mor(15); p.promise = S.t + 26; r = { ok: true, msg: `${p.n} vous fait confiance. Trouvez-lui un club avant 6 mois !` }; }
+    else if (Math.random() < 0.5) { mor(5); r = { ok: true, msg: `${p.n} accepte de se battre pour sa place.` }; }
+    else { mor(-15); r = { ok: false, msg: `${p.n} est furieux de rester.` }; }
+  } else if (e.k === 'conflict') {
+    if (i === 0) { mor(12); addRel(p.club, -15); r = { ok: true, msg: `${p.n} apprécie votre soutien. Le club, beaucoup moins.` }; }
+    else if (i === 1) { mor(-6); r = { ok: true, msg: 'L\'affaire se tasse doucement.' }; }
+    else { mor(-15); addRel(p.club, 10); r = { ok: false, msg: `Le club vous remercie, mais ${p.n} se sent trahi.` }; }
+  } else if (e.k === 'gala') {
+    if (i === 0) { if (!pay(e.c)) return broke; addRep(1.2); mor(8); p.fol = Math.round((p.fol || 0) * 1.1 + 3000); r = { ok: true, msg: 'Soirée magnifique : la presse salue l\'engagement de votre agence.' }; }
+    else { mor(-3); r = { ok: true, msg: `${p.n} est un peu déçu.` }; }
+  } else if (e.k === 'clinic') {
+    if (i === 0) { if (!pay(e.c * 2)) return broke; p.inj = Math.max(1, Math.ceil(p.inj / 2)); mor(6); r = { ok: true, msg: `Traitement réussi : ${p.n} reviendra dans ${p.inj} semaine(s).` }; }
+    else if (Math.random() < 0.2) { p.inj += 3; r = { ok: false, msg: `Rechute : ${p.n} est absent 3 semaines de plus.` }; }
+    else r = { ok: true, msg: 'Le protocole suit son cours.' };
   } else if (i === 0) { if (!pay(e.c)) return broke; mor(15); r = { ok: true, msg: `${p.n} retrouve le sourire.` }; }
   else { mor(-12); r = { ok: false, msg: `${p.n} broie du noir.` }; }
   S.event = null; save();
@@ -518,7 +553,7 @@ function actNegotiate(oid, lv) {
   o.nego = true;
   if (Math.random() >= negoOk(lv)) {
     if (Math.random() < negoWalk(lv)) {
-      S.offers = S.offers.filter((x) => x.id !== oid); save();
+      S.offers = S.offers.filter((x) => x.id !== oid); addRel(o.club, -8); save();
       return { ok: false, msg: `${CLUBS[o.club].name} claque la porte et retire son offre.` };
     }
     save(); return { ok: false, msg: "Le club refuse d'aller plus haut. L'offre reste valable." };
@@ -536,6 +571,9 @@ function actAccept(oid) {
   const p = getP(o.pid), club = CLUBS[o.club], from = CLUBS[p.club];
   const com = o.free ? o.bonus : Math.round(o.fee * commissionTransfer());
   p.hist.push({ s: S.season, from: from.name, to: club.name, fee: o.fee, free: !!o.free });
+  addRel(club.id, 15); if (!o.free) addRel(from.id, 6);
+  if (o.free) S.flags.free = 1;
+  p.promise = null;
   p.club = club.id; p.sal = o.sal; p.cy = rint(3, 5); p.morale = clamp(p.morale + 20, 0, 100); p.rej = {}; p.free = false;
   earn(com); S.stats.transfers++;
   if (o.fee > S.stats.bestFee) { S.stats.bestFee = o.fee; S.stats.bestName = `${p.n} → ${club.name}`; }
@@ -555,7 +593,7 @@ function actAccept(oid) {
   return { ok: true, msg: `Transfert conclu ! Vous touchez ${fmt(com)}.` };
 }
 
-function actRefuse(oid) { S.offers = S.offers.filter((x) => x.id !== oid); save(); }
+function actRefuse(oid) { const o = S.offers.find((x) => x.id === oid); if (o) addRel(o.club, -3); S.offers = S.offers.filter((x) => x.id !== oid); save(); }
 
 function actRaise(id) {
   const p = getP(id), fair = fairSalary(p, CLUBS[p.club]);
@@ -716,6 +754,7 @@ function playEuRound(k, silent) {
     setClub(win[0], CLUBS[win[0]].rep + 1);
     news(EU[k].icon, `FINALE de la ${EU[k].name} : ${CLUBS[t[0]].name} ${t[2]}-${t[3]} ${CLUBS[t[1]].name}${t[4] ? ' (t.a.b.)' : ''}. ${CLUBS[win[0]].name} soulève le trophée !`);
     clients().filter((p) => p.club === win[0]).forEach((p) => {
+      if (k === 'C1') S.flags.c1 = 1;
       p.aw.unshift(`${label} : vainqueur de la ${EU[k].name}`); addRep(k === 'C1' ? 3 : 1.5); S.stats.troph++; p.morale = clamp(p.morale + 15, 0, 100);
       news('🥇', `${p.n} remporte la ${EU[k].name} avec ${CLUBS[p.club].name} !`);
     });
@@ -781,6 +820,7 @@ function playMatch(p, res, cup) {
       const line = { pid: p.id, club: p.club, w: S.week, opp: res.opp, home: res.home, gf: res.gf, ga: res.ga, g, a, n, cup };
       S.wk.push(line); p.log.unshift(line); if (p.log.length > 6) p.log.length = 6;
       p.morale = clamp(p.morale + (n >= 7.5 ? 0.4 : n < 5.5 ? -0.3 : 0), 0, 100);
+      if (g >= 3) S.flags.hat = 1;
       if (g >= 2 || n >= 9) news('⚽', `${p.n} brille avec ${CLUBS[p.club].name} contre ${CLUBS[res.opp].name} : ${g} but(s), ${a} passe(s), note ${n.toFixed(1)}.`);
     }
   }
@@ -830,6 +870,7 @@ function nextWeek() {
   const win = inWindow(S.week);
   clients().forEach((p) => {
     if (!p.dream) p.dream = newDream(p);
+    if (p.promise && S.t > p.promise) { p.promise = null; p.morale = clamp(p.morale - 25, 0, 100); news('😡', `Promesse non tenue : ${p.n} n'a pas été transféré et vous en veut énormément.`); }
     checkDream(p);
     const pp = playProb(p);
     p.morale = clamp(p.morale + (pp < 0.3 ? (p.tr === 'amb' ? -2 : -1.2) : pp > 0.6 ? 0.5 : 0) + PLANS[p.plan || 'std'].mor, 0, 100);
@@ -941,7 +982,7 @@ function endSeason() {
     tr: S.stats.transfers - S.ss.tr0, rep0: S.ss.rep0, rep1: S.rep, rank: agencyRank(), clients: cl.length,
     best: best && best.ovr - best.o0 >= 1 ? `${best.n} (+${Math.floor(best.ovr - best.o0)})` : null,
   };
-  S.hist.unshift(Object.assign({}, S.recap));
+  S.hist.unshift(Object.assign({ cash: S.cash }, S.recap));
   if (S.hist.length > 40) S.hist.length = 40;
   news('🎉', `Fin de la saison ${S.season}/${(S.season + 1) % 100}. ${cl.length} client(s), réputation +${repGain.toFixed(1)}.`);
 
@@ -1013,6 +1054,8 @@ function endSeason() {
     for (let i = n; i < MARKET_SIZE[c]; i++) S.players.push(genPlayer(c, 16, 18));
   }
   S.season++; S.week = 1; S.ss = newSeasonStats();
+  Object.keys(S.rel).forEach((id) => { S.rel[id] = Math.floor(S.rel[id] * 0.85); });
+  academyIntake();
   newMissions();
   news('📅', `Début de la saison ${S.season}/${(S.season + 1) % 100}. Le mercato d'été est ouvert (6 semaines).`);
 }

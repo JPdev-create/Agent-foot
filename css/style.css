@@ -190,3 +190,16 @@ main > .chips { padding-bottom: 10px; }
 .confetti { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 31; }
 .confetti i { position: absolute; top: -12px; width: 8px; height: 14px; border-radius: 2px; opacity: 0; animation: fall linear forwards; }
 @keyframes fall { 0% { opacity: 1; transform: translateY(0) rotate(0); } 100% { opacity: .9; transform: translateY(105vh) rotate(720deg); } }
+
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.search { margin-bottom: 8px; font-size: 14px; padding: 11px 12px; }
+.ach { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.ach button { background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 8px 2px; color: var(--txt); font: inherit; cursor: pointer; opacity: .35; filter: grayscale(1); }
+.ach button.on { opacity: 1; filter: none; border-color: var(--acc2); }
+.ach span { display: block; font-size: 22px; } .ach small { font-size: 10px; line-height: 1.15; display: block; margin-top: 2px; }
+.chart svg { width: 100%; height: 80px; display: block; margin: 4px 0 10px; }
+.chart polyline { fill: none; stroke: var(--acc); stroke-width: 2; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.chart rect.p { fill: var(--acc); } .chart rect.n { fill: var(--bad); } .chart line { stroke: var(--line); vector-effect: non-scaling-stroke; }
+.swatch i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+.live { display: flex; align-items: center; gap: 10px; margin: -4px 0 10px; } .live span { font-weight: 800; color: var(--bad); white-space: nowrap; font-size: 14px; min-width: 70px; }
+.live .bar { flex: 1; margin: 0; }

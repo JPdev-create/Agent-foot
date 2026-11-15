@@ -20,6 +20,10 @@ const FANFARE = [[523, 0.16], [659, 0.16], [784, 0.16], [1047, 0.32], [784, 0.14
 const DRUM = [[110, 0.07], [110, 0.07], [110, 0.07], [110, 0.07], [110, 0.07], [110, 0.07], [110, 0.07], [110, 0.07]];
 const CHIME = [[880, 0.12], [1175, 0.3]];
 
+const LOGOS = ['⚽', '🦁', '🦅', '🐺', '👑', '🔥', '💎', '⭐', '🛡️', '🚀'];
+const COLORS = [['#35d07f', 'Vert'], ['#f2c14e', 'Or'], ['#5aa9ff', 'Bleu'], ['#ff8a5c', 'Corail'], ['#b48cff', 'Violet']];
+const norm = (s) => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
 const UI = { tab: 'bureau', modal: null, toast: null, mk: { country: 'BE', pos: '', sort: 'ovr', fav: false }, lg: 'BE1', mode: 'transfer', clg: 'BE1', jv: 'list' };
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -50,6 +54,8 @@ function viewStart() {
     <p>Fondez votre agence de joueurs en Belgique. Dénichez de jeunes talents dans les petits clubs,
     faites-les grandir et placez-les dans les 5 grands championnats européens.</p>
     <label>Nom de l'agence<input id="in-name" maxlength="24" value="JP Sport Management"></label>
+    <div class="two"><label>Logo<select id="in-logo">${LOGOS.map((l) => `<option>${l}</option>`).join('')}</select></label>
+    <label>Couleur<select id="in-color">${COLORS.map(([c, n]) => `<option value="${c}">${n}</option>`).join('')}</select></label></div>
     <label>Difficulté<select id="in-diff">${DIFFS.map((d, i) => `<option value="${i}" ${i === 1 ? 'selected' : ''}>${d.name} — ${fmt(d.cash)} au départ</option>`).join('')}</select></label>
     <label>Ville<select id="in-city">${['Liège', 'Bruxelles', 'Charleroi', 'Namur', 'Anvers', 'Gand', 'Marche-en-Famenne', 'Mons'].map((c) => `<option>${c}</option>`).join('')}</select></label>
     <button class="btn big" data-act="start">Créer mon agence</button>
@@ -62,7 +68,7 @@ function header() {
   let pips = '';
   for (let i = 0; i < o.actions; i++) pips += `<i class="${i < S.actions ? 'on' : ''}"></i>`;
   return `<header>
-    <div class="h1"><b>${esc(S.agency.name)}</b><span class="win ${win ? 'open' : ''}">${win ? 'Mercato ouvert' : 'Mercato fermé'}</span></div>
+    <div class="h1"><b>${esc(S.agency.logo || '')} ${esc(S.agency.name)}</b><span class="win ${win ? 'open' : ''}">${win ? 'Mercato ouvert' : 'Mercato fermé'}</span></div>
     <div class="h2">
       <div><small>Caisse</small><b class="${S.cash < 0 ? 'neg' : ''}">${fmt(S.cash)}</b></div>
       <div><small>Réputation</small><b>${Math.floor(S.rep)}/100</b></div>
@@ -164,7 +170,9 @@ function playerRow(p, mine) {
 
 function viewMarche() {
   const f = UI.mk, locked = f.country !== 'BE' && S.office < INTL_OFFICE;
-  let list = S.players.filter((p) => !p.mine && p.nat === f.country && (!f.pos || p.pos === f.pos) && (!f.fav || p.fav));
+  const q = norm((f.q || '').trim());
+  let list = q ? S.players.filter((p) => !p.mine && norm(p.n).includes(q))
+    : S.players.filter((p) => !p.mine && p.nat === f.country && (!f.pos || p.pos === f.pos) && (!f.fav || p.fav));
   const sorters = {
     ovr: (a, b) => b.ovr - a.ovr, age: (a, b) => a.age - b.age || b.ovr - a.ovr,
     pot: (a, b) => (b.sc ? b.potHi : 0) - (a.sc ? a.potHi : 0) || b.ovr - a.ovr,
@@ -172,7 +180,8 @@ function viewMarche() {
   };
   list.sort(sorters[f.sort]);
   const sel = (k, opts) => `<select data-filter="${k}">${opts.map(([v, l]) => `<option value="${v}" ${f[k] === v ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
-  return `<div class="filters">
+  return `<input id="mkq" class="search" type="search" placeholder="🔍 Rechercher un joueur par son nom (tous pays)" value="${esc(f.q || '')}" autocomplete="off">
+    <div class="filters">
       ${sel('country', Object.keys(COUNTRY_LABEL).map((c) => [c, COUNTRY_LABEL[c]]))}
       ${sel('pos', [['', 'Tous postes'], ...Object.keys(POSITIONS).map((k) => [k, POSITIONS[k]])])}
       ${sel('sort', [['ovr', 'Tri : niveau'], ['pot', 'Tri : potentiel'], ['age', 'Tri : âge'], ['val', 'Tri : moins chers']])}
@@ -244,6 +253,18 @@ function viewCompet() {
     : '<p class="empty">Aucun but pour l\'instant.</p>'}</div>`;
 }
 
+function agencyCharts() {
+  const h = S.hist.slice().reverse();
+  if (h.length < 2) return '';
+  const W = 300, H = 80, n = h.length, x = (i) => (i / (n - 1)) * (W - 12) + 6;
+  const rep = h.map((s, i) => `${x(i).toFixed(1)},${(H - 6 - s.rep1 / 100 * (H - 12)).toFixed(1)}`).join(' ');
+  const res = h.map((s) => s.inc - s.costs), mx = Math.max(1, ...res.map(Math.abs)), bw = Math.max(3, (W - 12) / n - 4);
+  const bars = res.map((v, i) => { const hh = Math.abs(v) / mx * (H / 2 - 4); return `<rect x="${(x(i) - bw / 2).toFixed(1)}" y="${(v >= 0 ? H / 2 - hh : H / 2).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1, hh).toFixed(1)}" class="${v >= 0 ? 'p' : 'n'}"/>`; }).join('');
+  return `<h2>📈 Évolution de l'agence</h2><div class="card chart"><small>Réputation (0 à 100)</small><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><polyline points="${rep}"/></svg>
+    <small>Résultat net par saison (meilleure : ${fmt(Math.max(...res))})</small><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><line x1="0" x2="${W}" y1="${H / 2}" y2="${H / 2}"/>${bars}</svg>
+    <div class="row"><small>${h[0].label}</small><small>${h[n - 1].label}</small></div></div>`;
+}
+
 function viewAgence() {
   const o = office(), next = OFFICES[S.office + 1];
   return `<h2>Bureau</h2>
@@ -256,9 +277,19 @@ function viewAgence() {
     ${Object.keys(STAFF).map((k) => { const s = STAFF[k], lv = S.stl[k]; return `<div class="card up"><div><b>${s.name} <span class="stars">${'★'.repeat(lv)}${'☆'.repeat(3 - lv)}</span></b><small>${s.desc}</small><small>${lv ? `Niveau ${lv} · ${fmt(s.weekly * lv)}/sem.` : `${fmt(s.weekly)}/sem. par niveau`}</small></div>
       <div class="col">${lv < 3 ? `<button class="btn" data-act="staff" data-id="${k}" ${S.cash < staffCost(k) ? 'disabled' : ''}>${lv ? `Niv. ${lv + 1}` : 'Engager'}<small>${fmt(staffCost(k))}</small></button>` : '<span class="tag">Max</span>'}
       ${lv ? `<button class="btn ghost sm" data-act="fire" data-id="${k}">Licencier</button>` : ''}</div></div>`; }).join('')}
+    <h2>🏫 Académie de jeunes</h2>
+    <div class="card"><div class="row"><b>${ACADEMY[S.acad].name}</b><span class="tag">Niveau ${S.acad}/3</span></div>
+      <small>${S.acad ? `${ACADEMY[S.acad].kids} jeune(s) de 16 ans formé(s) rejoignent l'agence chaque été · ${fmt(ACADEMY[S.acad].weekly)}/sem.` : 'Formez vos propres pépites : chaque été, des jeunes de 16 ans sortent de votre académie et signent directement chez vous.'}</small>
+      ${ACADEMY[S.acad + 1] ? `<div class="up"><div><b>→ ${ACADEMY[S.acad + 1].name}</b><small>${ACADEMY[S.acad + 1].kids} jeune(s)/saison · ${fmt(ACADEMY[S.acad + 1].weekly)}/sem.${S.office < 1 ? ' · bureau niveau 2 requis' : ''}</small></div>
+      <button class="btn" data-act="acad" ${S.cash < ACADEMY[S.acad + 1].cost || S.office < 1 ? 'disabled' : ''}>${fmt(ACADEMY[S.acad + 1].cost)}</button></div>` : ''}</div>
+    ${Object.keys(S.rel).some((id) => S.rel[id] >= 10) ? `<h2>🤝 Clubs partenaires</h2><div class="card hof">${Object.keys(S.rel).filter((id) => S.rel[id] >= 10).sort((a, b) => S.rel[b] - S.rel[a]).slice(0, 6)
+      .map((id) => `<div><span>${LEAGUES[CLUBS[id].league].flag}</span><p><b>${esc(CLUBS[id].name)}</b><small>${relLabel(S.rel[id])} — plus de chances que vos propositions aboutissent</small></p><em>❤️ ${S.rel[id]}</em></div>`).join('')}</div>` : ''}
     <h2>Classement des agences</h2>
     <div class="card rank">${[{ n: S.agency.name, rep: S.rep, me: true }, ...S.rivals].sort((a, b) => b.rep - a.rep)
     .map((a, i) => `<div class="${a.me ? 'me' : ''}"><span>${i + 1}</span><p>${esc(a.n)}</p><b>${Math.floor(a.rep)}</b></div>`).join('')}</div>
+    <h2>🏅 Succès (${Object.keys(S.ach).length}/${ACH.length})</h2>
+    <div class="card ach">${ACH.map((a) => `<button class="${S.ach[a.id] ? 'on' : ''}" data-act="achInfo" data-id="${a.id}"><span>${a.i}</span><small>${a.l}</small></button>`).join('')}</div>
+    ${agencyCharts()}
     <h2>Objectifs</h2>
     <div class="card goals">${GOALS.map((g) => `<div class="${S.goals[g.id] ? 'done' : ''}"><span>${S.goals[g.id] ? '✅' : '⬜'}</span><p>${g.label}<small>Prime : ${fmt(g.reward)}</small></p></div>`).join('')}</div>
     <h2>Statistiques</h2>
@@ -275,6 +306,9 @@ function viewAgence() {
       ${S.hist.map((h) => `<tr><td>${h.label}</td><td>${h.rank}ᵉ</td><td>${Math.floor(h.rep1)}</td><td>${h.tr}</td><td class="${h.inc - h.costs < 0 ? 'neg' : 'pos'}">${fmt(h.inc - h.costs)}</td></tr>`).join('')}</table></div>` : ''}
     ${S.hof.length ? `<h2>🏛️ Panthéon de l'agence</h2><div class="card hof">${S.hof.map((h) => `<div><span class="ovr sm ${ovrClass(h.ovr)}">${h.ovr}</span><p><b>${esc(h.n)}</b>
       <small>${h.pos} · ${esc(h.club)} · ${h.why} (${h.s})</small>${h.top.length ? `<small>🏅 ${h.top.map(esc).join(' · ')}</small>` : ''}</p><em>${h.aw}🏅 ${h.tr}🤝</em></div>`).join('')}</div>` : ''}
+    <h2>🎨 Identité de l'agence</h2>
+    <div class="card"><small>Logo</small><div class="chips">${LOGOS.map((l) => `<button class="chip ${S.agency.logo === l ? 'on' : ''}" data-act="logo" data-id="${l}">${l}</button>`).join('')}</div>
+      <small>Couleur</small><div class="chips">${COLORS.map(([c, n]) => `<button class="chip swatch ${S.agency.color === c ? 'on' : ''}" data-act="color" data-id="${c}"><i style="background:${c}"></i>${n}</button>`).join('')}</div></div>
     <h2>Sauvegarde</h2>
     <div class="card"><small>Votre partie est enregistrée sur cet appareil. Exportez-la pour la garder en sécurité ou la continuer ailleurs (ex. passer du navigateur à l'appli installée).</small>
       <button class="btn alt" data-act="export">📤 Exporter la sauvegarde</button>
@@ -380,7 +414,7 @@ function modalPropose(p) {
       sub = `Temps de jeu estimé : ${pct(clamp(0.5 + (p.ovr - (c.rep - 12)) / 16, 0.05, 0.97))}`;
     } else {
       if (!why && !playerAccepts(p, c)) why = 'Trop petit pour lui';
-      sub = (dreamMatch(p.dream, c) ? '🌟 Son rêve · ' : '') + (c.rep > cur.rep ? 'Club plus prestigieux' : 'Niveau équivalent');
+      sub = (dreamMatch(p.dream, c) ? '🌟 Son rêve · ' : '') + (c.rep > cur.rep ? 'Club plus prestigieux' : 'Niveau équivalent') + (rel(c.id) >= 10 ? ` · 🤝 ${relLabel(rel(c.id))}` : '');
     }
     return `<div class="prow"><span class="ovr ${ovrClass(c.rep - 10)}">${c.rep}</span>
         <div class="pmain"><b>${esc(c.name)}</b><small>${why || sub}</small></div>
@@ -405,15 +439,21 @@ function modalMatch(p, m) {
   for (let i = 0; i < x.ga; i++) ev.push({ side: 'opp', sc: who(x.opp), as: rand() < 0.6 ? who(x.opp) : null });
   ev.forEach((e) => { e.min = 1 + Math.floor(rand() * 90); if (e.as === e.sc) e.as = null; });
   ev.sort((a, b) => a.min - b.min);
+  const minute = m.live ? Math.min(90, Math.floor((Date.now() - m.live) / 110)) : 90, done = minute >= 90;
+  const shown = ev.filter((e) => e.min <= minute);
+  if (m.live && shown.length > (m.seen || 0)) { m.seen = shown.length; play(shown[shown.length - 1].side === 'me' ? CHIME : [[220, 0.25]]); }
   const left = x.home ? my : x.opp, right = x.home ? x.opp : my;
-  const gl = x.home ? x.gf : x.ga, gr = x.home ? x.ga : x.gf;
+  const lSide = x.home ? 'me' : 'opp';
+  const gl = shown.filter((e) => e.side === lSide).length, gr = shown.length - gl;
   return `<small>${x.cup ? EU[x.cup].icon + ' ' + EU[x.cup].name : LEAGUES[CLUBS[my].league].name} · semaine ${x.w}</small>
     <div class="score"><div>${esc(CLUBS[left].name)}</div><b>${gl} - ${gr}</b><div>${esc(CLUBS[right].name)}</div></div>
-    <div class="events">${ev.length ? ev.map((e) => `<div class="${(e.side === 'me') === x.home ? 'l' : 'r'} ${e.sc === p.n || e.as === p.n ? 'hl' : ''}">
-      <span>${e.min}'</span><p>⚽ <b>${esc(e.sc)}</b>${e.as ? `<small>passe : ${esc(e.as)}</small>` : ''}</p></div>`).join('') : '<p class="empty">Aucun but.</p>'}</div>
+    ${m.live ? `<div class="live"><span>${done ? 'Terminé' : `🔴 ${minute}'`}</span><div class="bar"><i style="width:${minute / 90 * 100}%"></i></div></div>` : ''}
+    <div class="events">${shown.length ? shown.map((e) => `<div class="${(e.side === 'me') === x.home ? 'l' : 'r'} ${e.sc === p.n || e.as === p.n ? 'hl' : ''}">
+      <span>${e.min}'</span><p>⚽ <b>${esc(e.sc)}</b>${e.as ? `<small>passe : ${esc(e.as)}</small>` : ''}</p></div>`).join('') : (done ? '<p class="empty">Aucun but.</p>' : '<p class="empty">Le match est en cours…</p>')}</div>
+    ${!done ? '<button class="btn alt" data-act="liveSkip">⏩ Voir le score final</button>' : `${!m.live ? '<button class="btn" data-act="live">📺 Revivre le match en direct</button>' : ''}
     <div class="card"><div class="row"><b>${esc(p.n)}</b>${x.out ? `<span class="tag">${x.out}</span>` : `<b class="${noteClass(x.n)}">Note ${x.n.toFixed(1)}</b>`}</div>
       ${x.out ? '' : `<small>${x.g ? x.g + ' but(s)' : 'Pas de but'} · ${x.a ? x.a + ' passe(s) décisive(s)' : 'pas de passe décisive'}</small>`}</div>
-    <button class="btn alt" data-act="open" data-id="${p.id}">Voir la fiche de ${esc(p.n)}</button>`;
+    <button class="btn alt" data-act="open" data-id="${p.id}">Voir la fiche de ${esc(p.n)}</button>`}`;
 }
 function genericName(club, rand) {
   const n = NAMES[LEAGUES[CLUB_DEFAULT[club].league].country];
@@ -471,6 +511,16 @@ function viewCer() {
   return `${top}${dots}<div class="cer-body" key="${m.i}-${m.open}">${body}</div>`;
 }
 
+function startLive() {
+  clearInterval(UI.lt);
+  UI.lt = setInterval(() => {
+    const m = UI.modal;
+    if (!m || m.type !== 'match' || !m.live) { clearInterval(UI.lt); return; }
+    renderModal();
+    if (Date.now() - m.live >= 90 * 110) clearInterval(UI.lt);
+  }, 220);
+}
+
 function modalHelp() {
   return `<h3>Comment jouer</h3>
     <div class="help">
@@ -483,6 +533,7 @@ function modalHelp() {
     <p><b>Astuces d'agent.</b> Mettez un joueur aux enchères pour faire monter les prix, partez en voyage de détection pour dénicher des pépites, et réalisez le rêve de carrière de vos clients. Un joueur en fin de contrat devient libre : placez-le pour une grosse prime.</p>
     <p><b>Concurrence.</b> Les agences rivales repèrent aussi les pépites (👀 convoité) : signez-les avant elles. Négociez des contrats de sponsoring pour vos clients connus et visez le Ballon d'Or.</p>
     <p><b>Chaque saison.</b> Remplissez les missions 🎯, choisissez le plan d'entraînement de vos clients et assistez à la cérémonie des trophées (Golden Boy, Soulier d'or, Ballon d'Or…). Une saison sur deux : Coupe du monde ou Euro.</p>
+    <p><b>Réseau.</b> Chaque transfert renforce votre relation avec les clubs (🤝) : vos propositions y aboutissent plus souvent. Construisez une académie pour former vos propres pépites et débloquez les succès 🏅.</p>
     <p><b>5. Grandissez.</b> Agrandissez le bureau (plus de clients et d'actions), engagez du personnel et grimpez au classement des agences jusqu'aux 5 grands championnats.</p>
     <p><b>Attention</b> au moral de vos joueurs (un joueur frustré peut partir) et à votre caisse : faillite si les dettes dépassent ${fmt(DIFFS[S ? S.diff : 1].bank)}.</p>
     </div><button class="btn" data-act="close">C'est parti</button>`;
@@ -502,6 +553,7 @@ function renderModal() {
 
 function render() {
   const app = $('#app');
+  document.documentElement.style.setProperty('--acc', (S && S.agency.color) || '#35d07f');
   if (!S) { app.innerHTML = viewStart(); $('#modal').innerHTML = ''; renderToast(); return; }
   const views = { bureau: viewBureau, marche: viewMarche, joueurs: viewJoueurs, compet: viewCompet, agence: viewAgence };
   const tabs = [['bureau', '🏠', 'Bureau'], ['marche', '🔎', 'Marché'], ['joueurs', '👥', 'Joueurs'], ['compet', '🏆', 'Compét.'], ['agence', '🏢', 'Agence']];
@@ -515,7 +567,7 @@ function render() {
 
 /* ---------- Événements ---------- */
 const ACTIONS = {
-  start() { newGame($('#in-name').value.trim(), $('#in-city').value, +$('#in-diff').value); UI.modal = { type: 'help' }; },
+  start() { newGame($('#in-name').value.trim(), $('#in-city').value, +$('#in-diff').value); S.agency.logo = $('#in-logo').value; S.agency.color = $('#in-color').value; save(); UI.modal = { type: 'help' }; },
   week() { nextWeek(); autoCer(); },
   fast() {
     for (let i = 0; i < 4; i++) {
@@ -567,6 +619,12 @@ const ACTIONS = {
   cer() { UI.modal = { type: 'cer', i: 0, open: false }; },
   cerNext() { cerNext(); },
   cerClose() { UI.modal = null; },
+  acad() { toast(buyAcademy()); },
+  achInfo(d) { const a = ACH.find((x) => x.id === d.id); toast({ ok: !!S.ach[a.id], msg: `${a.i} ${a.l} : ${a.d}${S.ach[a.id] ? ` (débloqué en ${S.ach[a.id]})` : ' — pas encore débloqué'}` }); },
+  logo(d) { S.agency.logo = d.id; save(); },
+  color(d) { S.agency.color = d.id; save(); },
+  live() { UI.modal.live = Date.now(); UI.modal.seen = 0; UI.modal.keep = true; startLive(); },
+  liveSkip() { UI.modal.live = 1; },
   sponsor(d) { toast(actSponsor(+d.id)); },
   renew(d) { toast(actRenew(+d.id)); },
   jv(d) { UI.jv = d.id; },
@@ -586,6 +644,11 @@ document.addEventListener('click', (e) => {
   if (!el || el.disabled) return;
   const fn = ACTIONS[el.dataset.act];
   if (fn) { fn(el.dataset); render(); }
+});
+document.addEventListener('input', (e) => {
+  if (e.target.id !== 'mkq') return;
+  UI.mk.q = e.target.value; render();
+  const el = $('#mkq'); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
 });
 document.addEventListener('change', (e) => {
   const k = e.target.dataset && e.target.dataset.filter;

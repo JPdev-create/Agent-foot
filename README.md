@@ -40,6 +40,9 @@ La partie est sauvegardée automatiquement dans le navigateur.
 - **Coupe du monde / Euro** une saison sur deux, **missions de saison**, **plans d'entraînement**,
   **abonnés** (popularité), **personnel à 3 niveaux**, **négociation à paliers**, **panthéon** et sons.
 
+- **Relations avec les clubs**, **académie de jeunes**, **23 succès** à débloquer, **graphiques** de l'agence,
+  **recherche** de joueurs, **matchs à revivre en direct**, nouveaux événements et **logo/couleur** de l'agence.
+
 ## Installer l'application
 
 Le jeu est une application web installable (PWA). Ouvrez le site sur le téléphone puis :
@@ -54,5 +57,6 @@ L'appli récupère la dernière version à chaque ouverture et reste jouable hor
 - `js/data.js` — championnats, clubs, noms, bureaux, objectifs
 - `js/game.js` — règles et simulation
 - `js/season.js` — cérémonie, tournois internationaux, missions, panthéon
+- `js/extra.js` — relations avec les clubs, académie, succès
 - `js/ui.js` — interface
 - `sw.js`, `manifest.webmanifest`, `icons/` — application installable

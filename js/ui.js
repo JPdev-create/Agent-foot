@@ -1022,7 +1022,8 @@ function render() {
 
 /* ============ Actions ============ */
 const keep = () => { if (UI.modal) UI.modal.keep = true; };
-const snap = () => ({ cash: S.cash, rep: S.rep, w: S.week, s: S.season, inj: clients().filter((p) => p.inj > 0).length, offers: S.offers.map((o) => o.id) });
+const snap = () => ({ cash: S.cash, rep: S.rep, w: S.week, s: S.season, inj: clients().filter((p) => p.inj > 0).length, offers: S.offers.map((o) => o.id), rc: S.recap });
+const newRecap = (a) => !!S.recap && S.recap !== a.rc;
 const newOffer = (a) => S.offers.some((o) => !a.offers.includes(o.id));
 function weekSum(a) {
   UI.sum = { dc: S.cash - a.cash, dr: S.rep - a.rep, n: S.season === a.s ? S.week - a.w : 1, g: S.wk.reduce((s, x) => s + (x.g || 0), 0),
@@ -1055,7 +1056,7 @@ const ACTIONS = {
     const a = snap();
     for (let i = 0; i < 4; i++) {
       nextWeek();
-      if (S.over || S.event || newOffer(a) || S.recap || S.week === 20) break;
+      if (S.over || S.event || newOffer(a) || newRecap(a) || S.week === 20) break;
     }
     weekSum(a); autoCer();
   },
@@ -1063,7 +1064,7 @@ const ACTIONS = {
     const a = snap();
     for (let i = 0; i < 40 && !inWindow(S.week); i++) {
       nextWeek();
-      if (S.over || S.event || newOffer(a) || S.recap) break;
+      if (S.over || S.event || newOffer(a) || newRecap(a)) break;
     }
     weekSum(a); autoCer();
   },

@@ -937,6 +937,7 @@ function nextWeek() {
     });
   }
   if (S.week === 20) clients().forEach(pushVal);
+  if (S.recap && S.week > 6) S.recap = null;
   if (S.week === 6 || S.week === 23) news('⏰', 'Jour de clôture du mercato : les clubs s\'activent, dernière chance de conclure !');
   if (S.week === 15) youthTournament();
 

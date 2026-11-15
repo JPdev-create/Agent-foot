@@ -45,29 +45,28 @@ function toHof(p, why) {
 const NATIONS = {
   FR: ['France', '🇫🇷', 90], ES: ['Espagne', '🇪🇸', 89], EN: ['Angleterre', '🏴󠁧󠁢󠁥󠁮󠁧󠁿', 88], DE: ['Allemagne', '🇩🇪', 87],
   BE: ['Belgique', '🇧🇪', 84], IT: ['Italie', '🇮🇹', 85], PT: ['Portugal', '🇵🇹', 86], NL: ['Pays-Bas', '🇳🇱', 85],
-  BR: ['Brésil', '🇧🇷', 90], AR: ['Argentine', '🇦🇷', 90],
+  BR: ['Brésil', '🇧🇷', 90], AR: ['Argentine', '🇦🇷', 90], HR: ['Croatie', '🇭🇷', 84], MA: ['Maroc', '🇲🇦', 82],
+  UY: ['Uruguay', '🇺🇾', 82], CO: ['Colombie', '🇨🇴', 81], JP: ['Japon', '🇯🇵', 79], US: ['États-Unis', '🇺🇸', 79],
+  CH: ['Suisse', '🇨🇭', 81], DK: ['Danemark', '🇩🇰', 81], AT: ['Autriche', '🇦🇹', 80], TR: ['Turquie', '🇹🇷', 79],
+  PL: ['Pologne', '🇵🇱', 78], RS: ['Serbie', '🇷🇸', 78], SC: ['Écosse', '🏴󠁧󠁢󠁳󠁣󠁴󠁿', 76],
 };
+const TOUR_TEAMS = {
+  'Coupe du monde': ['FR', 'ES', 'EN', 'DE', 'BE', 'IT', 'PT', 'NL', 'BR', 'AR', 'HR', 'MA', 'UY', 'CO', 'JP', 'US'],
+  Euro: ['FR', 'ES', 'EN', 'DE', 'BE', 'IT', 'PT', 'NL', 'HR', 'CH', 'DK', 'AT', 'TR', 'PL', 'RS', 'SC'],
+};
+const TOUR_ROUNDS = ['8es de finale', 'Quarts de finale', 'Demi-finales', 'Finale'];
 const tourName = (season) => (season % 4 === 2 ? 'Coupe du monde' : season % 4 === 0 ? 'Euro' : null);
 
 function playTournament() {
   const name = tourName(S.season);
   if (!name) return null;
-  const teams = (name === 'Euro' ? ['FR', 'ES', 'EN', 'DE', 'BE', 'IT', 'PT', 'NL'] : ['FR', 'ES', 'EN', 'DE', 'BE', 'IT', 'BR', 'AR'])
-    .sort(() => Math.random() - 0.5);
-  // Les internationaux de l'agence renforcent un peu leur sélection
-  const power = {};
-  teams.forEach((t) => {
-    const stars = clients().filter((p) => p.intl && p.nat === t).length;
-    power[t] = NATIONS[t][2] + stars * 0.8 + rnd(-2, 2);
-  });
+  const teams = TOUR_TEAMS[name].slice().sort(() => Math.random() - 0.5), year0 = S.season + 1;
   let alive = teams.slice();
   const rounds = [];
   while (alive.length > 1) {
     const next = [], ties = [];
     for (let i = 0; i < alive.length; i += 2) {
-      const a = alive[i], b = alive[i + 1], d = power[a] - power[b];
-      const ga = poisson(clamp(1.2 * Math.exp(d / 18), 0.3, 3)), gb = poisson(clamp(1.2 * Math.exp(-d / 18), 0.3, 3));
-      const pen = ga === gb ? (Math.random() < 0.5 + d / 80 ? 1 : 2) : 0;
+      const a = alive[i], b = alive[i + 1], [ga, gb, pen] = intlMatch(a, b, `${name} ${year0}`, true);
       const w = ga > gb || pen === 1 ? a : b;
       ties.push([a, b, ga, gb, pen]); next.push(w);
     }
@@ -87,6 +86,8 @@ function playTournament() {
       p.aw.unshift(`Participation à la ${label}`);
     }
   });
+  if (!S.intl) S.intl = { nl: null, last: null };
+  S.intl.last = { label, champ, rounds, kind: name, season: S.season };
   return { label, champ, rounds, heroes };
 }
 
@@ -108,6 +109,7 @@ function buildCeremony(champs, label, cl) {
     const id = Object.keys(champs).find((c) => champs[c] === lg);
     return { i: LEAGUES[lg].flag, l: LEAGUES[lg].name, v: CLUBS[id].name, mine: cl.some((p) => p.club === id) };
   });
+  if (S.intl && S.intl.nl && S.intl.nl.season === S.season && S.intl.nl.champ) rows.push({ i: NATIONS[S.intl.nl.champ][1], l: 'Ligue des nations', v: NATIONS[S.intl.nl.champ][0], mine: cl.some((p) => p.intl && p.nat === S.intl.nl.champ) });
   ['C1', 'C3', 'BC'].forEach((k) => { if (S.eu[k].champ) rows.push({ i: EU[k].icon, l: EU[k].name, v: CLUBS[S.eu[k].champ].name, mine: cl.some((p) => p.club === S.eu[k].champ) }); });
   slides.push({ k: 'list', title: 'Le palmarès de la saison', icon: '🏟️', rows });
 
@@ -194,7 +196,7 @@ function buildCeremony(champs, label, cl) {
     slides.push({ k: 'list', title: tour.label, icon: '🌍', rows: [
       { i: NATIONS[tour.champ][1], l: 'Vainqueur', v: NATIONS[tour.champ][0], mine: tour.heroes.length > 0 },
       { i: '🏟️', l: 'Finale', v: `${NATIONS[f[0]][0]} ${f[2]}-${f[3]} ${NATIONS[f[1]][0]}${f[4] ? ' (t.a.b.)' : ''}` },
-      ...tour.rounds[1].map((t) => ({ i: '⚔️', l: 'Demi-finale', v: `${NATIONS[t[0]][0]} ${t[2]}-${t[3]} ${NATIONS[t[1]][0]}${t[4] ? ' (t.a.b.)' : ''}` })),
+      ...tour.rounds[tour.rounds.length - 2].map((t) => ({ i: '⚔️', l: 'Demi-finale', v: `${NATIONS[t[0]][0]} ${t[2]}-${t[3]} ${NATIONS[t[1]][0]}${t[4] ? ' (t.a.b.)' : ''}` })),
       ...tour.heroes.map((n) => ({ i: '🥇', l: 'Champion du monde/d\'Europe', v: n, mine: true })),
     ] });
     if (tour.heroes.length) mine.push(`🌍 ${tour.label} : ${tour.heroes.join(', ')}`);

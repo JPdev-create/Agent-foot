@@ -37,7 +37,7 @@ const UI = {
   tab: 'home', modal: null, toast: null, newsAll: false,
   mk: { country: 'BE', pos: '', sort: 'ovr', fav: false, u19: false, q: '' }, com: 1,
   cs: 'ovr', jv: 'list', cmp: [], lg: 'BE1', mode: 'transfer',
-  cmode: 'lg', clg: 'BE1', cview: 'table', eu: 'C1', av: 'dev',
+  cmode: 'lg', ivw: 'nl', clg: 'BE1', cview: 'table', eu: 'C1', av: 'dev',
   nw: { name: 'JP Sport Management', logo: '⚽', color: '#35d07f', diff: 1, city: 'Liège' },
 };
 
@@ -195,6 +195,8 @@ function agendaBlock() {
   const r = EU_WEEKS.findIndex((x) => x > w);
   if (r >= 0) out.push(['🏆', `${EU_ROUNDS[r]} de coupe`, EU_WEEKS[r] - w]);
   if (w < 15) out.push(['🏟️', 'Tournoi des espoirs', 15 - w]);
+  const nlw = NL_WEEKS.concat(NL_FF, FRIENDLY_WEEKS).sort((a, b) => a - b).find((x) => x > w);
+  if (nlw) out.push(['🌍', NL_FF.includes(nlw) ? 'Final Four de la Ligue des nations' : FRIENDLY_WEEKS.includes(nlw) ? 'Trêve internationale (matchs amicaux)' : 'Trêve internationale (Ligue des nations)', nlw - w]);
   const t = tourName(S.season);
   out.push(['🎬', `Cérémonie des trophées${t ? ` + ${t} ${S.season + 1}` : ''}`, SEASON_WEEKS + 1 - w]);
   return sec('📆 À venir', `<div class="list">${out.map(([i, x, n]) => `<div class="row wrap"><span class="ico">${i}</span><div class="main"><b style="font-weight:550">${x}</b></div><div class="side">${tag(`dans ${n} sem.`)}</div></div>`).join('')}</div>`);
@@ -389,10 +391,44 @@ function viewBdo() {
     <p class="hint">Buts, passes, notes et titres dans les 5 grands championnats. Vos clients doivent avoir joué au moins 15 matchs.</p>`;
 }
 
+/* ---------- Sélections nationales ---------- */
+function natFx(r, ko) {
+  const [a, b, ga, gb, pen] = r, me = (t) => clients().some((p) => p.intl && p.nat === t);
+  return `<div class="fx ${me(a) || me(b) ? 'me' : ''}"><span class="h ${ga > gb || pen === 1 ? 'w' : ''}">${natName(a)}</span><span class="sc">${ga} - ${gb}${pen ? '<small>t.a.b.</small>' : ''}</span><span class="${gb > ga || pen === 2 ? 'w' : ''}">${natName(b)}</span></div>`;
+}
+function viewIntl() {
+  const nl = S.intl && S.intl.nl, last = S.intl && S.intl.last;
+  const next = tourName(S.season) ? `${tourName(S.season)} ${S.season + 1}` : `${tourName(S.season + 1)} ${S.season + 2}`;
+  let h = pills('ivw', UI.ivw, [['nl', '🏅 Ligue des nations'], ['tour', `🌍 ${last ? last.label : 'Coupe du monde / Euro'}`], ['mine', '👤 Mes internationaux']]);
+  if (UI.ivw === 'nl') {
+    if (!nl) return h + '<div class="card"><p class="empty">La Ligue des nations démarre à la prochaine trêve internationale.</p></div>';
+    const meNat = (t) => clients().filter((p) => p.intl && p.nat === t).length;
+    if (nl.champ) h += `<div class="card goldc" style="text-align:center"><div style="font-size:40px">${NATIONS[nl.champ][1]}</div><b style="font-size:19px">${NATIONS[nl.champ][0]}</b><small>Vainqueur de la Ligue des nations ${seasonTxt(nl.season)}</small></div>`;
+    if (nl.ff) h += sec('🏆 Final Four', `<div class="card fixtures">${nl.ff.semis.map((r) => natFx(r, true)).join('')}${nl.ff.final ? `<div class="news-day" style="margin:6px -14px">Finale</div>${natFx(nl.ff.final, true)}` : ''}</div>`);
+    h += nl.groups.map((g, gi) => sec(`Groupe ${gi ? 'B' : 'A'}`, `<div class="card flush"><table class="tbl"><tr><th>#</th><th class="l">Nation</th><th>J</th><th>G</th><th>N</th><th>P</th><th>+/-</th><th>Pts</th></tr>
+      ${nlStand(g).map((t, i) => { const x = nl.tab[t]; return `<tr class="${meNat(t) ? 'me' : ''} ${i < 2 ? 'z-c1' : ''}"><td class="pos-n">${i + 1}</td><td class="l">${natName(t)}${meNat(t) ? ` 👤${meNat(t) > 1 ? meNat(t) : ''}` : ''}</td><td>${x[0]}</td><td>${x[1]}</td><td>${x[2]}</td><td>${x[3]}</td><td>${x[4] - x[5] > 0 ? '+' : ''}${x[4] - x[5]}</td><td class="pts">${x[1] * 3 + x[2]}</td></tr>`; }).join('')}</table></div>`)).join('');
+    if (nl.days.length) h += sec('Résultats', nl.days.map((d, i) => `<div class="card fixtures"><div class="news-day" style="margin:-4px -14px 4px">Journée ${i + 1} · semaine ${NL_WEEKS[i]}</div>${d.map((r) => natFx(r)).join('')}</div>`).reverse().join(''));
+    return h + `<p class="hint">Journées aux semaines ${NL_WEEKS.join(', ')} · les 2 premiers de chaque groupe jouent le Final Four (semaines ${NL_FF.join(' et ')}).</p>`;
+  }
+  if (UI.ivw === 'tour') {
+    h += `<div class="note">📅 Prochain grand tournoi : <b>${next}</b> (16 nations, à la fin de la saison ${tourName(S.season) ? seasonTxt(S.season) : seasonTxt(S.season + 1)}).</div>`;
+    if (!last) return h + '<div class="card"><p class="empty">Aucun grand tournoi joué pour l\'instant.</p></div>';
+    h += `<div class="card goldc" style="text-align:center"><div style="font-size:40px">${NATIONS[last.champ][1]}</div><b style="font-size:19px">${NATIONS[last.champ][0]}</b><small>Vainqueur · ${esc(last.label)}</small></div>`;
+    return h + last.rounds.map((ties, i) => sec(TOUR_ROUNDS[i + 4 - last.rounds.length], `<div class="card fixtures">${ties.map((r) => natFx(r, true)).join('')}</div>`)).reverse().join('');
+  }
+  const intl = clients().filter((p) => p.intl).sort((a, b) => (b.caps || 0) - (a.caps || 0));
+  const near = clients().filter((p) => !p.intl && NATIONS[p.nat] && p.ovr >= intlThreshold(p.nat) - 5).sort((a, b) => b.ovr - a.ovr);
+  h += sec('🌍 Vos internationaux', intl.length ? `<div class="list">${intl.map((p) => `<button class="row" data-act="open" data-id="${p.id}">${rt(ovrOf(p), 'sm')}<div class="main"><b>${esc(p.n)}</b><small>${natName(p.nat)} · ${POS_SHORT[p.pos]}</small></div>
+    <div class="side"><b>${p.caps || 0} sél.</b><small>${p.ig || 0} but(s)</small></div><span class="chev">›</span></button>`).join('')}</div>` : '<div class="card"><p class="empty">Aucun client international pour l\'instant.</p></div>');
+  if (near.length) h += sec('📈 Bientôt sélectionnables', `<div class="list">${near.map((p) => `<button class="row" data-act="open" data-id="${p.id}">${rt(ovrOf(p), 'sm')}<div class="main"><b>${esc(p.n)}</b><small>${natName(p.nat)} · niveau requis : ${intlThreshold(p.nat)}</small></div><div class="side" style="width:80px">${bar(ovrOf(p) / intlThreshold(p.nat) * 100, 'gold')}</div><span class="chev">›</span></button>`).join('')}</div>`);
+  return h + '<p class="hint">Les sélections sont décidées à la fin de chaque saison. Le niveau requis dépend du pays : plus facile en Belgique qu\'en France. Un international vaut 12 % de plus.</p>';
+}
+
 function viewCompet() {
   const mine = {};
   clients().forEach((p) => { mine[p.club] = (mine[p.club] || 0) + 1; });
-  const top = seg('cmode', UI.cmode, [['lg', '🏟️ Championnats'], ['eu', '🏆 Coupes'], ['bdo', '⭐ Ballon d\'Or']]);
+  const top = seg('cmode', UI.cmode, [['lg', '🏟️ Clubs'], ['eu', '🏆 Coupes'], ['intl', '🌍 Nations'], ['bdo', '⭐ Ballon d\'Or']]);
+  if (UI.cmode === 'intl') return top + viewIntl();
   if (UI.cmode === 'eu') return top + viewEurope(UI.eu, mine);
   if (UI.cmode === 'bdo') return top + viewBdo();
   return top + viewLeague(UI.clg, mine);
@@ -637,6 +673,7 @@ function clientStats(p) {
   return `<h4>Saison ${seasonTxt(S.season)}</h4>
     <div class="stats">${stat('Matchs', p.m)}${stat('Buts', p.g)}${stat('Passes déc.', p.a)}</div>
     <div class="stats" style="margin-top:8px">${stat('Note moyenne', avgNote(p), p.m ? noteClass(p.rs / p.m) : '')}${stat(def ? 'Clean sheets' : 'Buts / match', def ? p.cs : p.m ? (p.g / p.m).toFixed(2).replace('.', ',') : '–')}${stat('Coupes', `${p.em || 0} m · ${p.eg || 0} b`)}</div>
+    ${p.intl || p.caps ? `<div class="stats" style="margin-top:8px">${stat('Sélection', p.intl ? natName(p.nat) : '—')}${stat('Sélections', p.caps || 0)}${stat('Buts en sélection', p.ig || 0)}</div>` : ''}
     <h4>Derniers matchs</h4>
     ${p.log.length ? `<div class="list">${p.log.map((x, i) => `<div class="row" data-act="match" data-id="${p.id}" data-src="log" data-i="${i}"><span class="res ${resClass(x)}"></span>
       <div class="main"><b style="font-weight:550;font-size:13.5px">${scoreTxt(x)}</b><small>Semaine ${x.w}</small></div><div class="side"><b>${x.g ? '⚽'.repeat(x.g) : ''}${x.a ? '🅰️'.repeat(x.a) : ''} <span class="${noteClass(x.n)}">${x.n.toFixed(1)}</span></b></div><span class="chev">›</span></div>`).join('')}</div>`
@@ -996,7 +1033,8 @@ const ACTIONS = {
   mkMore() { UI.mkMore = (UI.mkMore || 50) + 50; },
   country(d) { UI.mk.country = d.id; UI.mk.u19 = false; UI.mkMore = 50; }, favFilter() { UI.mk.fav = !UI.mk.fav; UI.mk.u19 = false; },
   u19() { UI.mk.u19 = !UI.mk.u19 || UI.tab !== 'scout'; UI.mk.fav = false; UI.mk.q = ''; UI.tab = 'scout'; UI.modal = null; },
-  cmode(d) { UI.cmode = d.id; }, clg(d) { UI.clg = d.id; }, cview(d) { UI.cview = d.id; }, eu(d) { UI.eu = d.id; },
+  cmode(d) { UI.cmode = d.id; },
+  ivw(d) { UI.ivw = d.id; }, clg(d) { UI.clg = d.id; }, cview(d) { UI.cview = d.id; }, eu(d) { UI.eu = d.id; },
   av(d) { UI.av = d.id; },
   // Fiche joueur
   open(d) { const prev = UI.modal; UI.modal = { type: 'player', id: +d.id, ptab: prev && prev.type === 'propose' ? 'act' : 'ov' }; },

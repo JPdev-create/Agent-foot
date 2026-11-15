@@ -185,6 +185,7 @@ function migrate() {
   if (!S.eu) newEurope(euQualified());
   if (S.eu && !S.eu.BC) S.eu.BC = { alive: clubsOf('BE1').map((c) => c.id).sort(() => Math.random() - 0.5), rounds: [], champ: null };
   if (!S.inv) S.inv = { mk: 0, gala: 0, cl: {} };
+  if (!S.intl) S.intl = { nl: null, last: null };
   if (!S.owned) S.owned = [];
   if (!S.inv.own) S.inv.own = {};
   if (!S.rec) S.rec = {};
@@ -912,6 +913,7 @@ function nextWeek() {
   S.wk = [];
   const results = playMatchday();
   playEurope();
+  intlWeek();
   S.players.forEach((p) => simPlayer(p, p.free ? null : results[p.club]));
 
   const inc = weeklyIncome(), costs = weeklyCosts();
@@ -1005,7 +1007,7 @@ function seasonAwards(cl) {
       p.aw.unshift(`${label} : ${p.g} buts en ${LEAGUES[lg].name}`); addRep(big ? 1.5 : 0.6);
       news('👟', `${p.n} termine la saison avec ${p.g} buts en ${LEAGUES[lg].name}. Les recruteurs s'affolent.`);
     }
-    if (!p.intl && p.ovr >= 76) {
+    if (!p.intl && p.ovr >= intlThreshold(p.nat)) {
       p.intl = true; p.morale = clamp(p.morale + 10, 0, 100); addRep(1);
       p.aw.unshift(`${label} : première sélection nationale`);
       news('🌍', `${p.n} est appelé pour la première fois en équipe nationale ! Sa valeur grimpe.`);

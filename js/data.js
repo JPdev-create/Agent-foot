@@ -114,11 +114,11 @@ const COUNTRY_LEAGUES = { BE: ['BE1', 'BE2', 'BE3'], FR: ['FRA'], EN: ['ENG'], E
 const POSITIONS = { GB: 'Gardien', DEF: 'Défenseur', MIL: 'Milieu', ATT: 'Attaquant' };
 
 const OFFICES = [
-  { name: 'Garage familial', maxClients: 3, actions: 2, cost: 0, weekly: 100 },
-  { name: 'Petit bureau à Liège', maxClients: 6, actions: 3, cost: 40000, weekly: 400 },
-  { name: 'Bureaux à Bruxelles', maxClients: 10, actions: 4, cost: 250000, weekly: 2000 },
-  { name: 'Agence internationale', maxClients: 16, actions: 5, cost: 1500000, weekly: 9000 },
-  { name: 'Empire du football', maxClients: 25, actions: 6, cost: 8000000, weekly: 30000 },
+  { name: 'Garage familial', maxClients: 3, actions: 3, cost: 0, weekly: 100 },
+  { name: 'Petit bureau à Liège', maxClients: 6, actions: 4, cost: 40000, weekly: 400 },
+  { name: 'Bureaux à Bruxelles', maxClients: 10, actions: 5, cost: 250000, weekly: 2000 },
+  { name: 'Agence internationale', maxClients: 16, actions: 6, cost: 1500000, weekly: 9000 },
+  { name: 'Empire du football', maxClients: 25, actions: 7, cost: 8000000, weekly: 30000 },
 ];
 const INTL_OFFICE = 3; // niveau de bureau requis pour recruter hors Belgique
 

@@ -129,6 +129,12 @@ function assistantTips() {
   const cl = clients(), win = inWindow(S.week), t = [];
   const add = (pr, i, txt, act, id) => t.push({ pr, i, txt, act, id });
   if (!cl.length) add(10, '🔎', 'Commencez par observer de jeunes Belges dans Recrutement, puis proposez-leur un mandat.', 'tab', 'scout');
+  else if (cl.length < 3 && cl.length < office().maxClients && S.actions > 0) add(4, '✍️', `Il vous reste de la place : signez d'autres jeunes (${cl.length}/${office().maxClients} clients).`, 'tab', 'scout');
+  if (cl.length && S.stats.transfers === 0) {
+    const best = cl.slice().sort((a, b) => b.ovr - a.ovr)[0];
+    if (win) add(6, '📣', `Le mercato est ouvert : proposez ${best.n} à un club (fiche du joueur → Actions).`, 'open', best.id);
+    else add(3, '⏭', `Vos joueurs progressent en jouant. Le mercato rouvre bientôt : le bouton « ⏭ Mercato » vous y emmène directement.`, 'tab', 'home');
+  }
   if (S.cash < 0) add(9, '🚨', `Caisse dans le rouge : faillite si les dettes dépassent ${fmt(DIFFS[S.diff].bank)}. Réduisez vos frais ou vendez.`, 'tab', 'agence');
   if (win && (S.week === 6 || S.week === 23)) add(8, '⏰', 'Jour de clôture du mercato : les clubs font deux fois plus d\'offres, c\'est le moment de placer vos joueurs !', 'tab', 'clients');
   if (S.week >= 15 && S.week <= 17 && S.players.some((p) => p.u19 === S.season && !p.mine)) add(5, '🏟️', 'Des pépites se sont révélées au tournoi des espoirs : allez les voir dans Recrutement (filtre 🏟️).', 'u19', '1');

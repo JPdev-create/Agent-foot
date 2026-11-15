@@ -157,8 +157,10 @@ function offerCard(o) {
 
 function eventCard() {
   const v = eventView(), p = getP(S.event.pid);
+  const mult = { rival: 2, ecart: 1, stage: 3, gala: 1, clinic: 2, mal: 1 }[S.event.k], price = mult ? S.event.c * mult : 0;
   return `<div class="card warnc"><span class="kicker">⚡ Décision à prendre${p ? ` · ${esc(p.n)}` : ''}</span><h3>${esc(v.title)}</h3><p>${esc(v.text)}</p>
-    ${v.choices.map((c, i) => `<button class="btn ${i ? 'sec' : ''}" data-act="event" data-id="${i}">${esc(c)}</button>`).join('')}</div>`;
+    ${v.choices.map((c, i) => { const broke = i === 0 && price > S.cash; return `<button class="btn ${i ? 'sec' : ''}" data-act="event" data-id="${i}" ${broke ? 'disabled' : ''}>${esc(c)}${broke ? '<small>· fonds insuffisants</small>' : ''}</button>`; }).join('')}
+    <small style="margin-top:8px">Le bouton « Semaine » est bloqué tant que vous n'avez pas décidé.</small></div>`;
 }
 
 function recapCard() {
@@ -192,7 +194,7 @@ function agendaBlock() {
   if (w < 15) out.push(['🏟️', 'Tournoi des espoirs', 15 - w]);
   const t = tourName(S.season);
   out.push(['🎬', `Cérémonie des trophées${t ? ` + ${t} ${S.season + 1}` : ''}`, SEASON_WEEKS + 1 - w]);
-  return sec('📆 À venir', `<div class="list">${out.map(([i, x, n]) => `<div class="row"><span class="ico">${i}</span><div class="main"><b style="font-weight:550">${x}</b></div><div class="side">${tag(`dans ${n} sem.`)}</div></div>`).join('')}</div>`);
+  return sec('📆 À venir', `<div class="list">${out.map(([i, x, n]) => `<div class="row wrap"><span class="ico">${i}</span><div class="main"><b style="font-weight:550">${x}</b></div><div class="side">${tag(`dans ${n} sem.`)}</div></div>`).join('')}</div>`);
 }
 
 function weekMatches() {
@@ -213,21 +215,25 @@ function viewHome() {
   const inc = weeklyIncome(), costs = weeklyCosts(), net = inc - costs;
   let h = '';
   if (S.over) h += `<div class="card badc"><span class="kicker">Partie terminée</span><h3>💀 Faillite</h3><p>Les dettes de l'agence ont dépassé ${fmt(DIFFS[S.diff].bank)}.</p><button class="btn" data-act="reset">Recommencer une partie</button></div>`;
-  if (UI.sum && !S.over) h += sumCard();
   if (S.event) h += eventCard();
   if (S.offers.length) h += sec(`📨 Offres sur la table (${S.offers.length})`, S.offers.map(offerCard).join(''));
   if (S.cer && S.week <= 6) h += `<div class="card goldc cer-cta" data-act="cer"><span>🎬</span><div><b>Cérémonie des trophées ${S.cer.label}</b><small>Golden Boy, Soulier d'or, Ballon d'Or… Revoir la soirée</small></div><b class="gold">▶</b></div>`;
   if (S.recap) h += recapCard();
-  h += sec('💼 Cette semaine', `<div class="card"><div class="stats">
-      ${stat('Revenus', '+' + fmt(inc), 'pos')}${stat('Frais', '-' + fmt(costs), 'neg')}${stat('Solde', (net >= 0 ? '+' : '') + fmt(net), net < 0 ? 'neg' : 'pos')}
-    </div><div class="split" style="margin-top:10px"><small>👥 ${clients().length}/${office().maxClients} clients</small><small>⚡ ${S.actions} action(s) restante(s)</small></div></div>`);
+  const s = UI.sum, chip = (t, cls) => `<span class="tag ${cls || ''}" style="font-size:12px;padding:4px 9px">${t}</span>`;
+  h += sec(`💼 Semaine ${S.week}`, `<div class="card">
+    ${s && !S.over ? `<div class="kicker">${s.n > 1 ? `Bilan des ${s.n} dernières semaines` : 'Bilan de la semaine écoulée'}</div><div class="tags" style="margin:0 0 12px">${chip(`💶 ${s.dc >= 0 ? '+' : ''}${fmt(s.dc)}`, s.dc >= 0 ? 'ok' : 'bad')}${chip(`⭐ ${s.dr >= 0 ? '+' : ''}${s.dr.toFixed(1)} rép.`, s.dr >= 0 ? 'ok' : 'bad')}
+      ${s.g ? chip(`⚽ ${s.g} but(s)`, 'ok') : ''}${s.offers ? chip(`📨 ${s.offers} nouvelle(s) offre(s)`, 'gold') : ''}${s.inj ? chip(`🚑 ${s.inj} blessé(s)`, 'bad') : ''}</div>` : ''}
+    <div class="stats">${stat('Revenus / sem.', '+' + fmt(inc), 'pos')}${stat('Frais / sem.', '-' + fmt(costs), 'neg')}${stat('Solde', (net >= 0 ? '+' : '') + fmt(net), net < 0 ? 'neg' : 'pos')}</div>
+    <div class="split" style="margin-top:10px"><small>👥 ${clients().length}/${office().maxClients} clients</small><small>⚡ ${S.actions} action(s) restante(s)</small></div></div>`);
   const tips = assistantTips();
   if (tips.length) h += sec('🧠 Conseils de l\'assistant', `<div class="list">${tips.map((x) => `<button class="row" data-act="${x.act}" data-id="${x.id}"><span class="ico">${x.i}</span><div class="main"><span style="font-size:13.5px;display:block;white-space:normal">${esc(x.txt)}</span></div><span class="chev">›</span></button>`).join('')}</div>`);
   h += weekMatches();
   h += missionsBlock();
   h += agendaBlock();
   const news = S.news.slice(0, UI.newsAll ? 60 : 8);
-  h += sec('📰 Actualités', `<div class="list">${news.map((n) => `<div class="row" style="align-items:flex-start"><span class="ico" style="font-size:18px">${n.i}</span><div class="main"><span style="font-size:13.5px;display:block">${esc(n.x)}</span><small>Semaine ${n.w} · ${seasonTxt(n.s)}</small></div></div>`).join('')}</div>`,
+  let lastKey = '';
+  h += sec('📰 Actualités', `<div class="list">${news.map((n) => { const k = n.s + '-' + n.w, head = k !== lastKey ? `<div class="news-day">Semaine ${n.w} · ${seasonTxt(n.s)}</div>` : ''; lastKey = k;
+    return `${head}<div class="row" style="align-items:flex-start;padding:9px 13px"><span class="ico" style="font-size:17px">${n.i}</span><div class="main"><span style="font-size:13.5px;display:block;white-space:normal">${esc(n.x)}</span></div></div>`; }).join('')}</div>`,
     S.news.length > 8 ? `<button class="link" data-act="newsAll">${UI.newsAll ? 'Réduire' : 'Tout voir'}</button>` : '');
   return h;
 }
@@ -236,6 +242,7 @@ function dock() {
   if (UI.tab !== 'home' || S.over) return '';
   const block = !!S.event;
   const closed = !inWindow(S.week);
+  if (block) return `<div class="dock" style="grid-template-columns:1fr"><button class="btn lg" disabled>⚡ Décision en attente (en haut)</button></div>`;
   return `<div class="dock ${closed ? 'three' : ''}"><button class="btn lg" data-act="week" ${block ? 'disabled' : ''}>${block ? '⚡ Décision en attente' : '▶ Semaine'}</button>
     <button class="btn lg sec icon" data-act="fast" ${block ? 'disabled' : ''} title="Avancer de 4 semaines">⏩ ×4</button>
     ${closed ? `<button class="btn lg sec icon" data-act="toWindow" ${block ? 'disabled' : ''} title="Avancer jusqu'au prochain mercato">⏭ Mercato</button>` : ''}</div>`;
@@ -313,7 +320,8 @@ function viewScout() {
       <button class="btn sm" data-act="trip" data-id="${f.country}" ${S.cash < tripCost(f.country) ? 'disabled' : ''}>${fmt(tripCost(f.country))}<small>· 1 action</small></button></div>
     ${locked ? `<div class="note warn">🔒 Recrutement à l'étranger débloqué avec le bureau « ${OFFICES[INTL_OFFICE].name} ». Vous pouvez déjà observer.</div>` : ''}`}
     <div class="sec-h" style="margin-top:4px"><h2>${q ? `Résultats pour « ${esc(f.q)} »` : f.u19 ? '🏟️ Révélés au tournoi des espoirs' : f.fav ? '⭐ Joueurs suivis' : 'Jeunes joueurs'}</h2><small>${list.length} joueur(s)</small></div>
-    <div class="list">${list.slice(0, 80).map(marketRow).join('') || `<p class="empty">${f.fav ? 'Aucun joueur suivi. Ouvrez une fiche et touchez « Suivre ».' : 'Aucun joueur trouvé.'}</p>`}</div>`;
+    <div class="list">${list.slice(0, UI.mkMore || 50).map(marketRow).join('') || `<p class="empty">${f.fav ? 'Aucun joueur suivi. Ouvrez une fiche et touchez « Suivre ».' : 'Aucun joueur trouvé.'}</p>`}</div>
+    ${list.length > (UI.mkMore || 50) ? `<button class="btn sec" data-act="mkMore">Afficher plus (${list.length - (UI.mkMore || 50)} restants)</button>` : ''}`;
 }
 
 /* ============ Compétitions ============ */
@@ -329,7 +337,7 @@ function viewLeague(lg, mine) {
   let body = '';
   if (UI.cview === 'table') {
     body = `<div class="card flush"><table class="tbl"><tr><th>#</th><th class="l">Club</th><th>J</th><th>G</th><th>N</th><th>P</th><th>+/-</th><th>Pts</th></tr>
-      ${st.map((x, i) => `<tr class="${mine[x.c.id] ? 'me' : ''} ${zoneOf(lg, i, st.length)}" data-act="club" data-id="${esc(x.c.id)}"><td class="pos-n">${i + 1}</td><td class="l">${esc(x.c.name)}${mine[x.c.id] ? ` 👤${mine[x.c.id] > 1 ? mine[x.c.id] : ''}` : ''}</td>
+      ${st.map((x, i) => `<tr class="${mine[x.c.id] ? 'me' : ''} ${zoneOf(lg, i, st.length)}" data-act="club" data-id="${esc(x.c.id)}"><td class="pos-n">${i + 1}</td><td class="l">${S.owned.includes(x.c.id) ? '🏛️ ' : ''}${esc(x.c.name)}${mine[x.c.id] ? ` 👤${mine[x.c.id] > 1 ? mine[x.c.id] : ''}` : ''}</td>
         <td>${x.t[0]}</td><td>${x.t[1]}</td><td>${x.t[2]}</td><td>${x.t[3]}</td><td>${x.t[4] - x.t[5] > 0 ? '+' : ''}${x.t[4] - x.t[5]}</td><td class="pts">${pts(x.t)}</td></tr>`).join('')}</table>
       <div class="legend" style="padding:0 0 10px">${LEAGUES[lg].big || lg === 'BE1' ? '<span><i style="background:var(--gold)"></i>Ligue des champions</span><span><i style="background:var(--info)"></i>Ligue Europa</span>' : ''}
         ${lg === 'BE2' || lg === 'BE3' ? '<span><i style="background:var(--acc)"></i>Montée</span>' : ''}${lg === 'BE1' || lg === 'BE2' ? '<span><i style="background:var(--bad)"></i>Relégation</span>' : ''}<span>👤 vos clients</span></div></div>`;
@@ -802,6 +810,17 @@ function renderModal() {
   m.keep = false;
 }
 
+/* Le bouton « retour » du téléphone ferme la fenêtre ouverte au lieu de quitter l'appli */
+const HIST = { open: false, skip: false };
+function syncHistory() {
+  if (UI.modal && !HIST.open) { history.pushState({ af: 1 }, ''); HIST.open = true; }
+  else if (!UI.modal && HIST.open) { HIST.open = false; HIST.skip = true; history.back(); }
+}
+window.addEventListener('popstate', () => {
+  if (HIST.skip) { HIST.skip = false; return; }
+  if (UI.modal) { HIST.open = false; UI.modal = null; render(); }
+});
+
 function render() {
   const app = $('#app');
   applyTheme();
@@ -813,15 +832,16 @@ function render() {
   app.innerHTML = `${topbar()}<main>${views[UI.tab]()}</main>${dock()}${navbar()}`;
   app.dataset.tab = UI.tab;
   window.scrollTo(0, same ? y : 0);
-  renderModal(); renderToast();
+  renderModal(); renderToast(); syncHistory();
 }
 
 /* ============ Actions ============ */
 const keep = () => { if (UI.modal) UI.modal.keep = true; };
-const snap = () => ({ cash: S.cash, rep: S.rep, w: S.week, s: S.season, inj: clients().filter((p) => p.inj > 0).length });
+const snap = () => ({ cash: S.cash, rep: S.rep, w: S.week, s: S.season, inj: clients().filter((p) => p.inj > 0).length, offers: S.offers.map((o) => o.id) });
+const newOffer = (a) => S.offers.some((o) => !a.offers.includes(o.id));
 function weekSum(a) {
   UI.sum = { dc: S.cash - a.cash, dr: S.rep - a.rep, n: S.season === a.s ? S.week - a.w : 1, g: S.wk.reduce((s, x) => s + (x.g || 0), 0),
-    offers: S.offers.length, inj: Math.max(0, clients().filter((p) => p.inj > 0).length - a.inj) };
+    offers: S.offers.filter((o) => !a.offers.includes(o.id)).length, inj: Math.max(0, clients().filter((p) => p.inj > 0).length - a.inj) };
 }
 const ACTIONS = {
   // Nouvelle partie
@@ -850,7 +870,7 @@ const ACTIONS = {
     const a = snap();
     for (let i = 0; i < 4; i++) {
       nextWeek();
-      if (S.over || S.event || S.offers.length || S.recap || S.week === 20) break;
+      if (S.over || S.event || newOffer(a) || S.recap || S.week === 20) break;
     }
     weekSum(a); autoCer();
   },
@@ -858,7 +878,7 @@ const ACTIONS = {
     const a = snap();
     for (let i = 0; i < 40 && !inWindow(S.week); i++) {
       nextWeek();
-      if (S.over || S.event || S.offers.length || S.recap) break;
+      if (S.over || S.event || newOffer(a) || S.recap) break;
     }
     weekSum(a); autoCer();
   },
@@ -873,7 +893,8 @@ const ACTIONS = {
   refuse(d) { actRefuse(+d.id); },
   // Listes et filtres
   jv(d) { UI.jv = d.id; }, cs(d) { UI.cs = d.id; },
-  country(d) { UI.mk.country = d.id; UI.mk.u19 = false; }, favFilter() { UI.mk.fav = !UI.mk.fav; UI.mk.u19 = false; },
+  mkMore() { UI.mkMore = (UI.mkMore || 50) + 50; },
+  country(d) { UI.mk.country = d.id; UI.mk.u19 = false; UI.mkMore = 50; }, favFilter() { UI.mk.fav = !UI.mk.fav; UI.mk.u19 = false; },
   u19() { UI.mk.u19 = !UI.mk.u19 || UI.tab !== 'scout'; UI.mk.fav = false; UI.mk.q = ''; UI.tab = 'scout'; UI.modal = null; },
   cmode(d) { UI.cmode = d.id; }, clg(d) { UI.clg = d.id; }, cview(d) { UI.cview = d.id; }, eu(d) { UI.eu = d.id; },
   av(d) { UI.av = d.id; },
@@ -887,9 +908,9 @@ const ACTIONS = {
   propose(d) { UI.modal = { type: 'propose', id: +d.id }; UI.lg = 'REC'; },
   mode(d) { UI.mode = d.id; },
   lg(d) { UI.lg = d.id; keep(); },
-  doPropose(d) { const r = actPropose(+d.id, d.club); toast(r); if (r.ok) { UI.modal = null; UI.tab = 'home'; play(CHIME); } else keep(); },
+  doPropose(d) { const r = actPropose(+d.id, d.club); toast(r); if (r.ok) { UI.modal = null; play(CHIME); buzz(40); } else keep(); },
   doLoan(d) { const r = actLoan(+d.id, d.club); toast(r); if (r.ok) UI.modal = { type: 'player', id: +d.id, ptab: 'ov' }; else keep(); },
-  auction(d) { const r = actAuction(+d.id); toast(r); if (r.ok) { UI.modal = null; UI.tab = 'home'; } else keep(); },
+  auction(d) { const r = actAuction(+d.id); toast(r); if (r.ok) { UI.modal = null; play(CHIME); buzz(40); } else keep(); },
   raise(d) { toast(actRaise(+d.id)); keep(); },
   renew(d) { toast(actRenew(+d.id)); keep(); },
   talk(d) { toast(actTalk(+d.id)); keep(); },

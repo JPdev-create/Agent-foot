@@ -814,38 +814,72 @@ function autoCer() {
 }
 function cerNext() {
   const m = UI.modal, sl = S.cer.slides[m.i];
-  if (sl.k === 'award' && !m.open) { m.open = true; play(DRUM, 'square'); setTimeout(() => { play(FANFARE); buzz([30, 40, 30, 40, 120]); }, 650); return; }
+  if (m.open === 'opening') return;
+  if (sl.k === 'award' && !m.open) {
+    // Suspense : l'enveloppe s'ouvre, roulement de tambour, puis révélation
+    m.open = 'opening'; play(DRUM, 'square'); buzz(30);
+    setTimeout(() => {
+      if (UI.modal !== m || m.open !== 'opening') return;
+      m.open = true; m.fx = true; play(FANFARE); buzz([30, 40, 30, 40, 120]); render();
+    }, 1400);
+    return;
+  }
   if (m.i >= S.cer.slides.length - 1) { UI.modal = null; return; }
-  m.i++; m.open = false;
+  m.i++; m.open = false; m.fx = false;
+}
+function cerPrev() {
+  const m = UI.modal;
+  if (m.open === 'opening' || m.i === 0) return;
+  m.i--; m.open = S.cer.slides[m.i].k === 'award'; m.fx = false;
 }
 function confetti() {
   const cols = ['#f2c14e', '#35d07f', '#ff6b6b', '#5aa9ff', '#ffffff'];
   let h = '';
-  for (let i = 0; i < 46; i++) h += `<i style="left:${Math.random() * 100}%;background:${cols[i % 5]};animation-delay:${(0.6 + Math.random() * 0.8).toFixed(2)}s;animation-duration:${(2 + Math.random() * 1.8).toFixed(2)}s;transform:rotate(${Math.floor(Math.random() * 360)}deg)"></i>`;
+  for (let i = 0; i < 46; i++) h += `<i style="left:${Math.random() * 100}%;background:${cols[i % 5]};animation-delay:${(Math.random() * 0.6).toFixed(2)}s;animation-duration:${(2 + Math.random() * 1.8).toFixed(2)}s;transform:rotate(${Math.floor(Math.random() * 360)}deg)"></i>`;
   return `<div class="confetti">${h}</div>`;
 }
 function viewCer() {
   const c = S.cer, m = UI.modal, sl = c.slides[m.i], n = c.slides.length, last = m.i === n - 1;
-  const top = `<div class="cer-top"><small>🎬 ${esc(c.label)} · ${m.i + 1}/${n}</small><div style="display:flex;gap:8px;align-items:center">${last ? '' : '<button class="btn sm ghost" style="color:#cfd9d3;border-color:rgba(255,255,255,.2)" data-act="cerSkip">Passer ⏭</button>'}<button class="x" data-act="cerClose">✕</button></div></div>`;
-  const dots = `<div class="dots">${c.slides.map((_, i) => `<i class="${i === m.i ? 'on' : i < m.i ? 'past' : ''}"></i>`).join('')}</div>`;
-  let body = '';
+  const awards = c.slides.filter((x) => x.k === 'award'), aNum = c.slides.slice(0, m.i + 1).filter((x) => x.k === 'award').length;
+  const top = `<div class="cer-top"><small>🎬 ${esc(c.label)}${sl.k === 'award' ? ` · prix ${aNum}/${awards.length}` : ''}</small>
+    <div class="cer-tools">${last ? '' : '<button class="cer-chip" data-act="cerSkip">Passer ⏭</button>'}<button class="cer-x" data-act="cerClose" aria-label="Fermer">✕</button></div></div>
+    <div class="dots">${c.slides.map((_, i) => `<i class="${i === m.i ? 'on' : i < m.i ? 'past' : ''}"></i>`).join('')}</div>`;
+  const rows = (list) => `<div class="cer-list ${list.length > 6 ? 'compact' : ''}">${list.map((r) => `<div class="${r.mine ? 'me' : ''}"><span>${r.i}</span><p>${r.l ? `<small>${esc(r.l)}</small>` : ''}<b>${esc(r.v)}</b></p></div>`).join('')}</div>`;
+  let body = '', btn = '';
   if (sl.k === 'intro') {
-    body = `<div class="cer-icon big">${sl.icon}</div><h2 class="cer-title">${esc(sl.title)}</h2><p class="cer-sub">${esc(sl.sub)}</p>
-      <button class="btn lg gold" data-act="cerNext">Que la cérémonie commence !</button>`;
-  } else if (sl.k === 'list' || sl.k === 'outro') {
-    const rows = sl.k === 'outro' ? (sl.rows.length ? sl.rows.map((x) => ({ i: '🏅', l: '', v: x, mine: true })) : [{ i: '🙂', l: '', v: 'Pas de trophée pour vos clients cette année. La prochaine sera la bonne !' }]) : sl.rows;
-    body = `<div class="cer-icon">${sl.icon}</div><h2 class="cer-title">${esc(sl.title)}</h2>
-      ${sl.k === 'outro' ? '<p class="cer-sub">Le bilan de votre agence ce soir :</p>' : ''}
-      <div class="cer-list">${rows.map((r) => `<div class="${r.mine ? 'me' : ''}"><span>${r.i}</span><p>${r.l ? `<small>${esc(r.l)}</small>` : ''}<b>${esc(r.v)}</b></p></div>`).join('')}</div>
-      <button class="btn lg gold" data-act="cerNext">${last ? 'Terminer la soirée' : 'Suivant'}</button>`;
+    const agencyNom = awards.some((a) => a.noms.some((x) => x.mine && x.n === S.agency.name));
+    const noms = [...new Set(awards.flatMap((a) => a.noms.filter((x) => x.mine && x.n !== S.agency.name).map((x) => x.n)))];
+    body = `<div class="cer-icon big">${esc(S.agency.logo || '🎬')}</div><h2 class="cer-title">${esc(sl.title)}</h2><p class="cer-sub">${esc(sl.sub)}</p>
+      <div class="cer-box"><small>${noms.length ? `Vos clients nommés ce soir (${noms.length})` : 'Aucun de vos clients n\'est nommé cette année'}</small>
+        ${noms.length ? `<div class="also">${noms.map((x) => `<span class="me">👤 ${esc(x)}</span>`).join('')}</div>` : '<p>Mais la soirée réserve toujours des surprises…</p>'}
+        ${agencyNom ? `<p style="margin-top:8px">🕴️ Et votre agence est en lice pour le prix de l'agent de l'année !</p>` : ''}</div>`;
+    btn = '🎬 Que la cérémonie commence !';
+  } else if (sl.k === 'list') {
+    body = `<div class="cer-icon">${sl.icon}</div><h2 class="cer-title">${esc(sl.title)}</h2>${rows(sl.rows)}`;
+    btn = 'Suivant ▶';
+  } else if (sl.k === 'outro') {
+    const r = sl.rows.length ? sl.rows.map((x) => ({ i: '🏅', v: x, mine: true })) : [{ i: '🙂', v: 'Pas de trophée pour vos clients cette année. La prochaine sera la bonne !' }];
+    body = `<div class="cer-icon">${sl.icon}</div><h2 class="cer-title">${esc(sl.title)}</h2><p class="cer-sub">Le bilan de votre agence ce soir</p>${rows(r)}`;
+    btn = 'Terminer la soirée';
+  } else if (m.open === true) {
+    const w = sl.noms[sl.win], others = sl.noms.filter((_, i) => i !== sl.win);
+    body = `<div class="cer-mini"><span>${sl.icon}</span><b>${esc(sl.title)}</b></div>
+      <div class="winner ${w.mine ? 'me' : ''} ${m.fx ? 'anim' : ''}"><div class="trophy">🏆</div><small>Le lauréat est</small><b>${esc(w.n)}</b>
+        <small>${esc(w.club || '')}${w.club && w.txt ? ' · ' : ''}${esc(w.txt || '')}</small>${w.mine ? '<em>👤 Votre client !</em>' : ''}</div>
+      <div class="cer-box"><small>Les autres nommés</small><div class="also">${others.map((x) => `<span class="${x.mine ? 'me' : ''}">${x.mine ? '👤 ' : ''}${esc(x.n)}</span>`).join('')}</div></div>
+      ${m.fx ? confetti() : ''}`;
+    btn = last ? 'Terminer' : 'Suivant ▶';
   } else {
-    const w = sl.noms[sl.win];
-    body = `<div class="cer-icon ${m.open ? 'spin' : ''}">${sl.icon}</div><h2 class="cer-title">${esc(sl.title)}</h2><p class="cer-sub">${esc(sl.sub)}</p>
-      ${m.open ? `<div class="winner ${w.mine ? 'me' : ''}"><small>Le lauréat est…</small><b>${esc(w.n)}</b><small>${esc(w.club || '')}${w.txt ? ` · ${esc(w.txt)}` : ''}</small>${w.mine ? '<em>👤 Votre client !</em>' : ''}</div>${confetti()}` : '<p class="cer-sub nom">Les nommés sont…</p>'}
-      <div class="cer-list noms">${sl.noms.map((x, i) => `<div class="${x.mine ? 'me' : ''} ${m.open && i === sl.win ? 'win' : m.open ? 'lose' : ''}"><span>${m.open && i === sl.win ? '🏆' : '🎟️'}</span><p><b>${esc(x.n)}${x.mine ? ' 👤' : ''}</b><small>${esc(x.club || '')}${x.txt && x.club ? ' · ' : ''}${esc(x.txt || '')}</small></p></div>`).join('')}</div>
-      <button class="btn lg gold" data-act="cerNext">${m.open ? (last ? 'Terminer' : 'Suivant') : '🎤 Ouvrir l\'enveloppe'}</button>`;
+    const opening = m.open === 'opening';
+    body = `<div class="cer-icon ${opening ? 'envelope' : ''}">${opening ? '✉️' : sl.icon}</div><h2 class="cer-title">${esc(sl.title)}</h2>
+      <p class="cer-sub">${opening ? '<span class="suspense">Et le lauréat est<i>.</i><i>.</i><i>.</i></span>' : esc(sl.sub)}</p>
+      ${opening ? '' : '<p class="cer-kicker">Les nommés sont</p>'}
+      <div class="cer-list noms ${opening ? 'dim' : ''}">${sl.noms.map((x) => `<div class="${x.mine ? 'me' : ''}"><span>🎟️</span><p><b>${esc(x.n)}${x.mine ? ' 👤' : ''}</b><small>${esc(x.club || '')}${x.txt && x.club ? ' · ' : ''}${esc(x.txt || '')}</small></p></div>`).join('')}</div>`;
+    btn = opening ? 'Ouverture de l\'enveloppe…' : '🎤 Ouvrir l\'enveloppe';
   }
-  return `${top}${dots}<div class="cer-body">${body}</div>`;
+  const foot = `<div class="cer-foot">${m.i > 0 ? `<button class="btn lg cer-prev" data-act="cerPrev" ${m.open === 'opening' ? 'disabled' : ''} aria-label="Précédent">◀</button>` : ''}
+    <button class="btn lg gold" data-act="cerNext" ${m.open === 'opening' ? 'disabled' : ''}>${btn}</button></div>`;
+  return `<div class="cer">${top}<div class="cer-body" key="${m.i}">${body}</div>${foot}</div>`;
 }
 
 function startLive() {
@@ -1027,7 +1061,8 @@ const ACTIONS = {
   // Cérémonie
   cer() { UI.modal = { type: 'cer', i: 0, open: false }; },
   cerNext() { cerNext(); },
-  cerSkip() { UI.modal.i = S.cer.slides.length - 1; UI.modal.open = false; },
+  cerPrev() { cerPrev(); },
+  cerSkip() { UI.modal.i = S.cer.slides.length - 1; UI.modal.open = false; UI.modal.fx = false; },
   cerClose() { UI.modal = null; },
 };
 
@@ -1058,7 +1093,11 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && UI.modal && UI.modal.type !== 'cer') { UI.modal = null; render(); return; }
   // Raccourcis clavier (ordinateur) : Entrée = semaine suivante, 1 à 5 = onglets
   if (!S || /INPUT|SELECT|TEXTAREA/.test((e.target.tagName || '')) || e.ctrlKey || e.metaKey || e.altKey) return;
-  if (UI.modal && UI.modal.type === 'cer' && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); cerNext(); render(); return; }
+  if (UI.modal && UI.modal.type === 'cer') {
+    if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowRight') { e.preventDefault(); cerNext(); render(); }
+    else if (e.key === 'ArrowLeft') { cerPrev(); render(); }
+    return;
+  }
   if (UI.modal) return;
   const tabs = { 1: 'home', 2: 'clients', 3: 'scout', 4: 'compet', 5: 'agence' };
   if (tabs[e.key]) { UI.tab = tabs[e.key]; window.scrollTo(0, 0); render(); return; }

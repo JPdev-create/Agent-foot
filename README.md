@@ -66,6 +66,11 @@ La partie est sauvegardée automatiquement dans le navigateur.
   négociation en plusieurs tours, option d'achat après un prêt réussi, rachat de mandats par les rivaux,
   promesse de retour au pays, filtres âge/potentiel, actualité du mercato et ambassadeurs de l'agence.
 
+- **Niveau d'agent et talents** : chaque opération rapporte de l'expérience ; à chaque niveau, un point à placer dans 8 talents
+  (Œil de lynx, Charisme, Requin, Carnet d'adresses, Mentor, Droits d'image, Gestionnaire, Hyperactif).
+- **Demandes des clubs** à chaque mercato (offre garantie et majorée pour le bon profil), **clauses de transfert**
+  (comptant, intéressement à la revente, primes de performance), 6 nouveaux événements, portraits des joueurs et 5 succès de plus.
+
 ## Installer l'application
 
 Le jeu est une application web installable (PWA). Ouvrez le site sur le téléphone puis :
@@ -83,5 +88,6 @@ L'appli récupère la dernière version à chaque ouverture et reste jouable hor
 - `js/extra.js` — relations avec les clubs, académie, succès
 - `js/intl.js` — sélections nationales, Ligue des nations
 - `js/club.js` — gestion du club racheté
+- `js/plus.js` — niveau d'agent, talents, demandes des clubs, clauses, événements, portraits
 - `js/ui.js` — interface
 - `sw.js`, `manifest.webmanifest`, `icons/` — application installable

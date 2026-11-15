@@ -410,3 +410,22 @@ button, .row, [data-act] { touch-action: manipulation; -webkit-user-select: none
 .cer-list.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
 .cer-list.grid2 > div { margin: 0; padding: 6px 8px; gap: 6px; min-width: 0; }
 .cer-list.grid2 span { font-size: 15px; } .cer-list.grid2 b { font-size: 12.5px; } .cer-list.grid2 small { font-size: 10.5px; }
+
+/* ---------- Niveau d'agent, demandes des clubs, clauses, portraits ---------- */
+.lvl { color: var(--gold); font-weight: 700; cursor: pointer; }
+.lvl-badge { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 20px; flex: none;
+  color: #1c1400; background: radial-gradient(circle at 30% 25%, #ffe9a6, var(--gold)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 25%, transparent); }
+.card.talent { display: flex; align-items: center; gap: 12px; padding: 12px; }
+.talent .t-ic { font-size: 24px; width: 34px; text-align: center; flex: none; }
+.talent .t-main { flex: 1; min-width: 0; }
+.talent .t-main b { display: block; font-size: 14.5px; }
+.talent .btn { flex: none; width: auto; margin: 0; }
+.deal { margin: 10px 0 0; }
+.deal .seg { margin: 0 0 6px; position: static; box-shadow: none; background: var(--s2); }
+.deal small { display: block; }
+.row.brief { align-items: flex-start; }
+.brief-fit { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.brief-fit .btn { width: auto; margin: 0; }
+.av-wrap { position: relative; flex: none; width: 72px; height: 72px; }
+.av-wrap .avatar { width: 72px; height: 72px; display: block; border-radius: 20px; background: var(--s2); }
+.av-wrap .rt { position: absolute; right: -8px; bottom: -8px; width: 34px; height: 34px; font-size: 14px; border-radius: 11px; border: 2px solid var(--s1); }

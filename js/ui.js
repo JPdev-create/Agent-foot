@@ -113,10 +113,10 @@ function viewStart() {
 /* ============ Barre du haut et navigation ============ */
 function topbar() {
   const o = office(), win = inWindow(S.week);
-  const dots = Array.from({ length: o.actions }, (_, i) => `<i class="${i < S.actions ? 'on' : ''}"></i>`).join('');
+  const dots = Array.from({ length: maxActions() }, (_, i) => `<i class="${i < S.actions ? 'on' : ''}"></i>`).join('');
   return `<header class="top">
     <div class="top-row">
-      <div class="brand"><span class="logo">${esc(S.agency.logo || '⚽')}</span><div style="min-width:0"><b>${esc(S.agency.name)}</b><small>${seasonTxt(S.season)} · Sem. ${S.week}/${SEASON_WEEKS}</small></div></div>
+      <div class="brand"><span class="logo">${esc(S.agency.logo || '⚽')}</span><div style="min-width:0"><b>${esc(S.agency.name)}</b><small>${seasonTxt(S.season)} · Sem. ${S.week}/${SEASON_WEEKS} · <span class="lvl" data-act="agent">Niv. ${S.ag.lvl}${S.ag.pts ? ' ●' : ''}</span></small></div></div>
       <span class="mk ${win ? 'open' : ''}"><i></i>${win ? 'Mercato ouvert' : 'Mercato fermé'}</span>
     </div>
     <div class="kpis">
@@ -132,7 +132,7 @@ function topbar() {
 const alertsOf = (p) => (p.inj > 0 ? 1 : 0) + (p.free ? 1 : 0) + (p.morale < 35 ? 1 : 0);
 function navbar() {
   const tabs = [['home', '🏠', 'Accueil', S.offers.length + (S.event ? 1 : 0)], ['clients', '👥', 'Joueurs', clients().filter(alertsOf).length],
-    ['scout', '🔎', 'Recrutement', 0], ['compet', '🏆', 'Compétitions', 0], ['agence', '🏢', 'Agence', 0]];
+    ['scout', '🔎', 'Recrutement', 0], ['compet', '🏆', 'Compétitions', 0], ['agence', '🏢', 'Agence', S.ag.pts]];
   return `<nav class="tabs">${tabs.map(([k, i, l, n]) => `<button class="${UI.tab === k ? 'on' : ''}" data-act="tab" data-id="${k}"><span>${i}</span>${l}${n ? `<em>${n}</em>` : ''}</button>`).join('')}</nav>`;
 }
 
@@ -144,14 +144,17 @@ function offerCard(o) {
       ${tag(`⏳ ${o.exp - S.t} sem.`, o.exp - S.t <= 1 ? 'bad' : 'warn')}</div>
     <div class="stats">
       ${stat('Indemnité', o.free ? 'Libre' : fmt(o.fee))}
-      ${stat(o.free ? 'Votre prime' : 'Votre commission', fmt(o.free ? o.bonus : o.fee * commissionTransfer()), 'pos')}
+      ${stat(o.free ? 'Votre prime' : 'Votre commission', fmt(offerCom(o, p)), 'pos')}
       ${stat('Salaire / sem.', fmt(o.sal))}
     </div>
+    ${o.brief ? '<div class="note" style="margin:8px 0 0">📋 Réponse à une demande du club : offre majorée de 15 %.</div>' : ''}${!o.free && hasSellOn(p) ? '<div class="note" style="margin:8px 0 0">📈 Clause de revente active : votre commission passe à 15 %.</div>' : ''}
     ${o.opt ? '<div class="note" style="margin:8px 0 0">🔁 Option d\'achat : son club de prêt veut le garder après une belle saison.</div>' : ''}
     <div class="tags" style="margin:8px 0 0">${o.free ? tag('🆓 Joueur libre : pas d\'indemnité', 'info') : (() => { const r = o.fee / Math.max(1, playerValue(p)); return r > 1.15 ? tag('💰 Au-dessus de sa valeur', 'ok') : r < 0.9 ? tag('📉 En dessous de sa valeur', 'bad') : tag('⚖️ Prix correct', ''); })()}
       ${c.rep > CLUBS[p.club].rep ? tag(`⬆️ Club plus prestigieux (+${c.rep - CLUBS[p.club].rep})`, 'ok') : c.rep < CLUBS[p.club].rep ? tag(`⬇️ Club moins prestigieux (${c.rep - CLUBS[p.club].rep})`, 'warn') : ''}
       ${o.sal > p.sal ? tag(`💶 Salaire +${Math.round((o.sal / p.sal - 1) * 100)} %`, 'ok') : ''}</div>
     ${dreamMatch(p.dream, c) ? '<div class="note warn">🌟 Ce club réaliserait son rêve de carrière.</div>' : ''}
+    ${o.free ? '' : `<div class="deal"><div class="seg">${Object.keys(DEALS).map((k) => `<button class="${(o.deal || 'cash') === k ? 'on' : ''}" data-act="deal" data-id="${o.id}" data-k="${k}">${DEALS[k].i} ${DEALS[k].n}</button>`).join('')}</div>
+      <small>${DEALS[o.deal || 'cash'].d}${o.deal === 'perf' ? ` Prime : ${fmt(perfPrime(o, p))} par match.` : ''}</small></div>`}
     <div class="btns">
       <button class="btn" data-act="accept" data-id="${o.id}">✔ Accepter</button>
       <button class="btn sec" data-act="negoOpen" data-id="${o.id}" ${o.nego ? 'disabled' : ''}>Négocier${o.nr ? ` ${o.nr}/${NEGO_ROUNDS}` : ''}</button>
@@ -161,7 +164,7 @@ function offerCard(o) {
 
 function eventCard() {
   const v = eventView(), p = getP(S.event.pid);
-  const mult = { rival: 2, ecart: 1, stage: 3, gala: 1, clinic: 2, mal: 1 }[S.event.k], price = mult ? S.event.c * mult : 0;
+  const X = EVX[S.event.k], mult = { rival: 2, ecart: 1, stage: 3, gala: 1, clinic: 2, mal: 1 }[S.event.k], price = X ? (X.price ? X.price(S.event) : 0) : mult ? S.event.c * mult : 0;
   return `<div class="card warnc"><span class="kicker">⚡ Décision à prendre${p ? ` · ${esc(p.n)}` : ''}</span><h3>${esc(v.title)}</h3><p>${esc(v.text)}</p>
     ${v.choices.map((c, i) => { const broke = i === 0 && price > S.cash; return `<button class="btn ${i ? 'sec' : ''}" data-act="event" data-id="${i}" ${broke ? 'disabled' : ''}>${esc(c)}${broke ? '<small>· fonds insuffisants</small>' : ''}</button>`; }).join('')}
     <small style="margin-top:8px">Le bouton « Semaine » est bloqué tant que vous n'avez pas décidé.</small></div>`;
@@ -186,6 +189,17 @@ function missionsBlock() {
       <div style="display:flex;align-items:center;gap:8px;margin-top:6px"><div style="flex:1">${bar(w, m.done ? '' : 'gold')}</div><small>${m.done ? 'Accomplie' : M.money ? `${fmt(pr)} / ${fmt(m.n)}` : `${pr} / ${m.n}`}</small></div></div>
       <div class="side"><b class="${m.done ? 'mut' : 'gold'}">${fmt(m.r)}</b></div></div>`;
   }).join('')}</div>`, `<small>${done}/${S.mis.length}</small>`);
+}
+
+function briefsBlock() {
+  if (!S.briefs || !S.briefs.length || !inWindow(S.week)) return '';
+  const cl = clients();
+  return sec('📋 Demandes des clubs', `<div class="list">${S.briefs.map((b) => {
+    const c = CLUBS[b.club], fit = cl.filter((p) => briefFits(b, p)), pend = S.offers.find((o) => o.brief === b.id);
+    return `<div class="row wrap brief"><span class="ico">${LEAGUES[c.league].flag}</span><div class="main"><b class="clublink" data-act="club" data-id="${esc(c.id)}">${esc(c.name)} ›</b><small>${briefTxt(b)} · prestige ${c.rep}</small>
+      ${pend ? '<small class="gold">📨 Offre sur la table</small>' : fit.length ? `<div class="brief-fit">${fit.slice(0, 3).map((p) => `<button class="btn sm" data-act="doPropose" data-id="${p.id}" data-club="${esc(c.id)}" ${S.actions < 1 ? 'disabled' : ''}>📣 ${esc(p.n)}</button>`).join('')}</div>` : ''}</div>
+      ${pend || fit.length ? '' : `<button class="btn sm sec" data-act="briefFind" data-id="${b.id}">🔎 Chercher</button>`}</div>`;
+  }).join('')}</div><p class="hint">Un client qui correspond : offre garantie et majorée de 15 % (1 action). Sinon, signez le bon profil avant la fin du mercato.</p>`, `<small>${S.briefs.length}</small>`);
 }
 
 function agendaBlock() {
@@ -225,6 +239,7 @@ function viewHome() {
   if (S.offers.length) h += sec(`📨 Offres sur la table (${S.offers.length})`, S.offers.map(offerCard).join(''));
   if (S.cer && S.week <= 6) h += `<div class="card goldc cer-cta" data-act="cer"><span>🎬</span><div><b>Cérémonie des trophées ${S.cer.label}</b><small>Golden Boy, Soulier d'or, Ballon d'Or… Revoir la soirée</small></div><b class="gold">▶</b></div>`;
   if (S.recap) h += recapCard();
+  if (S.ag.pts) h += `<div class="card goldc cer-cta" data-act="agent"><span>🎓</span><div><b>${S.ag.pts} point${S.ag.pts > 1 ? 's' : ''} de talent à dépenser</b><small>Agent niveau ${S.ag.lvl} · choisissez une nouvelle compétence</small></div><b class="gold">›</b></div>`;
   const s = UI.sum, chip = (t, cls) => `<span class="tag ${cls || ''}" style="font-size:12px;padding:4px 9px">${t}</span>`;
   h += sec(`💼 Semaine ${S.week}`, `<div class="card">
     ${s && !S.over ? `<div class="kicker">${s.n > 1 ? `Bilan des ${s.n} dernières semaines` : 'Bilan de la semaine écoulée'}</div><div class="tags" style="margin:0 0 12px">${chip(`💶 ${s.dc >= 0 ? '+' : ''}${fmt(s.dc)}`, s.dc >= 0 ? 'ok' : 'bad')}${chip(`⭐ ${s.dr >= 0 ? '+' : ''}${s.dr.toFixed(1)} rép.`, s.dr >= 0 ? 'ok' : 'bad')}
@@ -233,6 +248,7 @@ function viewHome() {
     <div class="split" style="margin-top:10px"><small>👥 ${clients().length}/${office().maxClients} clients</small><small class="${S.actions ? '' : 'gold'}">⚡ ${S.actions ? `${S.actions} action(s) restante(s)` : 'Plus d\'action : semaine suivante !'}</small></div></div>`);
   const tips = assistantTips();
   if (tips.length) h += sec('🧠 Conseils de l\'assistant', `<div class="list">${tips.map((x) => `<button class="row" data-act="${x.act}" data-id="${x.id}"><span class="ico">${x.i}</span><div class="main"><span style="font-size:13.5px;display:block;white-space:normal">${esc(x.txt)}</span></div><span class="chev">›</span></button>`).join('')}</div>`);
+  h += briefsBlock();
   h += weekMatches();
   h += missionsBlock();
   h += agendaBlock();
@@ -587,10 +603,24 @@ function agencySet() {
   return h;
 }
 
+function agencyAgent() {
+  const a = S.ag, need = xpNeed(a.lvl), max = a.lvl >= MAX_LVL;
+  let h = `<div class="card goldc"><div class="card-h" style="margin-bottom:10px"><div style="display:flex;gap:12px;align-items:center"><span class="lvl-badge">${a.lvl}</span><div><b>${agentTitle()}</b><small>Agent niveau ${a.lvl}/${MAX_LVL}</small></div></div>
+    ${a.pts ? tag(`${a.pts} point${a.pts > 1 ? 's' : ''} à dépenser`, 'gold') : ''}</div>
+    ${max ? '<small>Niveau maximum atteint.</small>' : `<div class="split" style="margin-bottom:6px"><small>Expérience</small><small>${a.xp} / ${need} XP</small></div>${bar(a.xp / need * 100, 'gold')}`}
+    <small style="margin-top:8px">L'expérience se gagne en observant, en signant, en transférant, en remplissant missions et demandes des clubs, et grâce aux trophées de vos clients.</small></div>`;
+  h += sec('🧬 Talents', Object.keys(TALENTS).map((k) => {
+    const T = TALENTS[k], r = tal(k), lock = talentLock(k);
+    return `<div class="card talent"><span class="t-ic">${T.i}</span><div class="t-main"><b>${T.n} <span class="gold" style="letter-spacing:1px">${'●'.repeat(r)}${'○'.repeat(T.max - r)}</span></b><small>${T.d}</small></div>
+      ${r >= T.max ? tag('Max', 'gold') : `<button class="btn sm" data-act="talent" data-id="${k}" ${a.pts < 1 || lock ? 'disabled' : ''}>${lock && r < T.max ? lock : '+1'}</button>`}</div>`;
+  }).join(''), `<small>${Object.keys(TALENTS).reduce((s, k) => s + tal(k), 0)} appris</small>`);
+  return h;
+}
+
 function viewAgence() {
-  const tabs = { club: viewMyClub, dev: agencyDev, net: agencyNet, pal: agencyPal, set: agencySet };
+  const tabs = { club: viewMyClub, ag: agencyAgent, dev: agencyDev, net: agencyNet, pal: agencyPal, set: agencySet };
   if (UI.av === 'club' && !S.cm) UI.av = 'dev';
-  return seg('av', UI.av, [...(S.cm ? [['club', '🏛️ Club']] : []), ['dev', S.cm ? 'Gestion' : 'Développement'], ['net', 'Réseau'], ['pal', 'Palmarès'], ['set', 'Réglages']]) + tabs[UI.av]();
+  return seg('av', UI.av, [...(S.cm ? [['club', '🏛️ Club']] : []), ['dev', S.cm ? 'Gestion' : 'Bureau'], ['ag', `Agent${S.ag.pts ? ' ●' : ''}`], ['net', 'Réseau'], ['pal', 'Palmarès'], ['set', 'Réglages']]) + tabs[UI.av]();
 }
 
 /* ============ Fiche joueur ============ */
@@ -627,7 +657,10 @@ function playerHead(p) {
   if (p.loan) t.push(tag(`🔁 Prêté par ${esc(CLUBS[p.loan.back].name)}`, 'info'));
   if (p.cov && !p.mine) t.push(tag('👀 Convoité', 'bad'));
   if (p.fav && !p.mine) t.push(tag('⭐ Suivi', 'gold'));
-  return `<div class="ph">${rt(ovrOf(p), 'xl')}<div style="min-width:0"><h3>${esc(p.n)}</h3><small>${POSITIONS[p.pos]} · ${p.age} ans · ${COUNTRY_LABEL[p.nat]}</small>
+  if (p.mine && hasSellOn(p)) t.push(tag('📈 Clause de revente', 'gold'));
+  if (p.mine && p.pf) t.push(tag(`🎯 ${fmt(p.pf.a)} / match`, 'gold'));
+  if (hyped(p)) t.push(tag('🔥 Cote en hausse', 'warn'));
+  return `<div class="ph"><div class="av-wrap">${avatar(p)}${rt(ovrOf(p))}</div><div style="min-width:0"><h3>${esc(p.n)}</h3><small>${POSITIONS[p.pos]} · ${p.age} ans · ${COUNTRY_LABEL[p.nat]}</small>
     <small class="clublink" data-act="club" data-id="${esc(p.club)}">${clubTxt(p)} · prestige ${c.rep} ›</small>${t.length ? `<div class="tags">${t.join('')}</div>` : ''}</div></div>`;
 }
 
@@ -646,7 +679,7 @@ function marketSheet(p) {
     ${attrCard(p)}
     <div class="info">${traitLine(p)}</div>
     ${p.cov ? `<div class="note bad">👀 <b>${esc(p.cov.by)}</b> veut le signer : il sera parti dans ${Math.max(1, p.cov.t - S.t)} semaine(s) !</div>` : ''}
-    ${p.sc >= 2 ? '' : actBtn('scout', p.id, '🔎', p.sc ? 'Affiner le rapport' : 'Observer le joueur', p.sc ? 'Potentiel estimé plus précisément' : 'Révèle son potentiel, ses qualités et son caractère', 1)}
+    ${p.sc >= 2 ? '' : actBtn('scout', p.id, '🔎', p.sc ? 'Affiner le rapport' : 'Observer le joueur', (S.ag.fs > 0 ? '👁️ Observation gratuite (Œil de lynx) · ' : '') + (p.sc ? 'Potentiel estimé plus précisément' : 'Révèle son potentiel, ses qualités et son caractère'), S.ag.fs > 0 ? 0 : 1)}
     <div class="stats two" style="margin:0 0 4px"><button class="btn sec" style="margin:0" data-act="fav" data-id="${p.id}">${p.fav ? '⭐ Suivi' : '☆ Suivre'}</button>
       <button class="btn sec" style="margin:0" data-act="cmpToggle" data-id="${p.id}">${UI.cmp.includes(p.id) ? '⚖️ Retirer' : '⚖️ Comparer'}</button></div>
     <h4>Proposer un mandat · 1 action</h4>
@@ -892,6 +925,7 @@ function modalHelp() {
     <div><p><b>Faites-le jouer.</b> Un jeune progresse surtout s'il joue : surveillez son temps de jeu et prêtez-le si besoin. Choisissez son plan d'entraînement.</p></div>
     <div><p><b>Transférez.</b> Pendant le mercato (semaines 1–6 et 20–23), proposez vos clients à de plus grands clubs ou mettez-les aux enchères. Vous touchez 10 % de l'indemnité puis 7 % du salaire chaque semaine.</p></div>
     <div><p><b>Développez l'agence.</b> Bureau, personnel, académie, sponsors, relations avec les clubs : grimpez au classement des agences.</p></div>
+    <div><p><b>Progressez.</b> Chaque opération rapporte de l'expérience : à chaque niveau d'agent, choisissez un talent (Agence → Agent). Pendant le mercato, répondez aux 📋 demandes des clubs et choisissez la formule de chaque transfert : comptant, clause de revente ou primes de performance.</p></div>
     <div><p><b>Fin de partie.</b> Au statut « Puissance mondiale », rachetez un club belge et menez-le jusqu'à la Ligue des champions. Au sommet, la réputation s'use : gagnez des trophées pour y rester.</p></div>
     <div><p><b>Chaque saison.</b> Remplissez les missions 🎯 et assistez à la cérémonie des trophées. Une saison sur deux : Coupe du monde ou Euro.</p></div>
   </div><div class="note warn">Attention au moral de vos joueurs et à votre caisse : faillite si les dettes dépassent ${fmt(DIFFS[S ? S.diff : 1].bank)}.</div>
@@ -1082,6 +1116,10 @@ const ACTIONS = {
   negoOpen(d) { const o = S.offers.find((x) => x.id === +d.id); if (o) UI.modal = { type: 'nego', id: o.pid, oid: o.id }; },
   nego(d) { const r = actNegotiate(+d.id, +d.lv); toast(r); const o = S.offers.find((x) => x.id === +d.id); if (!o || o.nego) UI.modal = null; else keep(); if (r.ok) play(CHIME); },
   refuse(d) { actRefuse(+d.id); },
+  deal(d) { setDeal(+d.id, d.k); },
+  agent() { UI.tab = 'agence'; UI.av = 'ag'; UI.modal = null; window.scrollTo(0, 0); },
+  talent(d) { const r = learnTalent(d.id); toast(r); if (r.ok) { play(CHIME); buzz(40); } },
+  briefFind(d) { const b = S.briefs.find((x) => x.id === +d.id); if (!b) return; Object.assign(UI.mk, { country: 'BE', pos: b.pos, sort: 'ovr', fav: false, u19: false, q: '', age: '', minpot: '' }); UI.tab = 'scout'; window.scrollTo(0, 0); toast({ ok: true, msg: `${CLUBS[b.club].name} cherche : ${briefTxt(b)}.` }); },
   // Listes et filtres
   jv(d) { UI.jv = d.id; }, cs(d) { UI.cs = d.id; },
   mkMore() { UI.mkMore = (UI.mkMore || 50) + 50; },

@@ -80,13 +80,18 @@ const ACH = [
   { id: 'ownEu', i: '🚀', l: 'De la Belgique à l\'Europe', d: 'Votre club dispute la Ligue des champions', t: () => (S.owned || []).some((id) => S.eu.C1.alive.includes(id) || S.eu.C1.rounds.some((r) => r.some((x) => x[0] === id || x[1] === id))) },
   { id: 'stad5', i: '🏟️', l: 'Bâtisseur de stade', d: 'Stade de votre club au niveau maximum', t: () => !!(S.cm && S.cm.stadium >= 5) },
   { id: 'ownChamp', i: '🏛️', l: 'Président champion', d: 'Votre club est champion de Belgique', t: () => S.flags.ownChamp },
+  { id: 'lvl5', i: '🎓', l: 'Agent confirmé', d: 'Atteindre le niveau d\'agent 5', t: () => S.ag.lvl >= 5 },
+  { id: 'lvl12', i: '🧠', l: 'Super-agent', d: 'Atteindre le niveau d\'agent 12', t: () => S.ag.lvl >= 12 },
+  { id: 'lvl20', i: '🦸', l: 'Légende du métier', d: 'Atteindre le niveau d\'agent 20', t: () => S.ag.lvl >= 20 },
+  { id: 'brief5', i: '📋', l: 'Sur commande', d: 'Honorer 5 demandes de clubs', t: () => (S.stats.briefs || 0) >= 5 },
+  { id: 'clause', i: '📈', l: 'Fin stratège', d: 'Conclure un transfert avec une clause (revente ou primes)', t: () => S.flags.clause },
   { id: 'cl25', i: '🏟️', l: 'Empire complet', d: 'Gérer 25 clients en même temps', t: () => clients().length >= 25 },
 ];
 function checkAch() {
   if (!S.ach) S.ach = {};
   ACH.forEach((a) => {
     if (S.ach[a.id] || !a.t()) return;
-    S.ach[a.id] = `${S.season}/${(S.season + 1) % 100}`; addRep(0.3);
+    S.ach[a.id] = `${S.season}/${(S.season + 1) % 100}`; addRep(0.3); addXp(30);
     news('🏅', `Succès débloqué : ${a.i} ${a.l} — ${a.d}.`);
   });
 }
@@ -137,6 +142,8 @@ function assistantTips() {
     if (win) add(6, '📣', `Le mercato est ouvert : proposez ${best.n} à un club (fiche du joueur → Actions).`, 'open', best.id);
     else add(3, '⏭', `Vos joueurs progressent en jouant. Le mercato rouvre bientôt : le bouton « ⏭ Mercato » vous y emmène directement.`, 'tab', 'home');
   }
+  if (S.ag.pts) add(5, '🎓', `Vous avez ${S.ag.pts} point(s) de talent à dépenser : choisissez une compétence d'agent.`, 'agent', '1');
+  if (win && S.actions > 0) { const b = (S.briefs || []).find((x) => cl.some((p) => briefFits(x, p))); if (b) { const p = cl.find((q) => briefFits(b, q)); add(7, '📋', `${CLUBS[b.club].name} cherche un profil comme ${p.n} : offre garantie et majorée (demandes des clubs).`, 'tab', 'home'); } }
   if (S.cash < 0) add(9, '🚨', `Caisse dans le rouge : faillite si les dettes dépassent ${fmt(DIFFS[S.diff].bank)}. Réduisez vos frais ou vendez.`, 'tab', 'agence');
   if (win && (S.week === 6 || S.week === 23)) add(8, '⏰', 'Jour de clôture du mercato : les clubs font deux fois plus d\'offres, c\'est le moment de placer vos joueurs !', 'tab', 'clients');
   if (S.week >= 15 && S.week <= 17 && S.players.some((p) => p.u19 === S.season && !p.mine)) add(5, '🏟️', 'Des pépites se sont révélées au tournoi des espoirs : allez les voir dans Recrutement (filtre 🏟️).', 'u19', '1');

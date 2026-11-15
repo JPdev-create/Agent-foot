@@ -25,7 +25,7 @@ function checkMissions() {
   if (!S.mis) return;
   S.mis.forEach((m) => {
     if (m.done || MISSIONS[m.k].prog() < m.n) return;
-    m.done = true; S.cash += m.r; addRep(0.5); ledger('🎯', `Mission : ${MISSIONS[m.k].t(m.n)}`, m.r);
+    m.done = true; S.cash += m.r; addRep(0.5); addXp(60); ledger('🎯', `Mission : ${MISSIONS[m.k].t(m.n)}`, m.r);
     news('🎯', `Mission accomplie : ${MISSIONS[m.k].t(m.n)}. Prime : ${fmt(m.r)}.`);
   });
 }

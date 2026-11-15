@@ -41,7 +41,7 @@ main { padding: 12px; }
 .btn.danger { color: var(--bad); margin-top: 18px; }
 .btn.sm { width: auto; margin: 0; padding: 8px 12px; font-size: 13px; }
 .btn.line { display: flex; justify-content: space-between; align-items: center; text-align: left; background: var(--panel2); color: var(--txt); border: 1px solid var(--line); }
-.btn.line b { color: var(--acc); font-size: 16px; }
+.btn.line b { color: var(--acc); font-size: 16px; white-space: nowrap; padding-left: 8px; }
 .btns { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
 .btns .btn { padding: 10px 4px; font-size: 13px; }
 .up { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
@@ -145,3 +145,48 @@ main > .chips { padding-bottom: 10px; }
 .events p { margin: 0; font-size: 14px; } .events small { font-size: 11px; }
 .events .hl b { color: var(--acc); }
 .events { margin-bottom: 12px; }
+
+/* Missions, agenda, panthéon */
+.mis > div { padding: 8px 0; border-bottom: 1px solid var(--line); } .mis > div:last-child { border: 0; }
+.mis .row { margin-bottom: 4px; font-size: 14px; } .mis .done span { color: var(--mut); }
+.bar { height: 6px; background: var(--panel2); border-radius: 3px; overflow: hidden; margin: 4px 0; }
+.bar i { display: block; height: 100%; background: var(--acc); border-radius: 3px; transition: width .4s; }
+.agenda > div, .hof > div { display: flex; gap: 10px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.agenda > div:last-child, .hof > div:last-child { border: 0; } .agenda p, .hof p { margin: 0; flex: 1; min-width: 0; }
+.hof em { font-style: normal; font-size: 12px; color: var(--mut); white-space: nowrap; }
+.cerbtn { display: flex; gap: 12px; align-items: center; cursor: pointer; border-color: var(--acc2); background: linear-gradient(135deg, #2a2310, var(--panel)); }
+.cerbtn > span { font-size: 30px; } .cerbtn > div { flex: 1; }
+.stars { color: var(--acc2); font-size: 13px; letter-spacing: 1px; }
+.col { display: flex; flex-direction: column; gap: 6px; align-items: stretch; } .col .btn small { display: block; color: inherit; opacity: .8; font-weight: 400; }
+.plans { padding: 4px 0; }
+
+/* Cérémonie */
+.stage { position: fixed; inset: 0; z-index: 30; overflow-y: auto; color: #fff; padding: calc(12px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+  background: radial-gradient(ellipse at 50% -10%, rgba(242, 193, 78, .35), transparent 55%), radial-gradient(ellipse at 15% 110%, rgba(53, 208, 127, .18), transparent 50%), #07100c; }
+.stage::before { content: ''; position: fixed; inset: 0; pointer-events: none; background: conic-gradient(from 200deg at 50% -5%, transparent 0 40%, rgba(255, 255, 255, .06) 45%, transparent 50% 100%); animation: sweep 7s ease-in-out infinite alternate; }
+@keyframes sweep { from { transform: rotate(-8deg); } to { transform: rotate(8deg); } }
+.cer-top { display: flex; justify-content: space-between; align-items: center; max-width: 520px; margin: 0 auto; position: relative; }
+.cer-top .x { position: static; background: rgba(255, 255, 255, .12); color: #fff; border: 0; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; }
+.dots { display: flex; gap: 5px; justify-content: center; margin: 10px 0 4px; } .dots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255, 255, 255, .2); }
+.dots i.past { background: rgba(242, 193, 78, .5); } .dots i.on { background: var(--acc2); width: 18px; border-radius: 4px; }
+.cer-body { max-width: 520px; margin: 0 auto; text-align: center; position: relative; animation: rise .45s ease-out; }
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.cer-icon { font-size: 64px; margin: 18px 0 6px; filter: drop-shadow(0 0 22px rgba(242, 193, 78, .55)); } .cer-icon.big { font-size: 88px; }
+.cer-icon.spin { animation: pop .9s ease-out; } @keyframes pop { 0% { transform: scale(.4) rotate(-20deg); } 60% { transform: scale(1.25) rotate(8deg); } 100% { transform: none; } }
+.cer-title { font-size: 26px; margin: 4px 0; color: var(--acc2); text-transform: none; letter-spacing: 0; text-shadow: 0 2px 18px rgba(242, 193, 78, .4); }
+.cer-sub { color: #c9d6cf; margin: 6px 0 16px; font-size: 14px; } .cer-sub.nom { font-style: italic; }
+.cer-list { text-align: left; margin-bottom: 16px; }
+.cer-list > div { display: flex; gap: 12px; align-items: center; padding: 10px 12px; margin-bottom: 6px; border-radius: 12px; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .08); transition: opacity .5s, transform .5s; }
+.cer-list > div span { font-size: 20px; } .cer-list p { margin: 0; flex: 1; min-width: 0; } .cer-list small { color: #b9c8c0; }
+.cer-list > div.me { border-color: var(--acc); } .cer-list > div.me b { color: var(--acc); }
+.cer-list > div.win { background: rgba(242, 193, 78, .18); border-color: var(--acc2); transform: scale(1.03); }
+.cer-list > div.lose { opacity: .45; }
+.winner { margin: 6px 0 16px; padding: 16px; border-radius: 16px; background: linear-gradient(135deg, rgba(242, 193, 78, .28), rgba(242, 193, 78, .06)); border: 1px solid var(--acc2);
+  animation: reveal 1.1s cubic-bezier(.2, 1.4, .4, 1) .55s both; }
+.winner b { display: block; font-size: 26px; margin: 4px 0; color: #fff; } .winner small { color: #e9dcb4; } .winner em { display: block; font-style: normal; color: var(--acc); font-weight: 700; margin-top: 6px; }
+.winner.me { box-shadow: 0 0 30px rgba(53, 208, 127, .45); }
+@keyframes reveal { from { opacity: 0; transform: scale(.6); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
+.btn.gold { background: linear-gradient(135deg, #f7d77a, #e0a92e); color: #2a1d00; box-shadow: 0 6px 22px rgba(242, 193, 78, .35); }
+.confetti { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 31; }
+.confetti i { position: absolute; top: -12px; width: 8px; height: 14px; border-radius: 2px; opacity: 0; animation: fall linear forwards; }
+@keyframes fall { 0% { opacity: 1; transform: translateY(0) rotate(0); } 100% { opacity: .9; transform: translateY(105vh) rotate(720deg); } }

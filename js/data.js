@@ -123,9 +123,9 @@ const OFFICES = [
 const INTL_OFFICE = 3; // niveau de bureau requis pour recruter hors Belgique
 
 const STAFF = {
-  scout: { name: 'Scout', desc: 'Rapports précis dès la 1re observation + un talent recommandé de temps en temps.', cost: 5000, weekly: 400 },
-  nego: { name: 'Négociateur', desc: '+10 % sur les indemnités de transfert et négociations plus sûres.', cost: 30000, weekly: 1500 },
-  coach: { name: 'Préparateur individuel', desc: 'Vos joueurs progressent 15 % plus vite et se blessent moins.', cost: 60000, weekly: 2500 },
+  scout: { name: 'Scout', desc: 'Rapports complets dès la 1re observation et pépites recommandées (plus souvent à chaque niveau).', cost: 5000, weekly: 400 },
+  nego: { name: 'Négociateur', desc: '+8 % par niveau sur les indemnités et primes, négociations plus sûres.', cost: 30000, weekly: 1500 },
+  coach: { name: 'Préparateur individuel', desc: '+12 % de progression par niveau et moins de blessures.', cost: 60000, weekly: 2500 },
 };
 
 const GOALS = [
@@ -158,3 +158,11 @@ const EU = { C1: { name: 'Ligue des champions', short: 'LDC', icon: '🏆' }, C3
 const EU_WEEKS = [10, 16, 26, 34];
 const EU_ROUNDS = ['8es de finale', 'Quarts de finale', 'Demi-finales', 'Finale'];
 const inWindow = (w) => (w >= 1 && w <= 6) || (w >= 20 && w <= 23);
+
+/* Plans d'entraînement individuels */
+const PLANS = {
+  std: { name: 'Standard', icon: '⚖️', desc: 'Équilibré.', g: 1, inj: 1, mor: 0, cost: 0 },
+  int: { name: 'Intensif', icon: '🔥', desc: '+20 % de progression, mais plus de blessures et de fatigue. Coûte 20 % de son salaire chaque semaine.', g: 1.2, inj: 1.6, mor: -0.3 },
+  rec: { name: 'Récupération', icon: '🧘', desc: 'Peu de blessures et meilleur moral, mais progression ralentie.', g: 0.75, inj: 0.4, mor: 0.3, cost: 0 },
+};
+const STAFF_COST_MULT = [1, 3, 8];

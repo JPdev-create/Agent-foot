@@ -1,6 +1,25 @@
 /* Interface */
 'use strict';
 
+/* Sons (WebAudio, aucun fichier) */
+const SND = { on: (() => { try { return localStorage.getItem('agentfoot_sound') !== '0'; } catch (e) { return true; } })() };
+function play(notes, type) {
+  if (!SND.on) return;
+  try {
+    const ctx = SND.ctx || (SND.ctx = new (window.AudioContext || window.webkitAudioContext)());
+    let t = ctx.currentTime;
+    notes.forEach(([f, d]) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = type || 'triangle'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.16, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t + d + 0.05); t += d * 0.85;
+    });
+  } catch (e) { /* audio indisponible */ }
+}
+const FANFARE = [[523, 0.16], [659, 0.16], [784, 0.16], [1047, 0.32], [784, 0.14], [1047, 0.6]];
+const DRUM = [[110, 0.07], [110, 0.07], [110, 0.07], [110, 0.07], [110, 0.07], [110, 0.07], [110, 0.07], [110, 0.07]];
+const CHIME = [[880, 0.12], [1175, 0.3]];
+
 const UI = { tab: 'bureau', modal: null, toast: null, mk: { country: 'BE', pos: '', sort: 'ovr', fav: false }, lg: 'BE1', mode: 'transfer', clg: 'BE1', jv: 'list' };
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -64,7 +83,7 @@ function offerCard(o) {
     <small>Prestige du club : ${c.rep} · expire dans ${o.exp - S.t} sem.${dreamMatch(p.dream, c) ? ' · 🌟 son rêve' : ''}</small>
     <div class="btns">
       <button class="btn" data-act="accept" data-id="${o.id}">Accepter</button>
-      <button class="btn alt" data-act="nego" data-id="${o.id}" ${o.nego ? 'disabled' : ''}>Négocier</button>
+      <button class="btn alt" data-act="negoOpen" data-id="${o.id}" ${o.nego ? 'disabled' : ''}>Négocier</button>
       <button class="btn ghost" data-act="refuse" data-id="${o.id}">Refuser</button>
     </div></div>`;
 }
@@ -89,13 +108,37 @@ function recapCard() {
     ${r.best ? `<small>Meilleure progression : ${esc(r.best)}</small>` : ''}</div>`;
 }
 
+function missionsCard() {
+  if (!S.mis || !S.mis.length) return '';
+  return `<h2>🎯 Missions de la saison</h2><div class="card mis">${S.mis.map((m) => {
+    const M = MISSIONS[m.k], pr = Math.min(m.n, M.prog()), w = Math.round(pr / m.n * 100);
+    return `<div class="${m.done ? 'done' : ''}"><div class="row"><span>${m.done ? '✅' : '🎯'} ${esc(M.t(m.n))}</span><small>${fmt(m.r)}</small></div>
+      <div class="bar"><i style="width:${m.done ? 100 : w}%"></i></div><small>${m.done ? 'Accomplie' : M.money ? `${fmt(pr)} / ${fmt(m.n)}` : `${pr} / ${m.n}`}</small></div>`;
+  }).join('')}</div>`;
+}
+
+function agendaCard() {
+  const w = S.week, out = [];
+  if (w <= 6) out.push(['🔓', `Fin du mercato d'été dans ${7 - w} sem.`]);
+  else if (w < 20) out.push(['📅', `Ouverture du mercato d'hiver dans ${20 - w} sem.`]);
+  else if (w <= 23) out.push(['🔓', `Fin du mercato d'hiver dans ${24 - w} sem.`]);
+  const r = EU_WEEKS.findIndex((x) => x > w);
+  if (r >= 0) out.push(['🏆', `${EU_ROUNDS[r]} européens dans ${EU_WEEKS[r] - w} sem.`]);
+  const t = tourName(S.season);
+  out.push(['🎬', `Cérémonie des trophées${t ? ` et ${t} ${S.season + 1}` : ''} dans ${SEASON_WEEKS + 1 - w} sem.`]);
+  return `<h2>📆 À venir</h2><div class="card agenda">${out.map(([i, x]) => `<div><span>${i}</span><p>${x}</p></div>`).join('')}</div>`;
+}
+
 function viewBureau() {
   const inc = weeklyIncome(), costs = weeklyCosts();
   return `
     ${S.over ? '<div class="card over"><b>Faillite !</b><p>Votre agence a coulé.</p><button class="btn" data-act="reset">Recommencer</button></div>'
     : S.event ? eventCard()
     : `<div class="weekbtns"><button class="btn big" data-act="week">▶ Semaine suivante</button><button class="btn big alt" data-act="fast" title="Avancer de 4 semaines">⏩ ×4</button></div>`}
+    ${S.cer && S.week <= 6 ? `<div class="card cerbtn" data-act="cer"><span>🎬</span><div><b>Cérémonie des trophées ${S.cer.label}</b><small>Golden Boy, Soulier d'or, Ballon d'Or… Revoir la soirée</small></div><b>▶</b></div>` : ''}
     ${S.recap ? recapCard() : ''}
+    ${missionsCard()}
+    ${agendaCard()}
     <div class="card grid3">
       <div><small>Revenus/sem.</small><b class="pos">+${fmt(inc)}</b></div>
       <div><small>Frais/sem.</small><b class="neg">-${fmt(costs)}</b></div>
@@ -210,8 +253,9 @@ function viewAgence() {
       <button class="btn" data-act="office" ${S.cash < next.cost ? 'disabled' : ''}>${fmt(next.cost)}</button></div>` : '<small>Niveau maximum atteint.</small>'}
     </div>
     <h2>Équipe</h2>
-    ${Object.keys(STAFF).map((k) => { const s = STAFF[k]; return `<div class="card up"><div><b>${s.name}${S.staff[k] ? ' ✅' : ''}</b><small>${s.desc} ${fmt(s.weekly)}/sem.</small></div>
-      <button class="btn ${S.staff[k] ? 'ghost' : ''}" data-act="staff" data-id="${k}" ${!S.staff[k] && S.cash < s.cost ? 'disabled' : ''}>${S.staff[k] ? 'Licencier' : fmt(s.cost)}</button></div>`; }).join('')}
+    ${Object.keys(STAFF).map((k) => { const s = STAFF[k], lv = S.stl[k]; return `<div class="card up"><div><b>${s.name} <span class="stars">${'★'.repeat(lv)}${'☆'.repeat(3 - lv)}</span></b><small>${s.desc}</small><small>${lv ? `Niveau ${lv} · ${fmt(s.weekly * lv)}/sem.` : `${fmt(s.weekly)}/sem. par niveau`}</small></div>
+      <div class="col">${lv < 3 ? `<button class="btn" data-act="staff" data-id="${k}" ${S.cash < staffCost(k) ? 'disabled' : ''}>${lv ? `Niv. ${lv + 1}` : 'Engager'}<small>${fmt(staffCost(k))}</small></button>` : '<span class="tag">Max</span>'}
+      ${lv ? `<button class="btn ghost sm" data-act="fire" data-id="${k}">Licencier</button>` : ''}</div></div>`; }).join('')}
     <h2>Classement des agences</h2>
     <div class="card rank">${[{ n: S.agency.name, rep: S.rep, me: true }, ...S.rivals].sort((a, b) => b.rep - a.rep)
     .map((a, i) => `<div class="${a.me ? 'me' : ''}"><span>${i + 1}</span><p>${esc(a.n)}</p><b>${Math.floor(a.rep)}</b></div>`).join('')}</div>
@@ -229,6 +273,8 @@ function viewAgence() {
     </div>
     ${S.hist.length ? `<h2>Historique de l'agence</h2><div class="card"><table class="tbl hist"><tr><th>Saison</th><th>Rang</th><th>Rép.</th><th>Transf.</th><th>Résultat</th></tr>
       ${S.hist.map((h) => `<tr><td>${h.label}</td><td>${h.rank}ᵉ</td><td>${Math.floor(h.rep1)}</td><td>${h.tr}</td><td class="${h.inc - h.costs < 0 ? 'neg' : 'pos'}">${fmt(h.inc - h.costs)}</td></tr>`).join('')}</table></div>` : ''}
+    ${S.hof.length ? `<h2>🏛️ Panthéon de l'agence</h2><div class="card hof">${S.hof.map((h) => `<div><span class="ovr sm ${ovrClass(h.ovr)}">${h.ovr}</span><p><b>${esc(h.n)}</b>
+      <small>${h.pos} · ${esc(h.club)} · ${h.why} (${h.s})</small>${h.top.length ? `<small>🏅 ${h.top.map(esc).join(' · ')}</small>` : ''}</p><em>${h.aw}🏅 ${h.tr}🤝</em></div>`).join('')}</div>` : ''}
     <h2>Sauvegarde</h2>
     <div class="card"><small>Votre partie est enregistrée sur cet appareil. Exportez-la pour la garder en sécurité ou la continuer ailleurs (ex. passer du navigateur à l'appli installée).</small>
       <button class="btn alt" data-act="export">📤 Exporter la sauvegarde</button>
@@ -237,6 +283,7 @@ function viewAgence() {
     <div class="card">${UI.standalone ? '<small>✅ Application installée. Elle se met à jour toute seule à chaque ouverture (connexion nécessaire).</small>'
     : UI.installEvt ? '<button class="btn" data-act="install" style="margin-top:0">📲 Installer l\'application</button><small>Ajoute Agent Foot à votre écran d\'accueil. Mises à jour automatiques.</small>'
     : '<small><b>Installer sur le téléphone</b><br>Android (Chrome) : menu ⋮ → « Installer l\'application » ou « Ajouter à l\'écran d\'accueil ».<br>iPhone (Safari) : bouton Partager → « Sur l\'écran d\'accueil ».<br>L\'appli se met ensuite à jour toute seule à chaque ouverture.</small>'}</div>
+    <button class="btn alt" data-act="sound">${SND.on ? '🔊 Sons activés' : '🔇 Sons coupés'}</button>
     <button class="btn alt" data-act="help">❓ Comment jouer</button>
     <button class="btn ghost danger" data-act="reset">Effacer la sauvegarde et recommencer</button>`;
 }
@@ -286,6 +333,10 @@ function modalPlayer(p) {
       <div><small>Mandat</small><b>${p.mandate} saison(s)</b></div>
       <div><small>Pour vous</small><b class="pos">${fmt(p.sal * COMMISSION_SALARY + (p.sp ? p.sp.w : 0))}/s</b></div>
     </div>
+    <p class="trait">📱 <b>${fmtFol(p.fol || 0)} abonnés</b> — sa popularité augmente la valeur de ses sponsors.</p>
+    <h4>Plan d'entraînement</h4>
+    <div class="chips plans">${Object.keys(PLANS).map((k) => `<button class="chip ${(p.plan || 'std') === k ? 'on' : ''}" data-act="plan" data-id="${p.id}" data-k="${k}">${PLANS[k].icon} ${PLANS[k].name}</button>`).join('')}</div>
+    <small>${PLANS[p.plan || 'std'].desc}${p.plan === 'int' ? ` (${fmt(planCost(p))}/sem.)` : ''}</small>
     <button class="btn" data-act="propose" data-id="${p.id}" ${inWindow(S.week) && !p.loan ? '' : 'disabled'}>📣 Transfert ou prêt${p.loan ? ' — en prêt cette saison' : inWindow(S.week) ? ' (1 action)' : ' — mercato fermé'}</button>
     <button class="btn alt" data-act="auction" data-id="${p.id}" ${inWindow(S.week) && !p.loan ? '' : 'disabled'}>🔨 Mettre aux enchères (2 actions)</button>
     <button class="btn alt" data-act="raise" data-id="${p.id}" ${p.free ? 'disabled' : ''}>💶 Demander une revalorisation (1 action)</button>
@@ -369,6 +420,57 @@ function genericName(club, rand) {
   return n.first[Math.floor(rand() * n.first.length)] + ' ' + n.last[Math.floor(rand() * n.last.length)];
 }
 
+function modalNego(p, m) {
+  const o = S.offers.find((x) => x.id === m.oid);
+  if (!o) return '<p class="empty">Offre expirée.</p>';
+  const c = CLUBS[o.club], base = o.free ? o.bonus : o.fee;
+  return `<h3>Négocier avec ${esc(c.name)}</h3>
+    <small>Offre actuelle pour ${esc(p.n)} : ${o.free ? 'prime de ' + fmt(o.bonus) : fmt(o.fee)}. Une seule tentative possible.${S.stl.nego ? ` Votre négociateur (niv. ${S.stl.nego}) améliore vos chances.` : ''}</small>
+    ${NEGO.map((n, i) => `<button class="btn line" data-act="nego" data-id="${o.id}" data-lv="${i}">
+      <span>${['Demande raisonnable', 'Demande ferme', 'Coup de poker'][i]} (+${Math.round(n.up * 100)} %)<small>≈ ${fmt(base * (1 + n.up))} · s'il refuse : ${pct(negoWalk(i))} de risque qu'il parte</small></span><b>${pct(negoOk(i))}</b></button>`).join('')}
+    <button class="btn ghost" data-act="close">Garder l'offre actuelle</button>`;
+}
+
+/* ---------- Cérémonie des trophées ---------- */
+function autoCer() {
+  if (S.cer && UI.cerSeen !== S.cer.label && S.week === 1) { UI.cerSeen = S.cer.label; UI.modal = { type: 'cer', i: 0, open: false }; play(FANFARE); }
+}
+function cerNext() {
+  const m = UI.modal, sl = S.cer.slides[m.i];
+  if (sl.k === 'award' && !m.open) { m.open = true; play(DRUM, 'square'); setTimeout(() => play(FANFARE), 650); return; }
+  if (m.i >= S.cer.slides.length - 1) { UI.modal = null; return; }
+  m.i++; m.open = false;
+}
+function confetti() {
+  const cols = ['#f2c14e', '#35d07f', '#ff6b6b', '#5aa9ff', '#ffffff'];
+  let h = '';
+  for (let i = 0; i < 46; i++) h += `<i style="left:${Math.random() * 100}%;background:${cols[i % 5]};animation-delay:${(0.6 + Math.random() * 0.8).toFixed(2)}s;animation-duration:${(2 + Math.random() * 1.8).toFixed(2)}s;transform:rotate(${Math.floor(Math.random() * 360)}deg)"></i>`;
+  return `<div class="confetti">${h}</div>`;
+}
+function viewCer() {
+  const c = S.cer, m = UI.modal, sl = c.slides[m.i], n = c.slides.length, last = m.i === n - 1;
+  const top = `<div class="cer-top"><small>🎬 ${esc(c.label)} · ${m.i + 1}/${n}</small><button class="x" data-act="cerClose">✕</button></div>`;
+  const dots = `<div class="dots">${c.slides.map((_, i) => `<i class="${i === m.i ? 'on' : i < m.i ? 'past' : ''}"></i>`).join('')}</div>`;
+  let body = '';
+  if (sl.k === 'intro') {
+    body = `<div class="cer-icon big">${sl.icon}</div><h2 class="cer-title">${esc(sl.title)}</h2><p class="cer-sub">${esc(sl.sub)}</p>
+      <button class="btn big gold" data-act="cerNext">Que la cérémonie commence !</button>`;
+  } else if (sl.k === 'list' || sl.k === 'outro') {
+    const rows = sl.k === 'outro' ? (sl.rows.length ? sl.rows.map((x) => ({ i: '🏅', l: '', v: x, mine: true })) : [{ i: '🙂', l: '', v: 'Pas de trophée pour vos clients cette année. La prochaine sera la bonne !' }]) : sl.rows;
+    body = `<div class="cer-icon">${sl.icon}</div><h2 class="cer-title">${esc(sl.title)}</h2>
+      ${sl.k === 'outro' ? '<p class="cer-sub">Le bilan de votre agence ce soir :</p>' : ''}
+      <div class="cer-list">${rows.map((r) => `<div class="${r.mine ? 'me' : ''}"><span>${r.i}</span><p>${r.l ? `<small>${esc(r.l)}</small>` : ''}<b>${esc(r.v)}</b></p></div>`).join('')}</div>
+      <button class="btn big gold" data-act="cerNext">${last ? 'Terminer la soirée' : 'Suivant'}</button>`;
+  } else {
+    const w = sl.noms[sl.win];
+    body = `<div class="cer-icon ${m.open ? 'spin' : ''}">${sl.icon}</div><h2 class="cer-title">${esc(sl.title)}</h2><p class="cer-sub">${esc(sl.sub)}</p>
+      ${m.open ? `<div class="winner ${w.mine ? 'me' : ''}"><small>Le lauréat est…</small><b>${esc(w.n)}</b><small>${esc(w.club || '')}${w.txt ? ` · ${esc(w.txt)}` : ''}</small>${w.mine ? '<em>👤 Votre client !</em>' : ''}</div>${confetti()}` : '<p class="cer-sub nom">Les nommés sont…</p>'}
+      <div class="cer-list noms">${sl.noms.map((x, i) => `<div class="${x.mine ? 'me' : ''} ${m.open && i === sl.win ? 'win' : m.open ? 'lose' : ''}"><span>${m.open && i === sl.win ? '🏆' : '🎟️'}</span><p><b>${esc(x.n)}${x.mine ? ' 👤' : ''}</b><small>${esc(x.club || '')}${x.txt && x.club ? ' · ' : ''}${esc(x.txt || '')}</small></p></div>`).join('')}</div>
+      <button class="btn big gold" data-act="cerNext">${m.open ? (last ? 'Terminer' : 'Suivant') : '🎤 Ouvrir l\'enveloppe'}</button>`;
+  }
+  return `${top}${dots}<div class="cer-body" key="${m.i}-${m.open}">${body}</div>`;
+}
+
 function modalHelp() {
   return `<h3>Comment jouer</h3>
     <div class="help">
@@ -380,6 +482,7 @@ function modalHelp() {
     <p><b>Caractère et contrats.</b> Chaque joueur a un caractère (visible après observation). En dernière année de contrat, négociez une prolongation ou vendez vite.</p>
     <p><b>Astuces d'agent.</b> Mettez un joueur aux enchères pour faire monter les prix, partez en voyage de détection pour dénicher des pépites, et réalisez le rêve de carrière de vos clients. Un joueur en fin de contrat devient libre : placez-le pour une grosse prime.</p>
     <p><b>Concurrence.</b> Les agences rivales repèrent aussi les pépites (👀 convoité) : signez-les avant elles. Négociez des contrats de sponsoring pour vos clients connus et visez le Ballon d'Or.</p>
+    <p><b>Chaque saison.</b> Remplissez les missions 🎯, choisissez le plan d'entraînement de vos clients et assistez à la cérémonie des trophées (Golden Boy, Soulier d'or, Ballon d'Or…). Une saison sur deux : Coupe du monde ou Euro.</p>
     <p><b>5. Grandissez.</b> Agrandissez le bureau (plus de clients et d'actions), engagez du personnel et grimpez au classement des agences jusqu'aux 5 grands championnats.</p>
     <p><b>Attention</b> au moral de vos joueurs (un joueur frustré peut partir) et à votre caisse : faillite si les dettes dépassent ${fmt(DIFFS[S ? S.diff : 1].bank)}.</p>
     </div><button class="btn" data-act="close">C'est parti</button>`;
@@ -388,11 +491,12 @@ function modalHelp() {
 function renderModal() {
   const m = UI.modal;
   if (!m) { $('#modal').innerHTML = ''; return; }
+  if (m.type === 'cer') { $('#modal').innerHTML = `<div class="stage">${viewCer()}</div>`; return; }
   const p = m.type === 'help' ? null : getP(m.id);
   if (!p && m.type !== 'help') { UI.modal = null; $('#modal').innerHTML = ''; return; }
   const sc = $('#modal .sheet') ? $('#modal .sheet').scrollTop : 0;
   $('#modal').innerHTML = `<div class="backdrop" data-act="close"></div><div class="sheet">
-    <button class="x" data-act="close">✕</button>${m.type === 'help' ? modalHelp() : m.type === 'match' ? modalMatch(p, m) : m.type === 'propose' ? modalPropose(p) : modalPlayer(p)}</div>`;
+    <button class="x" data-act="close">✕</button>${m.type === 'help' ? modalHelp() : m.type === 'match' ? modalMatch(p, m) : m.type === 'nego' ? modalNego(p, m) : m.type === 'propose' ? modalPropose(p) : modalPlayer(p)}</div>`;
   if (m.keep) $('#modal .sheet').scrollTop = sc;
 }
 
@@ -412,12 +516,13 @@ function render() {
 /* ---------- Événements ---------- */
 const ACTIONS = {
   start() { newGame($('#in-name').value.trim(), $('#in-city').value, +$('#in-diff').value); UI.modal = { type: 'help' }; },
-  week() { nextWeek(); },
+  week() { nextWeek(); autoCer(); },
   fast() {
     for (let i = 0; i < 4; i++) {
       nextWeek();
       if (S.over || S.event || S.offers.length || S.recap || S.week === 20) break;
     }
+    autoCer();
   },
   event(d) { toast(resolveEvent(+d.id)); },
   recap() { S.recap = null; save(); },
@@ -457,15 +562,22 @@ const ACTIONS = {
     } catch (e) { toast({ ok: false, msg: 'Export impossible sur cet appareil.' }); }
   },
   match(d) { UI.modal = { type: 'match', id: +d.id, src: d.src, i: +d.i }; },
+  plan(d) { getP(+d.id).plan = d.k; save(); UI.modal.keep = true; },
+  sound() { SND.on = !SND.on; try { localStorage.setItem('agentfoot_sound', SND.on ? '1' : '0'); } catch (e) { /* rien */ } if (SND.on) play(CHIME); },
+  cer() { UI.modal = { type: 'cer', i: 0, open: false }; },
+  cerNext() { cerNext(); },
+  cerClose() { UI.modal = null; },
   sponsor(d) { toast(actSponsor(+d.id)); },
   renew(d) { toast(actRenew(+d.id)); },
   jv(d) { UI.jv = d.id; },
   release(d) { if (confirm('Rompre le mandat de ce joueur ?')) { actRelease(+d.id); UI.modal = null; } },
-  accept(d) { toast(actAccept(+d.id)); },
-  nego(d) { toast(actNegotiate(+d.id)); },
+  accept(d) { const r = actAccept(+d.id); toast(r); if (r.ok) play(CHIME); },
+  negoOpen(d) { const o = S.offers.find((x) => x.id === +d.id); if (o) UI.modal = { type: 'nego', id: o.pid, oid: o.id }; },
+  nego(d) { const r = actNegotiate(+d.id, +d.lv); toast(r); UI.modal = null; if (r.ok) play(CHIME); },
   refuse(d) { actRefuse(+d.id); },
   office() { toast(buyOffice()); },
   staff(d) { toast(hireStaff(d.id)); },
+  fire(d) { if (confirm('Licencier ce membre du personnel ?')) toast(fireStaff(d.id)); },
   reset() { if (confirm('Effacer définitivement la partie ?')) { wipe(); UI.tab = 'bureau'; UI.modal = null; } },
 };
 

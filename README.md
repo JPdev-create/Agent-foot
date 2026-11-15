@@ -35,6 +35,11 @@ La partie est sauvegardée automatiquement dans le navigateur.
 - **Agences rivales** qui signent les pépites du marché, **sponsoring**, **Ballon d'Or**,
   **3 niveaux de difficulté** et **compte rendu de match** (buteurs, minutes, passeurs).
 
+- **Cérémonie des trophées** télévisée à chaque fin de saison : révélation de l'agence, Golden Boy,
+  Soulier d'or, Ballon d'Or, transfert et agent de l'année, avec enveloppes, confettis et fanfare.
+- **Coupe du monde / Euro** une saison sur deux, **missions de saison**, **plans d'entraînement**,
+  **abonnés** (popularité), **personnel à 3 niveaux**, **négociation à paliers**, **panthéon** et sons.
+
 ## Installer l'application
 
 Le jeu est une application web installable (PWA). Ouvrez le site sur le téléphone puis :
@@ -48,5 +53,6 @@ L'appli récupère la dernière version à chaque ouverture et reste jouable hor
 
 - `js/data.js` — championnats, clubs, noms, bureaux, objectifs
 - `js/game.js` — règles et simulation
+- `js/season.js` — cérémonie, tournois internationaux, missions, panthéon
 - `js/ui.js` — interface
 - `sw.js`, `manifest.webmanifest`, `icons/` — application installable

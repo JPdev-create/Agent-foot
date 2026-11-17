@@ -7,6 +7,8 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
 import android.location.Location;
+import android.net.ConnectivityManager;
+import android.net.Network;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Build;
@@ -52,6 +54,36 @@ public class TripService extends Service implements LocationListener {
 
     final Runnable stopLater = new Runnable() { public void run() { finish(); } };
 
+    /** Pendant le trajet : si le Wi-Fi de la voiture disparaît, on prépare la fin du trajet. */
+    ConnectivityManager.NetworkCallback wifiCb;
+
+    private void watchCarWifi() {
+        if (Prefs.carSsid(this) == null || !WifiWatch.onCarWifi(this)) return;
+        ConnectivityManager cm = getSystemService(ConnectivityManager.class);
+        wifiCb = new ConnectivityManager.NetworkCallback() {
+            @Override public void onLost(Network n) {
+                handler.postDelayed(() -> { if (started && !WifiWatch.onCarWifi(TripService.this)) carLinkLost(); }, 3000);
+            }
+            @Override public void onAvailable(Network n) {
+                handler.postDelayed(() -> { if (started && WifiWatch.onCarWifi(TripService.this)) carLinkBack(); }, 3000);
+            }
+        };
+        try { cm.registerNetworkCallback(WifiWatch.wifiRequest(), wifiCb); } catch (Exception e) { wifiCb = null; }
+    }
+
+    private void carLinkLost() {
+        btPendingStop = true;
+        handler.removeCallbacks(stopLater);
+        handler.postDelayed(stopLater, BT_GRACE_MS);
+        updateNotif();
+    }
+
+    private void carLinkBack() {
+        btPendingStop = false;
+        handler.removeCallbacks(stopLater);
+        updateNotif();
+    }
+
     final Runnable tick = new Runnable() {
         public void run() {
             if (!started) return;
@@ -69,12 +101,7 @@ public class TripService extends Service implements LocationListener {
         if (A_STOP.equals(a)) {
             if (started) finish(); else stopSelf();
         } else if (A_BT_OFF.equals(a)) {
-            if (started) {
-                btPendingStop = true;
-                handler.removeCallbacks(stopLater);
-                handler.postDelayed(stopLater, BT_GRACE_MS);
-                updateNotif();
-            } else stopSelf();
+            if (started) carLinkLost(); else stopSelf();
         } else {
             btPendingStop = false;
             handler.removeCallbacks(stopLater);
@@ -123,6 +150,7 @@ public class TripService extends Service implements LocationListener {
         pts.clear();
         live = this;
         handler.post(tick);
+        if ("auto".equals(src)) watchCarWifi();
     }
 
     @Override public void onLocationChanged(Location l) {
@@ -173,6 +201,10 @@ public class TripService extends Service implements LocationListener {
         live = null;
         handler.removeCallbacksAndMessages(null);
         try { lm.removeUpdates(this); } catch (Exception ignored) {}
+        if (wifiCb != null) {
+            try { getSystemService(ConnectivityManager.class).unregisterNetworkCallback(wifiCb); } catch (Exception ignored) {}
+            wifiCb = null;
+        }
         long end = Math.min(System.currentTimeMillis(), lastMoveTs + 60_000);
         if (dist >= MIN_DIST_M) {
             Db.Trip t = new Db.Trip();

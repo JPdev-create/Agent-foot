@@ -130,6 +130,7 @@ public class MainActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
+        WifiWatch.register(this);
         render();
         handler.post(refresher);
     }
@@ -226,11 +227,13 @@ public class MainActivity extends Activity {
             refreshLive();
         } else {
             lc.addView(tv("🅿️  À l'arrêt", 15, SUB, true));
-            String car = Prefs.carName(this);
-            String msg = car == null
-                    ? "Choisis ta voiture (Bluetooth) dans les réglages : les trajets démarreront tout seuls."
+            String car = Prefs.carName(this), ssid = Prefs.carSsid(this);
+            String target = ssid != null && car != null ? "« " + ssid + " » ou « " + car + " »"
+                    : "« " + (ssid != null ? ssid : car) + " »";
+            String msg = !Prefs.carConfigured(this)
+                    ? "Choisis ta voiture (Bluetooth ou Wi-Fi) dans les réglages : les trajets démarreront tout seuls."
                     : (Prefs.autoEnabled(this)
-                        ? "Le prochain trajet démarrera tout seul dès que ton téléphone se connectera à « " + car + " »."
+                        ? "Le prochain trajet démarrera tout seul dès que ton téléphone se connectera à " + target + "."
                         : "Détection automatique désactivée.");
             TextView t = tv(msg, 14, TXT, false);
             t.setPadding(0, dp(6), 0, dp(12));
@@ -324,7 +327,7 @@ public class MainActivity extends Activity {
 
     List<String> setupIssues() {
         List<String> out = new ArrayList<>();
-        if (Prefs.carAddress(this) == null) out.add("Choisir ta voiture (Bluetooth)");
+        if (!Prefs.carConfigured(this)) out.add("Choisir ta voiture (Bluetooth ou Wi-Fi)");
         if (!granted(Manifest.permission.ACCESS_FINE_LOCATION)) out.add("Autoriser la localisation");
         else if (Build.VERSION.SDK_INT >= 29 && !granted(Manifest.permission.ACCESS_BACKGROUND_LOCATION))
             out.add("Localisation : « Toujours autoriser »");
@@ -659,11 +662,45 @@ public class MainActivity extends Activity {
         auto.setOnCheckedChangeListener((b, on) -> Prefs.get(this).edit().putBoolean("auto", on).apply());
         c.addView(auto);
         space(c, 10);
+        TextView wifiHint = tv("📶  Wi-Fi de la voiture (boîtier CarPlay / Android Auto)", 14, TXT, true);
+        c.addView(wifiHint);
+        String ssid = Prefs.carSsid(this);
+        EditText ssidField = field(c, "Nom du Wi-Fi (ex. AutoBox-9678)", ssid == null ? "" : ssid, false);
+        LinearLayout wb = new LinearLayout(this);
+        wb.addView(button("Enregistrer", true, v -> {
+            Prefs.get(this).edit().putString("car_ssid", ssidField.getText().toString().trim()).apply();
+            WifiWatch.register(this);
+            toast(ssidField.getText().toString().trim().isEmpty() ? "Détection Wi-Fi désactivée" : "Wi-Fi enregistré");
+            render();
+        }), new LinearLayout.LayoutParams(0, -2, 1f));
+        space(wb, 8);
+        wb.addView(button("Wi-Fi actuel", false, v -> {
+            String cur = WifiWatch.currentSsid(this);
+            if (cur == null) toast("Aucun Wi-Fi détecté (connecte-toi au boîtier et autorise la localisation)");
+            else ssidField.setText(cur);
+        }), new LinearLayout.LayoutParams(0, -2, 1f));
+        space(c, 6);
+        c.addView(wb);
+        String cur = WifiWatch.currentSsid(this);
+        if (ssid != null) {
+            TextView st = tv(WifiWatch.onCarWifi(this) ? "✅  Connecté au Wi-Fi de la voiture en ce moment" : "Wi-Fi actuel : " + (cur == null ? "aucun" : cur), 12, WifiWatch.onCarWifi(this) ? GOOD : SUB, false);
+            st.setPadding(0, dp(8), 0, 0);
+            c.addView(st);
+        }
+        space(c, 16);
+
         String car = Prefs.carName(this);
-        c.addView(row("Bluetooth de la voiture", car == null ? "Aucune" : car));
-        space(c, 10);
-        c.addView(button(car == null ? "Choisir ma voiture" : "Changer de voiture", car == null, v -> pickCar()));
-        TextView hint = tv("Ta 208 doit déjà être appairée en Bluetooth avec le téléphone (pour la musique ou les appels). Le trajet démarre à la connexion et se termine 1 min 30 après la déconnexion.", 12, SUB, false);
+        c.addView(tv("🔵  Bluetooth de la voiture (facultatif)", 14, TXT, true));
+        c.addView(row("Appareil", car == null ? "Aucun" : car));
+        c.addView(button(car == null ? "Choisir le Bluetooth" : "Changer de Bluetooth", false, v -> pickCar()));
+        if (car != null) {
+            space(c, 6);
+            c.addView(button("Retirer le Bluetooth", false, v -> {
+                Prefs.get(this).edit().remove("car_addr").remove("car_name").apply();
+                render();
+            }));
+        }
+        TextView hint = tv("Le trajet démarre dès que le téléphone se connecte au Wi-Fi ou au Bluetooth de la voiture, et se termine 1 min 30 après la déconnexion. Pour lire le nom du Wi-Fi, Android exige la localisation « Toujours autoriser ».", 12, SUB, false);
         hint.setPadding(0, dp(10), 0, 0);
         c.addView(hint);
 
@@ -745,7 +782,7 @@ public class MainActivity extends Activity {
                 + "•  Ouvre l'appli une fois après l'installation (et après une mise à jour).\n"
                 + "•  Pour corriger un trajet raté : Trajets → « Ajouter à la main ».", 13, TXT, false));
 
-        TextView ver = tv("Compteur 208 · version 1.0 · données stockées uniquement sur ton téléphone", 11, SUB, false);
+        TextView ver = tv("Compteur 208 · version 1.1 · données stockées uniquement sur ton téléphone", 11, SUB, false);
         ver.setGravity(Gravity.CENTER);
         ver.setPadding(0, dp(20), 0, 0);
         content.addView(ver);

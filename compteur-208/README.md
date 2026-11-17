@@ -1,7 +1,8 @@
 # Compteur 208 🚗
 
 Application Android qui enregistre **toute seule** les trajets de la Peugeot 208 :
-dès que le téléphone se connecte au Bluetooth de la voiture, le trajet démarre
+dès que le téléphone se connecte au **Wi-Fi du boîtier CarPlay / Android Auto**
+(par défaut `AutoBox-9678`) ou au **Bluetooth** de la voiture, le trajet démarre
 (distance GPS, durée, vitesse). Il se termine 1 min 30 après la coupure du moteur.
 
 ## Ce qu'elle fait
@@ -20,7 +21,8 @@ dès que le téléphone se connecte au Bluetooth de la voiture, le trajet démar
 1. Télécharge `Compteur208.apk` sur le téléphone et ouvre-le.
 2. Autorise « Installer des applis inconnues » pour l'appli qui l'ouvre (Fichiers, Chrome…).
 3. Lance **Compteur 208** → onglet **Réglages** :
-   - **Choisir ma voiture** : sélectionne le Bluetooth de la 208 (elle doit déjà être appairée)
+   - **Wi-Fi de la voiture** : `AutoBox-9678` est déjà rempli (modifiable)
+   - **Bluetooth** (facultatif) : sélectionne le Bluetooth de la 208
    - Autorise **toutes** les lignes (localisation « Toujours autoriser », Bluetooth,
      notifications, batterie non restreinte)
    - Saisis le **kilométrage actuel** du compteur

@@ -24,20 +24,25 @@ public class BtReceiver extends BroadcastReceiver {
         if (BluetoothDevice.ACTION_ACL_CONNECTED.equals(a)) {
             // Sans « Toujours autoriser », Android refuse le GPS en arrière-plan :
             // on propose plutôt de démarrer d'un appui sur la notification.
-            if (TripService.live == null && !canTrackInBackground(c)) { Notifs.cannotStart(c); return; }
-            try {
-                if (TripService.live != null)
-                    c.startService(new Intent(c, TripService.class).setAction(TripService.A_BT_ON));
-                else
-                    c.startForegroundService(new Intent(c, TripService.class).setAction(TripService.A_START).putExtra("src", "auto"));
-            } catch (Exception e) {
-                Notifs.cannotStart(c);
-            }
+            carConnected(c);
         } else if (BluetoothDevice.ACTION_ACL_DISCONNECTED.equals(a)) {
             if (TripService.live == null) return;
             try {
                 c.startService(new Intent(c, TripService.class).setAction(TripService.A_BT_OFF));
             } catch (Exception ignored) {}
+        }
+    }
+
+    /** La voiture vient d'être détectée (Bluetooth ou Wi-Fi) : on démarre le trajet. */
+    static void carConnected(Context c) {
+        if (TripService.live == null && !canTrackInBackground(c)) { Notifs.cannotStart(c); return; }
+        try {
+            if (TripService.live != null)
+                c.startService(new Intent(c, TripService.class).setAction(TripService.A_BT_ON));
+            else
+                c.startForegroundService(new Intent(c, TripService.class).setAction(TripService.A_START).putExtra("src", "auto"));
+        } catch (Exception e) {
+            Notifs.cannotStart(c);
         }
     }
 

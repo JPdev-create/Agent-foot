@@ -62,10 +62,10 @@ public class TripService extends Service implements LocationListener {
         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
         wifiCb = new ConnectivityManager.NetworkCallback() {
             @Override public void onLost(Network n) {
-                handler.postDelayed(() -> { if (started && !WifiWatch.onCarWifi(TripService.this)) carLinkLost(); }, 3000);
+                handler.postDelayed(new Runnable() { public void run() { if (started && !WifiWatch.onCarWifi(TripService.this)) carLinkLost(); } }, 3000);
             }
             @Override public void onAvailable(Network n) {
-                handler.postDelayed(() -> { if (started && WifiWatch.onCarWifi(TripService.this)) carLinkBack(); }, 3000);
+                handler.postDelayed(new Runnable() { public void run() { if (started && WifiWatch.onCarWifi(TripService.this)) carLinkBack(); } }, 3000);
             }
         };
         try { cm.registerNetworkCallback(WifiWatch.wifiRequest(), wifiCb); } catch (Exception e) { wifiCb = null; }

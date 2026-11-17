@@ -7,6 +7,7 @@ import android.app.DatePickerDialog;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
@@ -27,6 +28,8 @@ import android.view.ViewGroup;
 import android.view.Window;
 import android.widget.ArrayAdapter;
 import android.widget.CheckBox;
+import android.widget.CompoundButton;
+import android.widget.DatePicker;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -92,7 +95,7 @@ public class MainActivity extends Activity {
             TextView t = tv(TABS[i], 11, SUB, false);
             t.setGravity(Gravity.CENTER);
             t.setPadding(0, dp(6), 0, dp(6));
-            t.setOnClickListener(v -> show(k));
+            t.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { show(k); } });
             nav.addView(t, new LinearLayout.LayoutParams(0, -2, 1f));
         }
         root.addView(nav, new LinearLayout.LayoutParams(-1, -2));
@@ -206,7 +209,7 @@ public class MainActivity extends Activity {
             TextView t = tv(sb.toString().trim(), 14, TXT, false);
             t.setPadding(0, dp(8), 0, dp(10));
             c.addView(t);
-            c.addView(button("Ouvrir les réglages", true, v -> show(4)));
+            c.addView(button("Ouvrir les réglages", true, new View.OnClickListener() { public void onClick(View v) { show(4); } }));
         }
 
         // --- Trajet en cours ---
@@ -220,10 +223,10 @@ public class MainActivity extends Activity {
             lc.addView(liveBig);
             lc.addView(liveSub);
             space(lc, 12);
-            lc.addView(button("Terminer le trajet", false, v -> {
-                startService(new Intent(this, TripService.class).setAction(TripService.A_STOP));
-                handler.postDelayed(this::render, 400);
-            }));
+            lc.addView(button("Terminer le trajet", false, new View.OnClickListener() { public void onClick(View v) {
+                startService(new Intent(MainActivity.this, TripService.class).setAction(TripService.A_STOP));
+                handler.postDelayed(new Runnable() { public void run() { render(); } }, 400);
+            } }));
             refreshLive();
         } else {
             lc.addView(tv("🅿️  À l'arrêt", 15, SUB, true));
@@ -238,7 +241,7 @@ public class MainActivity extends Activity {
             TextView t = tv(msg, 14, TXT, false);
             t.setPadding(0, dp(6), 0, dp(12));
             lc.addView(t);
-            lc.addView(button("▶  Démarrer un trajet maintenant", false, v -> startManual()));
+            lc.addView(button("▶  Démarrer un trajet maintenant", false, new View.OnClickListener() { public void onClick(View v) { startManual(); } }));
         }
 
         // --- Compteur estimé ---
@@ -344,7 +347,7 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 33 && !granted(Manifest.permission.POST_NOTIFICATIONS))
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, RQ_NOTIF);
         startForegroundService(new Intent(this, TripService.class).setAction(TripService.A_START).putExtra("src", "manuel"));
-        handler.postDelayed(this::render, 500);
+        handler.postDelayed(new Runnable() { public void run() { render(); } }, 500);
     }
 
     // =====================================================================
@@ -360,9 +363,9 @@ public class MainActivity extends Activity {
         header("Trajets", trips.size() + " trajets · " + Fmt.km(total) + " au total");
 
         LinearLayout actions = new LinearLayout(this);
-        actions.addView(button("+ Ajouter à la main", false, v -> manualTripDialog()), new LinearLayout.LayoutParams(0, -2, 1f));
+        actions.addView(button("+ Ajouter à la main", false, new View.OnClickListener() { public void onClick(View v) { manualTripDialog(); } }), new LinearLayout.LayoutParams(0, -2, 1f));
         space(actions, 8);
-        actions.addView(button("Exporter (CSV)", false, v -> exportTrips()), new LinearLayout.LayoutParams(0, -2, 1f));
+        actions.addView(button("Exporter (CSV)", false, new View.OnClickListener() { public void onClick(View v) { exportTrips(); } }), new LinearLayout.LayoutParams(0, -2, 1f));
         content.addView(actions);
         space(content, 8);
 
@@ -408,7 +411,7 @@ public class MainActivity extends Activity {
             eur.setGravity(Gravity.END);
             right.addView(eur);
             r.addView(right);
-            r.setOnClickListener(v -> { detailId = id; render(); scroll.scrollTo(0, 0); });
+            r.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { detailId = id; render(); scroll.scrollTo(0, 0); } });
         }
         if (dayHeader != null) dayHeader.setText(dayHeader.getText() + "  ·  " + Fmt.km(dayKm));
     }
@@ -418,7 +421,7 @@ public class MainActivity extends Activity {
         Db.Trip t = db.trip(id);
         TextView back = tv("←  Trajets", 15, ACC, true);
         back.setPadding(0, dp(4), 0, dp(12));
-        back.setOnClickListener(v -> { detailId = -1; render(); });
+        back.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { detailId = -1; render(); } });
         content.addView(back);
         if (t == null) { content.addView(tv("Trajet introuvable.", 15, TXT, false)); return; }
 
@@ -442,11 +445,11 @@ public class MainActivity extends Activity {
         c.addView(row("Coût estimé", Fmt.eur(t.km() * conso / 100 * price)));
         c.addView(row("Enregistrement", "auto".equals(t.src) ? "Automatique (Bluetooth)" : Fmt.cap(t.src == null ? "manuel" : t.src)));
 
-        content.addView(button("Supprimer ce trajet", false, v -> confirm("Supprimer ce trajet ?", () -> {
+        content.addView(button("Supprimer ce trajet", false, new View.OnClickListener() { public void onClick(View v) { confirm("Supprimer ce trajet ?", new Runnable() { public void run() {
             db.deleteTrip(id);
             detailId = -1;
             render();
-        })));
+        } }); } }));
     }
 
     void manualTripDialog() {
@@ -455,7 +458,7 @@ public class MainActivity extends Activity {
         TextView d = dateButton(f, date);
         EditText km = field(f, "Distance (km)", "", true);
         EditText min = field(f, "Durée (minutes)", "", true);
-        dialog("Ajouter un trajet", f, null, () -> {
+        dialog("Ajouter un trajet", f, null, new Save() { public boolean run() {
             double k = Fmt.parse(km.getText().toString());
             double m = Fmt.parse(min.getText().toString());
             if (!(k > 0)) { toast("Indique la distance"); return false; }
@@ -466,10 +469,10 @@ public class MainActivity extends Activity {
             t.start = cal.getTimeInMillis();
             t.end = t.start + (long) ((m > 0 ? m : k) * 60000);
             t.dist = k * 1000; t.src = "ajout manuel"; t.pts = "";
-            Db.get(this).addTrip(t);
+            Db.get(MainActivity.this).addTrip(t);
             render();
             return true;
-        });
+        } });
     }
 
     void exportTrips() {
@@ -499,7 +502,7 @@ public class MainActivity extends Activity {
         double yEur = 0, yL = 0;
         for (Db.Fuel f : fuels) if (f.date >= ys) { yEur += f.total; yL += f.liters; }
         header("Pleins", fuels.size() + " pleins enregistrés");
-        content.addView(button("+  Ajouter un plein", true, v -> fuelDialog(null)));
+        content.addView(button("+  Ajouter un plein", true, new View.OnClickListener() { public void onClick(View v) { fuelDialog(null); } }));
         space(content, 12);
 
         double real = Calc.realConso(fuels);
@@ -530,7 +533,7 @@ public class MainActivity extends Activity {
             if (!l3.isEmpty()) c.addView(tv(l3, 13, SUB, false));
             double[] s = seg.get(f.id);
             if (s != null) c.addView(tv("➜ " + Fmt.num(s[0] / s[1] * 100, 1) + " L/100 sur " + Fmt.kmInt(s[1]), 13, GOOD, true));
-            c.setOnClickListener(v -> fuelDialog(f));
+            c.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { fuelDialog(f); } });
         }
     }
 
@@ -568,8 +571,8 @@ public class MainActivity extends Activity {
         EditText station = field(form, "Station (facultatif)", f.station, false);
 
         dialog(existing == null ? "Nouveau plein" : "Modifier le plein", form,
-                existing == null ? null : () -> confirm("Supprimer ce plein ?", () -> { db.deleteFuel(f.id); render(); }),
-                () -> {
+                existing == null ? null : new Runnable() { public void run() { confirm("Supprimer ce plein ?", new Runnable() { public void run() { db.deleteFuel(f.id); render(); } }); } },
+                new Save() { public boolean run() {
                     double l = Fmt.parse(liters.getText().toString()), t = Fmt.parse(total.getText().toString());
                     double o = Fmt.parse(odo.getText().toString());
                     if (!(l > 0)) { toast("Indique le nombre de litres"); return false; }
@@ -579,7 +582,7 @@ public class MainActivity extends Activity {
                     db.saveFuel(f);
                     render();
                     return true;
-                });
+                } });
     }
 
     // =====================================================================
@@ -593,7 +596,7 @@ public class MainActivity extends Activity {
         long ys = Calc.yearStart(System.currentTimeMillis());
         for (Db.Maint m : list) if (m.date >= ys) sum += m.cost;
         header("Entretien & frais", "Cette année : " + Fmt.eur(sum));
-        content.addView(button("+  Ajouter une dépense", true, v -> maintDialog(null)));
+        content.addView(button("+  Ajouter une dépense", true, new View.OnClickListener() { public void onClick(View v) { maintDialog(null); } }));
         space(content, 12);
         if (list.isEmpty()) {
             LinearLayout c = card();
@@ -610,7 +613,7 @@ public class MainActivity extends Activity {
             c.addView(top);
             c.addView(tv(Fmt.date(m.date) + (m.odo > 0 ? " · " + Fmt.kmInt(m.odo) : ""), 13, SUB, false));
             if (!m.note.isEmpty()) c.addView(tv(m.note, 13, SUB, false));
-            c.setOnClickListener(v -> maintDialog(m));
+            c.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { maintDialog(m); } });
         }
     }
 
@@ -632,8 +635,8 @@ public class MainActivity extends Activity {
         if (existing == null && est > 0) odo.setHint("Kilométrage (≈ " + Fmt.kmInt(est) + ")");
         EditText note = field(form, "Note (garage, détails…)", m.note, false);
         dialog(existing == null ? "Nouvelle dépense" : "Modifier", form,
-                existing == null ? null : () -> confirm("Supprimer cette dépense ?", () -> { db.deleteMaint(m.id); render(); }),
-                () -> {
+                existing == null ? null : new Runnable() { public void run() { confirm("Supprimer cette dépense ?", new Runnable() { public void run() { db.deleteMaint(m.id); render(); } }); } },
+                new Save() { public boolean run() {
                     double c = Fmt.parse(cost.getText().toString()), o = Fmt.parse(odo.getText().toString());
                     m.type = (String) type.getSelectedItem();
                     m.date = date[0]; m.cost = c > 0 ? c : 0; m.odo = o > 0 ? o : -1;
@@ -641,7 +644,7 @@ public class MainActivity extends Activity {
                     db.saveMaint(m);
                     render();
                     return true;
-                });
+                } });
     }
 
     // =====================================================================
@@ -659,7 +662,7 @@ public class MainActivity extends Activity {
         auto.setTextColor(TXT);
         auto.setTextSize(15);
         auto.setChecked(Prefs.autoEnabled(this));
-        auto.setOnCheckedChangeListener((b, on) -> Prefs.get(this).edit().putBoolean("auto", on).apply());
+        auto.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() { public void onCheckedChanged(CompoundButton b, boolean on) { Prefs.get(MainActivity.this).edit().putBoolean("auto", on).apply(); } });
         c.addView(auto);
         space(c, 10);
         TextView wifiHint = tv("📶  Wi-Fi de la voiture (boîtier CarPlay / Android Auto)", 14, TXT, true);
@@ -667,18 +670,18 @@ public class MainActivity extends Activity {
         String ssid = Prefs.carSsid(this);
         EditText ssidField = field(c, "Nom du Wi-Fi (ex. AutoBox-9678)", ssid == null ? "" : ssid, false);
         LinearLayout wb = new LinearLayout(this);
-        wb.addView(button("Enregistrer", true, v -> {
-            Prefs.get(this).edit().putString("car_ssid", ssidField.getText().toString().trim()).apply();
-            WifiWatch.register(this);
+        wb.addView(button("Enregistrer", true, new View.OnClickListener() { public void onClick(View v) {
+            Prefs.get(MainActivity.this).edit().putString("car_ssid", ssidField.getText().toString().trim()).apply();
+            WifiWatch.register(MainActivity.this);
             toast(ssidField.getText().toString().trim().isEmpty() ? "Détection Wi-Fi désactivée" : "Wi-Fi enregistré");
             render();
-        }), new LinearLayout.LayoutParams(0, -2, 1f));
+        } }), new LinearLayout.LayoutParams(0, -2, 1f));
         space(wb, 8);
-        wb.addView(button("Wi-Fi actuel", false, v -> {
-            String cur = WifiWatch.currentSsid(this);
+        wb.addView(button("Wi-Fi actuel", false, new View.OnClickListener() { public void onClick(View v) {
+            String cur = WifiWatch.currentSsid(MainActivity.this);
             if (cur == null) toast("Aucun Wi-Fi détecté (connecte-toi au boîtier et autorise la localisation)");
             else ssidField.setText(cur);
-        }), new LinearLayout.LayoutParams(0, -2, 1f));
+        } }), new LinearLayout.LayoutParams(0, -2, 1f));
         space(c, 6);
         c.addView(wb);
         String cur = WifiWatch.currentSsid(this);
@@ -692,13 +695,13 @@ public class MainActivity extends Activity {
         String car = Prefs.carName(this);
         c.addView(tv("🔵  Bluetooth de la voiture (facultatif)", 14, TXT, true));
         c.addView(row("Appareil", car == null ? "Aucun" : car));
-        c.addView(button(car == null ? "Choisir le Bluetooth" : "Changer de Bluetooth", false, v -> pickCar()));
+        c.addView(button(car == null ? "Choisir le Bluetooth" : "Changer de Bluetooth", false, new View.OnClickListener() { public void onClick(View v) { pickCar(); } }));
         if (car != null) {
             space(c, 6);
-            c.addView(button("Retirer le Bluetooth", false, v -> {
-                Prefs.get(this).edit().remove("car_addr").remove("car_name").apply();
+            c.addView(button("Retirer le Bluetooth", false, new View.OnClickListener() { public void onClick(View v) {
+                Prefs.get(MainActivity.this).edit().remove("car_addr").remove("car_name").apply();
                 render();
-            }));
+            } }));
         }
         TextView hint = tv("Le trajet démarre dès que le téléphone se connecte au Wi-Fi ou au Bluetooth de la voiture, et se termine 1 min 30 après la déconnexion. Pour lire le nom du Wi-Fi, Android exige la localisation « Toujours autoriser ».", 12, SUB, false);
         hint.setPadding(0, dp(10), 0, 0);
@@ -708,29 +711,26 @@ public class MainActivity extends Activity {
         section("Autorisations");
         LinearLayout pc = card();
         boolean loc = granted(Manifest.permission.ACCESS_FINE_LOCATION);
-        permRow(pc, "Localisation précise", loc, () ->
-                requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, RQ_LOC));
+        permRow(pc, "Localisation précise", loc, new Runnable() { public void run() { requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, RQ_LOC); } });
         if (Build.VERSION.SDK_INT >= 29)
-            permRow(pc, "Localisation « Toujours autoriser »", granted(Manifest.permission.ACCESS_BACKGROUND_LOCATION), () -> {
+            permRow(pc, "Localisation « Toujours autoriser »", granted(Manifest.permission.ACCESS_BACKGROUND_LOCATION), new Runnable() { public void run() {
                 if (!loc) { toast("Autorise d'abord la localisation précise"); return; }
                 toast("Choisis « Toujours autoriser »");
                 requestPermissions(new String[]{Manifest.permission.ACCESS_BACKGROUND_LOCATION}, RQ_BG);
-            });
+            } });
         if (Build.VERSION.SDK_INT >= 31)
-            permRow(pc, "Bluetooth (appareils à proximité)", granted(Manifest.permission.BLUETOOTH_CONNECT), () ->
-                    requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT}, RQ_BT));
+            permRow(pc, "Bluetooth (appareils à proximité)", granted(Manifest.permission.BLUETOOTH_CONNECT), new Runnable() { public void run() { requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT}, RQ_BT); } });
         if (Build.VERSION.SDK_INT >= 33)
-            permRow(pc, "Notifications", granted(Manifest.permission.POST_NOTIFICATIONS), () ->
-                    requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, RQ_NOTIF));
-        permRow(pc, "Batterie non restreinte", batteryOk(), () -> {
+            permRow(pc, "Notifications", granted(Manifest.permission.POST_NOTIFICATIONS), new Runnable() { public void run() { requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, RQ_NOTIF); } });
+        permRow(pc, "Batterie non restreinte", batteryOk(), new Runnable() { public void run() {
             try {
                 startActivity(new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + getPackageName())));
             } catch (Exception e) {
                 openAppSettings();
             }
-        });
+        } });
         space(pc, 6);
-        pc.addView(button("Ouvrir les paramètres de l'appli", false, v -> openAppSettings()));
+        pc.addView(button("Ouvrir les paramètres de l'appli", false, new View.OnClickListener() { public void onClick(View v) { openAppSettings(); } }));
 
         // --- Compteur ---
         section("Compteur kilométrique");
@@ -739,13 +739,13 @@ public class MainActivity extends Activity {
         oc.addView(tv(ref > 0 ? "Dernier relevé saisi : " + Fmt.kmInt(ref) + " le " + Fmt.dateShort(Prefs.odoRefDate(this))
                 : "Lis le kilométrage sur le tableau de bord de ta 208 et note-le ici.", 13, SUB, false));
         EditText odo = field(oc, "Kilométrage actuel (km)", "", true);
-        oc.addView(button("Enregistrer le kilométrage", true, v -> {
+        oc.addView(button("Enregistrer le kilométrage", true, new View.OnClickListener() { public void onClick(View v) {
             double o = Fmt.parse(odo.getText().toString());
             if (!(o > 0)) { toast("Indique le kilométrage"); return; }
-            Prefs.get(this).edit().putFloat("odo_ref", (float) o).putLong("odo_ref_date", System.currentTimeMillis()).apply();
+            Prefs.get(MainActivity.this).edit().putFloat("odo_ref", (float) o).putLong("odo_ref_date", System.currentTimeMillis()).apply();
             toast("Kilométrage enregistré");
             render();
-        }));
+        } }));
 
         // --- Valeurs par défaut ---
         section("Valeurs de calcul");
@@ -754,24 +754,24 @@ public class MainActivity extends Activity {
         EditText conso = field(dc, "Consommation (L/100 km)", Fmt.num(Prefs.defaultConso(this), 1), true);
         EditText prix = field(dc, "Prix du litre (€)", Fmt.num(Prefs.defaultPrice(this), 3), true);
         EditText vid = field(dc, "Vidange tous les (km)", Fmt.num(Prefs.vidangeInterval(this), 0), true);
-        dc.addView(button("Enregistrer", false, v -> {
+        dc.addView(button("Enregistrer", false, new View.OnClickListener() { public void onClick(View v) {
             double a = Fmt.parse(conso.getText().toString()), p = Fmt.parse(prix.getText().toString()), k = Fmt.parse(vid.getText().toString());
-            android.content.SharedPreferences.Editor e = Prefs.get(this).edit();
+            android.content.SharedPreferences.Editor e = Prefs.get(MainActivity.this).edit();
             if (a > 0) e.putFloat("conso_def", (float) a);
             if (p > 0) e.putFloat("prix_def", (float) p);
             if (k > 0) e.putFloat("vidange_km", (float) k);
             e.apply();
             toast("Enregistré");
-        }));
+        } }));
 
         // --- Export ---
         section("Exporter");
         LinearLayout ec = card();
         ec.addView(tv("Pour les frais kilométriques ou un tableur (Excel, Google Sheets).", 13, SUB, false));
         space(ec, 8);
-        ec.addView(button("Exporter les trajets (CSV)", false, v -> exportTrips()));
+        ec.addView(button("Exporter les trajets (CSV)", false, new View.OnClickListener() { public void onClick(View v) { exportTrips(); } }));
         space(ec, 8);
-        ec.addView(button("Exporter les pleins (CSV)", false, v -> exportFuel()));
+        ec.addView(button("Exporter les pleins (CSV)", false, new View.OnClickListener() { public void onClick(View v) { exportFuel(); } }));
 
         // --- Astuces ---
         section("Astuces Samsung");
@@ -782,7 +782,7 @@ public class MainActivity extends Activity {
                 + "•  Ouvre l'appli une fois après l'installation (et après une mise à jour).\n"
                 + "•  Pour corriger un trajet raté : Trajets → « Ajouter à la main ».", 13, TXT, false));
 
-        TextView ver = tv("Compteur 208 · version 1.1 · données stockées uniquement sur ton téléphone", 11, SUB, false);
+        TextView ver = tv("Compteur 208 · version 1.2 · données stockées uniquement sur ton téléphone", 11, SUB, false);
         ver.setGravity(Gravity.CENTER);
         ver.setPadding(0, dp(20), 0, 0);
         content.addView(ver);
@@ -816,13 +816,13 @@ public class MainActivity extends Activity {
         }
         new AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
                 .setTitle("Quel est le Bluetooth de ta 208 ?")
-                .setItems(names.toArray(new String[0]), (dlg, i) -> {
+                .setItems(names.toArray(new String[0]), new DialogInterface.OnClickListener() { public void onClick(DialogInterface dlg, int i) {
                     BluetoothDevice d = devs.get(i);
                     String n = d.getName() == null ? d.getAddress() : d.getName();
-                    Prefs.get(this).edit().putString("car_addr", d.getAddress()).putString("car_name", n).apply();
+                    Prefs.get(MainActivity.this).edit().putString("car_addr", d.getAddress()).putString("car_name", n).apply();
                     toast("Voiture enregistrée : " + n);
                     render();
-                })
+                } })
                 .setNegativeButton("Annuler", null)
                 .show();
     }
@@ -962,7 +962,7 @@ public class MainActivity extends Activity {
         if (!ok) {
             TextView b = tv("Autoriser", 14, ACC, true);
             b.setPadding(dp(12), dp(6), dp(4), dp(6));
-            b.setOnClickListener(v -> fix.run());
+            b.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { fix.run(); } });
             r.addView(b);
         }
         parent.addView(r);
@@ -996,17 +996,17 @@ public class MainActivity extends Activity {
     TextView dateButton(LinearLayout parent, long[] date) {
         TextView d = tv("📅  " + Fmt.date(date[0]), 15, ACC, true);
         d.setPadding(dp(4), dp(12), dp(4), dp(12));
-        d.setOnClickListener(v -> {
+        d.setOnClickListener(new View.OnClickListener() { public void onClick(View v) {
             Calendar cal = Calendar.getInstance();
             cal.setTimeInMillis(date[0]);
-            new DatePickerDialog(this, (p, y, m, day) -> {
+            new DatePickerDialog(MainActivity.this, new DatePickerDialog.OnDateSetListener() { public void onDateSet(DatePicker p, int y, int m, int day) {
                 Calendar c2 = Calendar.getInstance();
                 c2.setTimeInMillis(date[0]);
                 c2.set(y, m, day);
                 date[0] = c2.getTimeInMillis();
                 d.setText("📅  " + Fmt.date(date[0]));
-            }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show();
-        });
+            } }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show();
+        } });
         parent.addView(d);
         return d;
     }
@@ -1022,18 +1022,18 @@ public class MainActivity extends Activity {
                 .setView(sv)
                 .setPositiveButton("Enregistrer", null)
                 .setNegativeButton("Annuler", null);
-        if (onDelete != null) b.setNeutralButton("Supprimer", (d, w) -> onDelete.run());
+        if (onDelete != null) b.setNeutralButton("Supprimer", new DialogInterface.OnClickListener() { public void onClick(DialogInterface d, int w) { onDelete.run(); } });
         AlertDialog dlg = b.create();
-        dlg.setOnShowListener(x -> dlg.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+        dlg.setOnShowListener(new DialogInterface.OnShowListener() { public void onShow(DialogInterface x) { dlg.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(new View.OnClickListener() { public void onClick(View v) {
             if (onSave.run()) dlg.dismiss();
-        }));
+        } }); } });
         dlg.show();
     }
 
     void confirm(String msg, Runnable yes) {
         new AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
                 .setMessage(msg)
-                .setPositiveButton("Supprimer", (d, w) -> yes.run())
+                .setPositiveButton("Supprimer", new DialogInterface.OnClickListener() { public void onClick(DialogInterface d, int w) { yes.run(); } })
                 .setNegativeButton("Annuler", null)
                 .show();
     }

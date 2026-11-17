@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Construit l'APK Android de Compteur 208, sans Android Studio.
-# Outils requis (Ubuntu/Debian) : sudo apt install aapt apksigner zipalign dalvik-exchange openjdk-17-jdk
+# Outils requis (Ubuntu/Debian) : sudo apt install aapt apksigner zipalign dalvik-exchange dexdump openjdk-17-jdk
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -22,6 +22,12 @@ javac --release 8 -nowarn -Xlint:none -encoding UTF-8 -cp "$ANDROID_JAR" -d buil
 
 echo "3/5 Conversion Dalvik"
 dalvik-exchange --dex --min-sdk-version=26 --output=build/classes.dex build/classes
+
+# Garde-fou : Android ne sait pas exécuter les lambdas Java non converties (plantage au lancement).
+if command -v dexdump >/dev/null && dexdump -d build/classes.dex | grep -q "invoke-custom"; then
+  echo "ERREUR : lambdas Java détectées (->, ::). Utiliser des classes anonymes." >&2
+  exit 1
+fi
 
 echo "4/5 Assemblage"
 cp build/res.apk build/unsigned.apk

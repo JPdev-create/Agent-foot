@@ -56,6 +56,7 @@
   body { @apply bg-bg text-ink font-sans antialiased; font-size: 1.0625rem; line-height: 1.6; }
   h1, h2 { font-family: var(--font-display); letter-spacing: -0.035em; line-height: 1.05; text-wrap: balance; }
   h3 { letter-spacing: -0.015em; line-height: 1.2; }
+  section:focus { outline: none; }
   :focus-visible { outline: 2px solid var(--t-primary); outline-offset: 3px; border-radius: 8px; }
   ::selection { background: var(--t-primary); color: var(--t-on-primary); }
 }

@@ -188,47 +188,88 @@ final class Charts {
         }
     }
 
-    /** Tracé GPS d'un trajet sur une grille discrète (sans fond de carte). */
+    /**
+     * Tracé GPS d'un trajet sur une vraie carte (tuiles sombres OpenStreetMap / CARTO,
+     * téléchargées puis gardées en cache). Sans connexion : simple grille.
+     */
     static final class Trace extends View {
+        static final java.util.concurrent.ExecutorService NET = java.util.concurrent.Executors.newFixedThreadPool(4);
+        static final android.util.LruCache<String, android.graphics.Bitmap> MEM = new android.util.LruCache<>(48);
+
         final List<double[]> pts;
+        final java.util.Set<String> requested = new java.util.HashSet<>();
         final Paint glow = new Paint(Paint.ANTI_ALIAS_FLAG), line = new Paint(Paint.ANTI_ALIAS_FLAG),
-                dot = new Paint(Paint.ANTI_ALIAS_FLAG), grid = new Paint(), txt;
+                dot = new Paint(Paint.ANTI_ALIAS_FLAG), grid = new Paint(), tilePaint = new Paint(Paint.FILTER_BITMAP_FLAG), txt, attr;
 
         Trace(Context c, List<double[]> pts) {
             super(c);
             this.pts = pts;
             glow.setStyle(Paint.Style.STROKE); glow.setStrokeWidth(dp(c, 12));
             glow.setStrokeCap(Paint.Cap.ROUND); glow.setStrokeJoin(Paint.Join.ROUND);
-            glow.setColor(BaseUi.alpha(BaseUi.ACC, 0x38));
+            glow.setColor(BaseUi.alpha(BaseUi.ACC, 0x40));
             line.setStyle(Paint.Style.STROKE); line.setStrokeWidth(dp(c, 4));
             line.setStrokeCap(Paint.Cap.ROUND); line.setStrokeJoin(Paint.Join.ROUND);
             line.setColor(BaseUi.ACC);
             grid.setColor(0x0DFFFFFF); grid.setStrokeWidth(dp(c, 1));
             txt = textPaint(c, 14, BaseUi.SUB, false);
+            attr = textPaint(c, 9, 0x99FFFFFF, false);
+            attr.setTextAlign(Paint.Align.RIGHT);
+        }
+
+        // Projection Web Mercator : coordonnées "monde" en pixels écran pour un zoom donné.
+        static double wx(double lon, double world) { return (lon + 180.0) / 360.0 * world; }
+        static double wy(double lat, double world) {
+            double r = Math.toRadians(Math.max(-85, Math.min(85, lat)));
+            return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * world;
         }
 
         @Override protected void onDraw(Canvas cv) {
             Context c = getContext();
-            float w = getWidth(), h = getHeight(), cell = dp(c, 28);
+            float w = getWidth(), h = getHeight();
+            float cell = dp(c, 28);
             for (float x = cell; x < w; x += cell) cv.drawLine(x, 0, x, h, grid);
             for (float y = cell; y < h; y += cell) cv.drawLine(0, y, w, y, grid);
             if (pts.size() < 2) { cv.drawText("Pas de tracé GPS pour ce trajet", w / 2, h / 2, txt); return; }
+
             double minLat = 90, maxLat = -90, minLon = 180, maxLon = -180;
             for (double[] p : pts) {
                 minLat = Math.min(minLat, p[0]); maxLat = Math.max(maxLat, p[0]);
                 minLon = Math.min(minLon, p[1]); maxLon = Math.max(maxLon, p[1]);
             }
-            double k = Math.cos(Math.toRadians((minLat + maxLat) / 2));
-            double spanX = Math.max((maxLon - minLon) * k, 1e-6), spanY = Math.max(maxLat - minLat, 1e-6);
-            float pad = dp(c, 28);
-            double s = Math.min((w - 2 * pad) / spanX, (h - 2 * pad) / spanY);
-            float ox = (float) ((w - spanX * s) / 2), oy = (float) ((h - spanY * s) / 2);
+            float tile = dp(c, 256);       // taille d'une tuile à l'écran
+            float pad = dp(c, 36);
+            int z = 17;
+            for (; z > 2; z--) {
+                double world = tile * Math.pow(2, z);
+                double bw = wx(maxLon, world) - wx(minLon, world), bh = wy(minLat, world) - wy(maxLat, world);
+                if (bw <= w - 2 * pad && bh <= h - 2 * pad) break;
+            }
+            double world = tile * Math.pow(2, z);
+            double cx = (wx(minLon, world) + wx(maxLon, world)) / 2, cy = (wy(minLat, world) + wy(maxLat, world)) / 2;
+            double ox = cx - w / 2, oy = cy - h / 2;
+
+            // Fond de carte
+            int n = 1 << z;
+            int tx0 = (int) Math.floor(ox / tile), tx1 = (int) Math.floor((ox + w) / tile);
+            int ty0 = (int) Math.floor(oy / tile), ty1 = (int) Math.floor((oy + h) / tile);
+            boolean anyTile = false;
+            for (int tx = tx0; tx <= tx1; tx++) {
+                for (int ty = ty0; ty <= ty1; ty++) {
+                    if (ty < 0 || ty >= n) continue;
+                    int x = ((tx % n) + n) % n;
+                    android.graphics.Bitmap b = tile(z, x, ty);
+                    if (b == null) continue;
+                    anyTile = true;
+                    float left = (float) (tx * tile - ox), top = (float) (ty * tile - oy);
+                    cv.drawBitmap(b, null, new RectF(left, top, left + tile, top + tile), tilePaint);
+                }
+            }
+
             Path path = new Path();
             float sx = 0, sy = 0, ex = 0, ey = 0;
             for (int i = 0; i < pts.size(); i++) {
                 double[] p = pts.get(i);
-                float x = ox + (float) ((p[1] - minLon) * k * s);
-                float y = oy + (float) ((maxLat - p[0]) * s);
+                float x = (float) (wx(p[1], world) - ox), y = (float) (wy(p[0], world) - oy);
                 if (i == 0) { path.moveTo(x, y); sx = x; sy = y; } else path.lineTo(x, y);
                 ex = x; ey = y;
             }
@@ -236,6 +277,51 @@ final class Charts {
             cv.drawPath(path, line);
             marker(cv, sx, sy, BaseUi.GOOD);
             marker(cv, ex, ey, BaseUi.ACC2);
+            if (anyTile) cv.drawText("© OpenStreetMap © CARTO", w - dp(c, 8), h - dp(c, 7), attr);
+        }
+
+        /** Tuile en mémoire, sinon lancement du chargement (disque puis internet). */
+        android.graphics.Bitmap tile(final int z, final int x, final int y) {
+            final String key = z + "_" + x + "_" + y;
+            android.graphics.Bitmap b = MEM.get(key);
+            if (b != null || requested.contains(key)) return b;
+            requested.add(key);
+            final java.io.File dir = new java.io.File(getContext().getCacheDir(), "tuiles");
+            NET.execute(new Runnable() {
+                public void run() {
+                    try {
+                        java.io.File f = new java.io.File(dir, key + ".png");
+                        android.graphics.Bitmap bm = f.exists() ? android.graphics.BitmapFactory.decodeFile(f.getPath()) : null;
+                        if (bm == null) {
+                            String host = "abcd".charAt((x + y) % 4) + ".basemaps.cartocdn.com";
+                            java.net.HttpURLConnection con = (java.net.HttpURLConnection)
+                                    new java.net.URL("https://" + host + "/dark_all/" + z + "/" + x + "/" + y + "@2x.png").openConnection();
+                            con.setConnectTimeout(8000);
+                            con.setReadTimeout(10000);
+                            con.setRequestProperty("User-Agent", "Compteur208/2.2 (Android)");
+                            java.io.InputStream in = con.getInputStream();
+                            java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+                            byte[] tmp = new byte[16384];
+                            int r;
+                            while ((r = in.read(tmp)) > 0) buf.write(tmp, 0, r);
+                            in.close();
+                            con.disconnect();
+                            byte[] data = buf.toByteArray();
+                            bm = android.graphics.BitmapFactory.decodeByteArray(data, 0, data.length);
+                            if (bm != null) {
+                                dir.mkdirs();
+                                java.io.FileOutputStream out = new java.io.FileOutputStream(f);
+                                out.write(data);
+                                out.close();
+                            }
+                        }
+                        if (bm != null) { MEM.put(key, bm); postInvalidate(); }
+                    } catch (Exception ignored) {
+                        // pas de réseau : la grille reste affichée
+                    }
+                }
+            });
+            return null;
         }
 
         void marker(Canvas cv, float x, float y, int color) {

@@ -48,7 +48,7 @@ public class MainActivity extends BaseUi {
     static final int RQ_LOC = 1, RQ_BG = 2, RQ_BT = 3, RQ_NOTIF = 4, RQ_LOC_START = 5, RQ_BT_PICK = 6;
     static final int[] NAV_ICONS = {R.drawable.i_home, R.drawable.i_route, R.drawable.i_fuel, R.drawable.i_wrench, R.drawable.i_sliders};
     static final String[] NAV_LABELS = {"Accueil", "Trajets", "Pleins", "Entretien", "Réglages"};
-    static final String VERSION = "2.1";
+    static final String VERSION = "2.2";
 
     LinearLayout content;
     ScrollView scroll;
@@ -585,8 +585,14 @@ public class MainActivity extends BaseUi {
         LinearLayout map = vbox();
         map.setBackground(roundStroke(SURF, 20, STROKE));
         map.setClipToOutline(true);
-        map.addView(new Charts.Trace(this, TripService.decode(t.pts)), new LinearLayout.LayoutParams(-1, dp(280)));
+        final List<double[]> tracePts = TripService.decode(t.pts);
+        map.addView(new Charts.Trace(this, tracePts), new LinearLayout.LayoutParams(-1, dp(320)));
         content.addView(map, fullWidth(12));
+        if (tracePts.size() >= 2) {
+            content.addView(tonalButton("Ouvrir dans Google Maps", R.drawable.i_pin, ACC, new Click() {
+                public void run() { openInMaps(tracePts); }
+            }), fullWidth(12));
+        }
 
         LinearLayout r1 = tilesRow(content);
         tile(r1, R.drawable.i_clock, ACC, "Durée", Fmt.dur(t.duration()), t.moving > 0 ? Fmt.dur(t.moving) + " en mouvement" : null);
@@ -611,6 +617,24 @@ public class MainActivity extends BaseUi {
             }
         }), fullWidth(0));
     }
+
+    /** Ouvre le trajet dans Google Maps (départ, arrivée et quelques points de passage). */
+    void openInMaps(List<double[]> p) {
+        StringBuilder u = new StringBuilder("https://www.google.com/maps/dir/?api=1&travelmode=driving");
+        u.append("&origin=").append(ll(p.get(0))).append("&destination=").append(ll(p.get(p.size() - 1)));
+        int nWay = Math.min(8, p.size() - 2);
+        if (nWay > 0) {
+            u.append("&waypoints=");
+            for (int i = 1; i <= nWay; i++) {
+                if (i > 1) u.append("%7C");
+                u.append(ll(p.get((int) ((long) i * (p.size() - 1) / (nWay + 1)))));
+            }
+        }
+        try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(u.toString()))); }
+        catch (Exception e) { toast("Impossible d'ouvrir la carte"); }
+    }
+
+    static String ll(double[] p) { return String.format(java.util.Locale.US, "%.5f,%.5f", p[0], p[1]); }
 
     void manualTripDialog() {
         LinearLayout f = vbox();

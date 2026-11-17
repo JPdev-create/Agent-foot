@@ -49,10 +49,29 @@ public class TripService extends Service implements LocationListener {
     long moving;
     float curSpeed;
     Location last;
-    int jumps;
+    int jumps, ticks;
+    String info = "";
     final List<double[]> pts = new ArrayList<>();
 
-    final Runnable stopLater = new Runnable() { public void run() { finish(); } };
+    /** Raison de la fin du trajet (enregistrée avec le trajet). */
+    String endReason = "Terminé à la main";
+    String linkReason;
+
+    /**
+     * Lien avec la voiture perdu : on ne termine le trajet que quand la voiture est
+     * immobile depuis BT_GRACE_MS. Ainsi une coupure Wi-Fi en roulant ne coupe jamais le trajet.
+     */
+    final Runnable stopLater = new Runnable() {
+        public void run() {
+            if (!started || !btPendingStop) return;
+            if (System.currentTimeMillis() - lastMoveTs >= BT_GRACE_MS) {
+                endReason = linkReason;
+                finish();
+            } else {
+                handler.postDelayed(this, 15_000);
+            }
+        }
+    };
 
     /** Pendant le trajet : si le Wi-Fi de la voiture disparaît, on prépare la fin du trajet. */
     ConnectivityManager.NetworkCallback wifiCb;
@@ -62,7 +81,7 @@ public class TripService extends Service implements LocationListener {
         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
         wifiCb = new ConnectivityManager.NetworkCallback() {
             @Override public void onLost(Network n) {
-                handler.postDelayed(new Runnable() { public void run() { if (started && !WifiWatch.onCarWifi(TripService.this)) carLinkLost(); } }, 3000);
+                handler.postDelayed(new Runnable() { public void run() { if (started && !WifiWatch.onCarWifi(TripService.this)) carLinkLost("Wi-Fi de la voiture perdu"); } }, 3000);
             }
             @Override public void onAvailable(Network n) {
                 handler.postDelayed(new Runnable() { public void run() { if (started && WifiWatch.onCarWifi(TripService.this)) carLinkBack(); } }, 3000);
@@ -71,10 +90,11 @@ public class TripService extends Service implements LocationListener {
         try { cm.registerNetworkCallback(WifiWatch.wifiRequest(), wifiCb); } catch (Exception e) { wifiCb = null; }
     }
 
-    private void carLinkLost() {
+    private void carLinkLost(String reason) {
         btPendingStop = true;
+        linkReason = reason;
         handler.removeCallbacks(stopLater);
-        handler.postDelayed(stopLater, BT_GRACE_MS);
+        handler.postDelayed(stopLater, 15_000);
         updateNotif();
     }
 
@@ -88,8 +108,9 @@ public class TripService extends Service implements LocationListener {
         public void run() {
             if (!started) return;
             long now = System.currentTimeMillis();
-            if (!"auto".equals(src) && now - lastMoveTs > IDLE_STOP_MS) { finish(); return; }
+            if (now - lastMoveTs > IDLE_STOP_MS) { endReason = "Immobile pendant 20 min"; finish(); return; }
             updateNotif();
+            if (++ticks % 4 == 0) checkpoint();
             handler.postDelayed(this, 5000);
         }
     };
@@ -97,22 +118,64 @@ public class TripService extends Service implements LocationListener {
     @Override public IBinder onBind(Intent i) { return null; }
 
     @Override public int onStartCommand(Intent i, int flags, int id) {
-        String a = i != null && i.getAction() != null ? i.getAction() : A_START;
+        if (i == null) {
+            // Redémarrage par Android après l'avoir tué : on reprend le trajet sauvegardé.
+            if (!started && hasCheckpoint(this)) begin("auto");
+            else if (!started) stopSelf();
+            return START_STICKY;
+        }
+        String a = i.getAction() != null ? i.getAction() : A_START;
         if (A_STOP.equals(a)) {
+            endReason = "Terminé à la main";
             if (started) finish(); else stopSelf();
         } else if (A_BT_OFF.equals(a)) {
-            if (started) carLinkLost(); else stopSelf();
+            if (started) carLinkLost("Bluetooth de la voiture déconnecté"); else stopSelf();
         } else {
             btPendingStop = false;
             handler.removeCallbacks(stopLater);
             if (!started) {
-                String s = i != null ? i.getStringExtra("src") : null;
+                String s = i.getStringExtra("src");
                 begin(s != null ? s : (A_BT_ON.equals(a) ? "auto" : "manuel"));
             } else {
                 promote(); // déjà en cours : on reste au premier plan
             }
         }
-        return START_NOT_STICKY;
+        return started ? START_STICKY : START_NOT_STICKY;
+    }
+
+    // ---------- Sauvegarde du trajet en cours (si Android tue l'appli) ----------
+
+    static android.content.SharedPreferences cp(android.content.Context c) {
+        return c.getSharedPreferences("trajet_en_cours", MODE_PRIVATE);
+    }
+
+    static boolean hasCheckpoint(android.content.Context c) {
+        long saved = cp(c).getLong("saved", 0);
+        return saved > 0 && System.currentTimeMillis() - saved < 15 * 60_000;
+    }
+
+    void checkpoint() {
+        cp(this).edit().putLong("saved", System.currentTimeMillis()).putLong("start", startTs).putLong("lastMove", lastMoveTs)
+                .putFloat("dist", (float) dist).putLong("moving", moving).putFloat("vmax", (float) vmax)
+                .putString("src", src).putString("info", info).putString("pts", encode(pts)).apply();
+    }
+
+    void clearCheckpoint() { cp(this).edit().clear().apply(); }
+
+    /** Trajet interrompu par Android et jamais repris : on l'enregistre tel quel. */
+    void saveStaleCheckpoint() {
+        android.content.SharedPreferences p = cp(this);
+        if (p.getLong("saved", 0) == 0 || hasCheckpoint(this)) return;
+        if (p.getFloat("dist", 0) >= MIN_DIST_M) {
+            Db.Trip t = new Db.Trip();
+            t.start = p.getLong("start", 0);
+            t.end = Math.max(t.start, p.getLong("lastMove", t.start));
+            t.dist = p.getFloat("dist", 0); t.moving = p.getLong("moving", 0); t.vmax = p.getFloat("vmax", 0);
+            t.src = p.getString("src", "auto"); t.pts = p.getString("pts", "");
+            t.info = p.getString("info", "") + " → Appli arrêtée par Android";
+            Db.get(this).addTrip(t);
+        }
+        clearCheckpoint();
     }
 
     private boolean promote() {
@@ -146,8 +209,23 @@ public class TripService extends Service implements LocationListener {
         src = source;
         started = true;
         startTs = lastMoveTs = System.currentTimeMillis();
-        dist = 0; vmax = 0; moving = 0; last = null; jumps = 0; curSpeed = 0;
+        dist = 0; vmax = 0; moving = 0; last = null; jumps = 0; curSpeed = 0; ticks = 0;
+        btPendingStop = false;
+        endReason = "Terminé à la main";
         pts.clear();
+        String ssid = WifiWatch.onCarWifi(this) ? Prefs.carSsid(this) : null;
+        info = "auto".equals(source) ? (ssid != null ? "Wi-Fi " + ssid : "Voiture détectée") : "Démarré à la main";
+        saveStaleCheckpoint();
+        if (hasCheckpoint(this)) {
+            android.content.SharedPreferences p = cp(this);
+            startTs = p.getLong("start", startTs);
+            lastMoveTs = Math.max(p.getLong("lastMove", startTs), System.currentTimeMillis() - 60_000);
+            dist = p.getFloat("dist", 0); moving = p.getLong("moving", 0); vmax = p.getFloat("vmax", 0);
+            src = p.getString("src", source);
+            info = p.getString("info", info) + " · repris après coupure";
+            pts.addAll(decode(p.getString("pts", "")));
+        }
+        checkpoint();
         live = this;
         handler.post(tick);
         if ("auto".equals(src)) watchCarWifi();
@@ -188,7 +266,7 @@ public class TripService extends Service implements LocationListener {
         if (!started) return;
         String text = Fmt.km(dist / 1000) + " · " + Fmt.dur(System.currentTimeMillis() - startTs)
                 + " · " + Math.round(curSpeed * 3.6) + " km/h";
-        String title = btPendingStop ? "Voiture coupée – fin du trajet dans un instant" : "🚗 Trajet en cours";
+        String title = btPendingStop ? "Voiture déconnectée – fin du trajet une fois garé" : "🚗 Trajet en cours";
         try {
             getSystemService(NotificationManager.class).notify(Notifs.ID_TRIP, Notifs.trip(this, title, text));
         } catch (Exception ignored) {}
@@ -209,13 +287,14 @@ public class TripService extends Service implements LocationListener {
         if (dist >= MIN_DIST_M) {
             Db.Trip t = new Db.Trip();
             t.start = startTs; t.end = Math.max(end, startTs); t.dist = dist; t.moving = moving; t.vmax = vmax;
-            t.src = src; t.pts = encode(pts);
+            t.src = src; t.pts = encode(pts); t.info = info + " → " + endReason;
             Db.get(this).addTrip(t);
             List<Db.Fuel> fuels = Db.get(this).fuels();
             double cost = t.km() * Calc.costPerKm(this, fuels);
             Notifs.info(this, "Trajet enregistré ✅",
                     Fmt.km(t.km()) + " en " + Fmt.dur(t.duration()) + " · environ " + Fmt.eur(cost) + " de carburant");
         }
+        clearCheckpoint();
         stopForeground(STOP_FOREGROUND_REMOVE);
         stopSelf();
     }
@@ -244,7 +323,7 @@ public class TripService extends Service implements LocationListener {
     }
 
     @Override public void onDestroy() {
-        if (started) finish();
+        if (started) { endReason = "Appli arrêtée par Android"; finish(); }
         super.onDestroy();
     }
 }

@@ -48,7 +48,7 @@ public class MainActivity extends BaseUi {
     static final int RQ_LOC = 1, RQ_BG = 2, RQ_BT = 3, RQ_NOTIF = 4, RQ_LOC_START = 5, RQ_BT_PICK = 6;
     static final int[] NAV_ICONS = {R.drawable.i_home, R.drawable.i_route, R.drawable.i_fuel, R.drawable.i_wrench, R.drawable.i_sliders};
     static final String[] NAV_LABELS = {"Accueil", "Trajets", "Pleins", "Entretien", "Réglages"};
-    static final String VERSION = "2.0";
+    static final String VERSION = "2.1";
 
     LinearLayout content;
     ScrollView scroll;
@@ -102,6 +102,8 @@ public class MainActivity extends BaseUi {
             item.addView(pill, lp(dp(60), dp(32), 0));
             navLabel[i] = text(NAV_LABELS[i], 11, MUTED, W_MED);
             navLabel[i].setPadding(0, dp(4), 0, 0);
+            navLabel[i].setGravity(Gravity.CENTER);
+            navLabel[i].setSingleLine(true);
             item.addView(navLabel[i]);
             item.setOnClickListener(new Click() { public void run() { show(k); } });
             nav.addView(item, lp(0, -2, 1f));
@@ -399,7 +401,7 @@ public class MainActivity extends BaseUi {
         mp.topMargin = dp(8);
         h.addView(mid, mp);
 
-        liveStatus = text("Voiture coupée : fin du trajet dans un instant", 13, WHITE, W_MED);
+        liveStatus = text("Voiture déconnectée : le trajet se terminera une fois garé", 13, WHITE, W_MED);
         liveStatus.setBackground(round(0x26FFFFFF, 12));
         liveStatus.setPadding(dp(12), dp(8), dp(12), dp(8));
         liveStatus.setVisibility(View.GONE);
@@ -439,13 +441,12 @@ public class MainActivity extends BaseUi {
         sub.setPadding(0, dp(3), 0, 0);
         col.addView(sub);
         c.addView(col, lp(0, -2, 1f));
-        TextView go = text("Démarrer", 14, ACC, W_MED);
-        go.setCompoundDrawablesRelative(tintedIcon(R.drawable.i_play, ACC, 14), null, null, null);
-        go.setCompoundDrawablePadding(dp(6));
-        go.setBackground(pressable(round(alpha(ACC, 0x1F), 100), 100));
-        go.setPadding(dp(14), dp(9), dp(16), dp(9));
+        FrameLayout go = new FrameLayout(this);
+        go.setBackground(pressable(round(alpha(ACC, 0x26), 100), 100));
+        go.addView(icon(R.drawable.i_play, ACC), new FrameLayout.LayoutParams(dp(18), dp(18), Gravity.CENTER));
+        go.setContentDescription("Démarrer un trajet");
         go.setOnClickListener(new Click() { public void run() { startManual(); } });
-        LinearLayout.LayoutParams gp = lp(-2, -2, 0);
+        LinearLayout.LayoutParams gp = lp(dp(46), dp(46), 0);
         gp.leftMargin = dp(8);
         c.addView(go, gp);
         content.addView(c, fullWidth(12));
@@ -598,8 +599,8 @@ public class MainActivity extends BaseUi {
         listRow(g, R.drawable.i_pin, GOOD, "Départ", null, Fmt.time(t.start), null, TXT, null);
         listRow(g, R.drawable.i_pin, ACC2, "Arrivée", null, Fmt.time(t.end), null, TXT, null);
         boolean auto = "auto".equals(t.src);
-        listRow(g, auto ? R.drawable.i_wifi : R.drawable.i_edit, auto ? ACC : SUB, "Enregistrement", null,
-                auto ? "Automatique" : Fmt.cap(t.src == null ? "manuel" : t.src), null, TXT, null);
+        listRow(g, auto ? R.drawable.i_wifi : R.drawable.i_edit, auto ? ACC : SUB, "Enregistrement",
+                t.info, auto ? "Automatique" : Fmt.cap(t.src == null ? "manuel" : t.src), null, TXT, null);
 
         space(content, 4);
         content.addView(tonalButton("Supprimer ce trajet", R.drawable.i_trash, BAD, new Click() {

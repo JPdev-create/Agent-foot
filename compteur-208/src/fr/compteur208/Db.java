@@ -18,23 +18,25 @@ final class Db extends SQLiteOpenHelper {
         return instance;
     }
 
-    private Db(Context c) { super(c, "compteur208.db", null, 1); }
+    private Db(Context c) { super(c, "compteur208.db", null, 2); }
 
     @Override public void onCreate(SQLiteDatabase d) {
-        d.execSQL("CREATE TABLE trips(_id INTEGER PRIMARY KEY AUTOINCREMENT, start INTEGER, end_ts INTEGER, dist REAL, moving INTEGER, vmax REAL, pts TEXT, src TEXT)");
+        d.execSQL("CREATE TABLE trips(_id INTEGER PRIMARY KEY AUTOINCREMENT, start INTEGER, end_ts INTEGER, dist REAL, moving INTEGER, vmax REAL, pts TEXT, src TEXT, info TEXT)");
         d.execSQL("CREATE TABLE fuel(_id INTEGER PRIMARY KEY AUTOINCREMENT, date INTEGER, odo REAL, liters REAL, total REAL, full INTEGER, station TEXT)");
         d.execSQL("CREATE TABLE maint(_id INTEGER PRIMARY KEY AUTOINCREMENT, date INTEGER, odo REAL, type TEXT, cost REAL, note TEXT)");
         d.execSQL("CREATE INDEX trips_start ON trips(start)");
     }
 
-    @Override public void onUpgrade(SQLiteDatabase d, int o, int n) {}
+    @Override public void onUpgrade(SQLiteDatabase d, int o, int n) {
+        if (o < 2) d.execSQL("ALTER TABLE trips ADD COLUMN info TEXT");
+    }
 
     // ---------- Modèles ----------
 
     static final class Trip {
         long id = -1, start, end, moving;
         double dist, vmax; // mètres, km/h
-        String pts, src;
+        String pts, src, info;
         double km() { return dist / 1000.0; }
         long duration() { return Math.max(0, end - start); }
         double avgKmh() {
@@ -62,7 +64,7 @@ final class Db extends SQLiteOpenHelper {
     long addTrip(Trip t) {
         ContentValues v = new ContentValues();
         v.put("start", t.start); v.put("end_ts", t.end); v.put("dist", t.dist);
-        v.put("moving", t.moving); v.put("vmax", t.vmax); v.put("pts", t.pts); v.put("src", t.src);
+        v.put("moving", t.moving); v.put("vmax", t.vmax); v.put("pts", t.pts); v.put("src", t.src); v.put("info", t.info);
         return getWritableDatabase().insert("trips", null, v);
     }
 
@@ -86,12 +88,13 @@ final class Db extends SQLiteOpenHelper {
     }
 
     Trip trip(long id) {
-        Cursor c = getReadableDatabase().rawQuery("SELECT _id,start,end_ts,dist,moving,vmax,src,pts FROM trips WHERE _id=?", new String[]{"" + id});
+        Cursor c = getReadableDatabase().rawQuery("SELECT _id,start,end_ts,dist,moving,vmax,src,pts,info FROM trips WHERE _id=?", new String[]{"" + id});
         try {
             if (!c.moveToNext()) return null;
             Trip t = new Trip();
             t.id = c.getLong(0); t.start = c.getLong(1); t.end = c.getLong(2); t.dist = c.getDouble(3);
             t.moving = c.getLong(4); t.vmax = c.getDouble(5); t.src = c.getString(6); t.pts = c.getString(7);
+            t.info = c.getString(8);
             return t;
         } finally { c.close(); }
     }

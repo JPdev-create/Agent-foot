@@ -1,0 +1,84 @@
+@import "tailwindcss";
+@import "@fontsource-variable/plus-jakarta-sans";
+@import "@fontsource-variable/jetbrains-mono";
+
+/* ===== Design system Tempora (UI UX Pro Max : SaaS B2B — Swiss Minimalism + Bento grid + micro-interactions) =====
+   Concept : la clarté d'une feuille de pointage. Indigo (couleur de l'appli) pour l'action,
+   orange chantier en accent rare. Contraste texte ≥ 4.5:1 dans les deux thèmes. */
+:root {
+  --t-bg: #f6f7fb;
+  --t-surface: #ffffff;
+  --t-sunken: #eef0f7;
+  --t-ink: #0e1325;
+  --t-soft: #454c69;
+  --t-mute: #646b88;
+  --t-line: #e1e4ee;
+  --t-primary: #4f46e5;
+  --t-primary-strong: #4338ca;
+  --t-on-primary: #ffffff;
+  --t-primary-tint: #eceafe;
+  --t-accent: #c2410c;
+  --t-accent-tint: #ffedd5;
+  --t-ok: #15803d;
+  --t-ok-tint: #dcfce7;
+  --t-shadow: 0 1px 2px rgb(14 19 37 / 0.04), 0 12px 32px -12px rgb(14 19 37 / 0.12);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --t-bg: #0a0c16; --t-surface: #121528; --t-sunken: #0e1120; --t-ink: #eef0fa; --t-soft: #b4b9d1; --t-mute: #8d93b0;
+    --t-line: #262a44; --t-primary: #8b93ff; --t-primary-strong: #a5abff; --t-on-primary: #0a0c16; --t-primary-tint: #1d1f45;
+    --t-accent: #fb923c; --t-accent-tint: #3a1d0c; --t-ok: #4ade80; --t-ok-tint: #10301d;
+    --t-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 16px 40px -16px rgb(0 0 0 / 0.6);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --t-bg: #0a0c16; --t-surface: #121528; --t-sunken: #0e1120; --t-ink: #eef0fa; --t-soft: #b4b9d1; --t-mute: #8d93b0;
+  --t-line: #262a44; --t-primary: #8b93ff; --t-primary-strong: #a5abff; --t-on-primary: #0a0c16; --t-primary-tint: #1d1f45;
+  --t-accent: #fb923c; --t-accent-tint: #3a1d0c; --t-ok: #4ade80; --t-ok-tint: #10301d;
+  --t-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 16px 40px -16px rgb(0 0 0 / 0.6);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--t-bg);
+  --color-surface: var(--t-surface);
+  --color-sunken: var(--t-sunken);
+  --color-ink: var(--t-ink);
+  --color-soft: var(--t-soft);
+  --color-mute: var(--t-mute);
+  --color-line: var(--t-line);
+  --color-primary: var(--t-primary);
+  --color-primary-strong: var(--t-primary-strong);
+  --color-on-primary: var(--t-on-primary);
+  --color-primary-tint: var(--t-primary-tint);
+  --color-accent: var(--t-accent);
+  --color-accent-tint: var(--t-accent-tint);
+  --color-ok: var(--t-ok);
+  --color-ok-tint: var(--t-ok-tint);
+  --shadow-card: var(--t-shadow);
+  --font-sans: "Plus Jakarta Sans Variable", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+}
+
+@layer base {
+  html { scroll-behavior: smooth; scroll-padding-top: 5.5rem; }
+  body { @apply bg-bg text-ink font-sans antialiased; font-size: 1.0625rem; line-height: 1.6; }
+  h1, h2, h3 { letter-spacing: -0.025em; line-height: 1.08; text-wrap: balance; }
+  :focus-visible { outline: 2px solid var(--t-primary); outline-offset: 3px; border-radius: 8px; }
+  ::selection { background: var(--t-primary); color: var(--t-on-primary); }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+
+/* Quadrillage discret façon feuille de pointage */
+.timesheet {
+  background-image:
+    linear-gradient(to right, var(--t-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--t-line) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black 20%, transparent 75%);
+}
+input[type="range"] { accent-color: var(--t-primary); }

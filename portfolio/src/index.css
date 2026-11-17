@@ -1,0 +1,68 @@
+@import "tailwindcss";
+@import "@fontsource-variable/space-grotesk";
+@import "@fontsource/space-mono";
+@import "@fontsource/space-mono/700.css";
+
+/* ===== Design system — Jason Pougin (UI UX Pro Max : Spatial UI + Aurora UI + 3D, mode sombre) =====
+   Fond « void » #04040A · Cyan #22D3EE (action) · Violet #A78BFA · Magenta #F472B6 (accent rare).
+   Texte #EEF0FF sur fond : 18:1 · texte secondaire #A3A8C3 : 8.6:1 · CTA texte noir sur cyan : 11:1. */
+@theme {
+  --color-void: #04040a;
+  --color-deep: #080814;
+  --color-panel: #0d0d1c;
+  --color-edge: #20203a;
+  --color-ink: #eef0ff;
+  --color-ink-soft: #a3a8c3;
+  --color-ink-mute: #767b98;
+  --color-cyan: #22d3ee;
+  --color-violet: #a78bfa;
+  --color-magenta: #f472b6;
+
+  --font-sans: "Space Grotesk Variable", system-ui, sans-serif;
+  --font-mono: "Space Mono", ui-monospace, monospace;
+}
+
+@layer base {
+  html { scroll-behavior: smooth; scroll-padding-top: 6rem; }
+  body { @apply bg-void text-ink font-sans antialiased; font-size: 1.0625rem; line-height: 1.65; }
+  ::selection { background: var(--color-cyan); color: var(--color-void); }
+  :focus-visible { outline: 2px solid var(--color-cyan); outline-offset: 3px; border-radius: 8px; }
+  h1, h2, h3 { letter-spacing: -0.03em; line-height: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+
+@utility glass {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.06), rgb(255 255 255 / 0.02));
+  border: 1px solid rgb(255 255 255 / 0.09);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+}
+@utility text-holo {
+  background: linear-gradient(100deg, #eef0ff 0%, #22d3ee 35%, #a78bfa 65%, #f472b6 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: holo 8s ease-in-out infinite;
+}
+@utility hud { @apply font-mono text-xs uppercase tracking-[0.2em] text-ink-mute; }
+
+@keyframes holo { 0%, 100% { background-position: 0% center; } 50% { background-position: 100% center; } }
+@keyframes scan { from { transform: translateY(-100%); } to { transform: translateY(100%); } }
+
+/* Grille en perspective façon sol holographique */
+.grid-floor {
+  background-image:
+    linear-gradient(to right, rgb(34 211 238 / 0.14) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(34 211 238 / 0.14) 1px, transparent 1px);
+  background-size: 56px 56px;
+  transform: perspective(600px) rotateX(62deg);
+  transform-origin: center top;
+  mask-image: linear-gradient(to bottom, transparent, black 30%, black 60%, transparent);
+}
+.noise::after {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 100; opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}

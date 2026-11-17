@@ -189,7 +189,7 @@ final class Charts {
     }
 
     /**
-     * Tracé GPS d'un trajet sur une vraie carte (tuiles sombres OpenStreetMap / CARTO,
+     * Tracé GPS d'un trajet sur une vraie carte (tuiles OpenStreetMap assombries,
      * téléchargées puis gardées en cache). Sans connexion : simple grille.
      */
     static final class Trace extends View {
@@ -214,6 +214,39 @@ final class Charts {
             txt = textPaint(c, 14, BaseUi.SUB, false);
             attr = textPaint(c, 9, 0x99FFFFFF, false);
             attr.setTextAlign(Paint.Align.RIGHT);
+            tilePaint.setColorFilter(new android.graphics.ColorMatrixColorFilter(darkMap()));
+        }
+
+        /**
+         * Transforme la carte OpenStreetMap (claire) en carte sombre :
+         * inversion des couleurs + rotation de teinte de 180° (l'eau reste bleue, la végétation verte),
+         * puis éclaircissement léger et désaturation.
+         */
+        static android.graphics.ColorMatrix darkMap() {
+            android.graphics.ColorMatrix invert = new android.graphics.ColorMatrix(new float[]{
+                    -1, 0, 0, 0, 255,
+                    0, -1, 0, 0, 255,
+                    0, 0, -1, 0, 255,
+                    0, 0, 0, 1, 0});
+            android.graphics.ColorMatrix hue = new android.graphics.ColorMatrix(new float[]{
+                    -0.574f, 1.430f, 0.144f, 0, 0,
+                    0.426f, 0.430f, 0.144f, 0, 0,
+                    0.426f, 1.430f, -0.856f, 0, 0,
+                    0, 0, 0, 1, 0});
+            android.graphics.ColorMatrix sat = new android.graphics.ColorMatrix();
+            sat.setSaturation(0.6f);
+            float k = 1.05f;
+            android.graphics.ColorMatrix dim = new android.graphics.ColorMatrix(new float[]{
+                    k, 0, 0, 0, 22,
+                    0, k, 0, 0, 25,
+                    0, 0, k, 0, 32,
+                    0, 0, 0, 1, 0});
+            android.graphics.ColorMatrix m = new android.graphics.ColorMatrix();
+            m.postConcat(invert);
+            m.postConcat(hue);
+            m.postConcat(sat);
+            m.postConcat(dim);
+            return m;
         }
 
         // Projection Web Mercator : coordonnées "monde" en pixels écran pour un zoom donné.
@@ -236,7 +269,7 @@ final class Charts {
                 minLat = Math.min(minLat, p[0]); maxLat = Math.max(maxLat, p[0]);
                 minLon = Math.min(minLon, p[1]); maxLon = Math.max(maxLon, p[1]);
             }
-            float tile = dp(c, 256);       // taille d'une tuile à l'écran
+            float tile = dp(c, 192);       // taille d'une tuile à l'écran (source 256 px)
             float pad = dp(c, 36);
             int z = 17;
             for (; z > 2; z--) {
@@ -277,7 +310,7 @@ final class Charts {
             cv.drawPath(path, line);
             marker(cv, sx, sy, BaseUi.GOOD);
             marker(cv, ex, ey, BaseUi.ACC2);
-            if (anyTile) cv.drawText("© OpenStreetMap © CARTO", w - dp(c, 8), h - dp(c, 7), attr);
+            if (anyTile) cv.drawText("© les contributeurs d'OpenStreetMap", w - dp(c, 8), h - dp(c, 7), attr);
         }
 
         /** Tuile en mémoire, sinon lancement du chargement (disque puis internet). */
@@ -286,19 +319,19 @@ final class Charts {
             android.graphics.Bitmap b = MEM.get(key);
             if (b != null || requested.contains(key)) return b;
             requested.add(key);
-            final java.io.File dir = new java.io.File(getContext().getCacheDir(), "tuiles");
+            final java.io.File dir = new java.io.File(getContext().getCacheDir(), "tuiles_osm");
             NET.execute(new Runnable() {
                 public void run() {
                     try {
                         java.io.File f = new java.io.File(dir, key + ".png");
                         android.graphics.Bitmap bm = f.exists() ? android.graphics.BitmapFactory.decodeFile(f.getPath()) : null;
                         if (bm == null) {
-                            String host = "abcd".charAt((x + y) % 4) + ".basemaps.cartocdn.com";
                             java.net.HttpURLConnection con = (java.net.HttpURLConnection)
-                                    new java.net.URL("https://" + host + "/dark_all/" + z + "/" + x + "/" + y + "@2x.png").openConnection();
+                                    new java.net.URL("https://tile.openstreetmap.org/" + z + "/" + x + "/" + y + ".png").openConnection();
                             con.setConnectTimeout(8000);
                             con.setReadTimeout(10000);
-                            con.setRequestProperty("User-Agent", "Compteur208/2.2 (Android)");
+                            con.setRequestProperty("User-Agent", "Compteur208/2.3 (application Android personnelle)");
+                            if (con.getResponseCode() != 200) { con.disconnect(); return; }
                             java.io.InputStream in = con.getInputStream();
                             java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
                             byte[] tmp = new byte[16384];

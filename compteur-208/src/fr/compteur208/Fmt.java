@@ -27,6 +27,8 @@ final class Fmt {
     }
 
     static String date(long ts) { return cap(new SimpleDateFormat("EEEE d MMMM yyyy", FR).format(new Date(ts))); }
+    static String dateMed(long ts) { return new SimpleDateFormat("d MMM yyyy", FR).format(new Date(ts)); }
+    static String dayMonth(long ts) { return new SimpleDateFormat("d MMM", FR).format(new Date(ts)); }
     static String dateShort(long ts) { return new SimpleDateFormat("dd/MM/yyyy", FR).format(new Date(ts)); }
     static String time(long ts) { return new SimpleDateFormat("HH:mm", FR).format(new Date(ts)); }
     static String month(long ts) { return cap(new SimpleDateFormat("MMMM yyyy", FR).format(new Date(ts))); }

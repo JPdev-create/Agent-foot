@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:colorAccent">#4F8CFF</item>
+        <item name="android:colorPrimary">#0A0C10</item>
+        <item name="android:colorPrimaryDark">#0A0C10</item>
+        <item name="android:colorControlActivated">#4F8CFF</item>
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:statusBarColor">#0A0C10</item>
+        <item name="android:navigationBarColor">#14171D</item>
+        <item name="android:datePickerDialogTheme">@style/PickerTheme</item>
+        <item name="android:alertDialogTheme">@style/PickerTheme</item>
+    </style>
+    <style name="PickerTheme" parent="@android:style/Theme.Material.Dialog.Alert">
+        <item name="android:colorAccent">#4F8CFF</item>
+    </style>
+</resources>

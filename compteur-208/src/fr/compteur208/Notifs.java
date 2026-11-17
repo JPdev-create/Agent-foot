@@ -37,7 +37,7 @@ final class Notifs {
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
                 .setShowWhen(false)
-                .setColor(0xFF3D8BFF)
+                .setColor(0xFF4F8CFF)
                 .setContentIntent(openApp(c))
                 .addAction(new Notification.Action.Builder(null, "Terminer le trajet", ps).build())
                 .build();
@@ -50,7 +50,7 @@ final class Notifs {
                 .setContentTitle(title)
                 .setContentText(text)
                 .setStyle(new Notification.BigTextStyle().bigText(text))
-                .setColor(0xFF3D8BFF)
+                .setColor(0xFF4F8CFF)
                 .setAutoCancel(true)
                 .setContentIntent(openApp(c))
                 .build();
@@ -69,7 +69,7 @@ final class Notifs {
                 .setContentTitle("Voiture détectée 🚗")
                 .setContentText("Touche ici pour enregistrer le trajet. Pour que ce soit 100 % automatique, vérifie les autorisations dans Réglages.")
                 .setStyle(new Notification.BigTextStyle().bigText("Touche ici pour enregistrer le trajet. Pour que ce soit 100 % automatique, vérifie les autorisations dans Réglages."))
-                .setColor(0xFF3D8BFF)
+                .setColor(0xFF4F8CFF)
                 .setAutoCancel(true)
                 .setContentIntent(ps)
                 .build();

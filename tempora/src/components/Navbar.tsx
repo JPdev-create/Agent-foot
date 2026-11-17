@@ -1,6 +1,6 @@
 import { AnimatePresence, motion, useMotionValueEvent, useScroll } from 'motion/react'
 import { Menu, X } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BRAND, TRIAL_DAYS } from '../data'
 import { Button, Container } from './ui'
 
@@ -32,6 +32,23 @@ export function Navbar() {
   const [scrolled, setScrolled] = useState(false)
   const { scrollY } = useScroll()
   useMotionValueEvent(scrollY, 'change', (y) => setScrolled(y > 12))
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open])
+
+  // Ferme le menu puis fait défiler vers la section (le défilement natif était interrompu par la fermeture)
+  function go(e: React.MouseEvent<HTMLAnchorElement>, href: string) {
+    e.preventDefault()
+    setOpen(false)
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    requestAnimationFrame(() => {
+      document.querySelector(href)?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
+    })
+  }
 
   return (
     <header
@@ -66,19 +83,20 @@ export function Navbar() {
         {open && (
           <motion.nav
             id="menu-mobile"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden md:hidden"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.2 }}
+            className="absolute inset-x-0 top-full border-b border-line bg-bg/95 shadow-card backdrop-blur-xl md:hidden"
             aria-label="Navigation mobile"
           >
             <Container className="flex flex-col gap-1 pb-5">
               {LINKS.map(([href, label]) => (
-                <a key={href} href={href} onClick={() => setOpen(false)} className="rounded-xl px-3 py-3 text-lg text-soft hover:bg-sunken hover:text-ink">
+                <a key={href} href={href} onClick={(e) => go(e, href)} className="flex min-h-12 items-center rounded-xl px-3 text-lg text-soft hover:bg-sunken hover:text-ink">
                   {label}
                 </a>
               ))}
-              <Button href="#essai" onClick={() => setOpen(false)} className="mt-2">
+              <Button href="#essai" onClick={(e) => go(e, '#essai')} className="mt-2">
                 Essai gratuit {TRIAL_DAYS} jours
               </Button>
             </Container>

@@ -29,7 +29,7 @@ const FEATURES: F[] = [
 export function Features() {
   return (
     <>
-      <section aria-label="Secteurs" className="border-y border-line bg-surface py-6">
+      <section aria-label="Secteurs" className="border-y border-line bg-sunken py-6">
         <div className="relative overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]">
           <motion.ul
             className="flex w-max gap-10 pr-10"
@@ -65,7 +65,12 @@ export function Features() {
                 key={f.title}
                 variants={{ hidden: { opacity: 0.001, y: 24 }, show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: EASE } } }}
                 whileHover={{ y: -4 }}
-                className={`group flex flex-col rounded-2xl border border-line bg-surface p-6 transition-[border-color,box-shadow] duration-300 hover:border-primary/40 hover:shadow-card ${f.span}`}
+                onPointerMove={(e) => {
+                  const r = e.currentTarget.getBoundingClientRect()
+                  e.currentTarget.style.setProperty('--x', `${e.clientX - r.left}px`)
+                  e.currentTarget.style.setProperty('--y', `${e.clientY - r.top}px`)
+                }}
+                className={`spotlight group flex flex-col rounded-2xl border border-line bg-surface/70 p-6 ${f.span}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <span className="grid size-11 place-items-center rounded-xl bg-primary-tint text-primary transition-transform duration-300 group-hover:scale-110 [&>svg]:size-5" aria-hidden>

@@ -5,6 +5,7 @@ import { BRAND, TRIAL_DAYS } from '../data'
 import { Button, Container } from './ui'
 
 const LINKS = [
+  ['#controle', 'Démo'],
   ['#fonctionnalites', 'Fonctionnalités'],
   ['#ecrans', 'Aperçu'],
   ['#tarifs', 'Tarifs'],

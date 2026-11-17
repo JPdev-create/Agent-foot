@@ -1,42 +1,30 @@
 @import "tailwindcss";
 @import "@fontsource-variable/plus-jakarta-sans";
 @import "@fontsource-variable/jetbrains-mono";
+@import "@fontsource-variable/unbounded";
 
-/* ===== Design system Tempora (UI UX Pro Max : SaaS B2B — Swiss Minimalism + Bento grid + micro-interactions) =====
-   Concept : la clarté d'une feuille de pointage. Indigo (couleur de l'appli) pour l'action,
-   orange chantier en accent rare. Contraste texte ≥ 4.5:1 dans les deux thèmes. */
+/* ===== Design system Tempora v2 (UI UX Pro Max : Dark Mode OLED + Glassmorphism + Motion-Driven, SaaS B2B) =====
+   Concept : un centre de contrôle. Fond nuit #05060D, indigo électrique → cyan pour l'action,
+   orange chantier en accent rare. Thème sombre assumé (un seul thème, couleurs toutes explicites).
+   Contraste : texte 17:1, texte secondaire ≥ 8:1, texte sur bouton ≥ 7:1. */
 :root {
-  --t-bg: #f6f7fb;
-  --t-surface: #ffffff;
-  --t-sunken: #eef0f7;
-  --t-ink: #0e1325;
-  --t-soft: #454c69;
-  --t-mute: #646b88;
-  --t-line: #e1e4ee;
-  --t-primary: #4f46e5;
-  --t-primary-strong: #4338ca;
-  --t-on-primary: #ffffff;
-  --t-primary-tint: #eceafe;
-  --t-accent: #c2410c;
-  --t-accent-tint: #ffedd5;
-  --t-ok: #15803d;
-  --t-ok-tint: #dcfce7;
-  --t-shadow: 0 1px 2px rgb(14 19 37 / 0.04), 0 12px 32px -12px rgb(14 19 37 / 0.12);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --t-bg: #0a0c16; --t-surface: #121528; --t-sunken: #0e1120; --t-ink: #eef0fa; --t-soft: #b4b9d1; --t-mute: #8d93b0;
-    --t-line: #262a44; --t-primary: #8b93ff; --t-primary-strong: #a5abff; --t-on-primary: #0a0c16; --t-primary-tint: #1d1f45;
-    --t-accent: #fb923c; --t-accent-tint: #3a1d0c; --t-ok: #4ade80; --t-ok-tint: #10301d;
-    --t-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 16px 40px -16px rgb(0 0 0 / 0.6);
-    color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --t-bg: #0a0c16; --t-surface: #121528; --t-sunken: #0e1120; --t-ink: #eef0fa; --t-soft: #b4b9d1; --t-mute: #8d93b0;
-  --t-line: #262a44; --t-primary: #8b93ff; --t-primary-strong: #a5abff; --t-on-primary: #0a0c16; --t-primary-tint: #1d1f45;
-  --t-accent: #fb923c; --t-accent-tint: #3a1d0c; --t-ok: #4ade80; --t-ok-tint: #10301d;
-  --t-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 16px 40px -16px rgb(0 0 0 / 0.6);
+  --t-bg: #05060d;
+  --t-surface: #0b0e1c;
+  --t-sunken: #080a15;
+  --t-ink: #eef1ff;
+  --t-soft: #aab1cd;
+  --t-mute: #7d85a5;
+  --t-line: #1c2138;
+  --t-primary: #8b8cff;
+  --t-primary-strong: #a9aaff;
+  --t-on-primary: #05060d;
+  --t-primary-tint: #16183a;
+  --t-cyan: #22d3ee;
+  --t-accent: #ff9a52;
+  --t-accent-tint: #33190a;
+  --t-ok: #4ade80;
+  --t-ok-tint: #0e2b1a;
+  --t-shadow: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 20px 50px -20px rgb(0 0 0 / 0.8);
   color-scheme: dark;
 }
 
@@ -56,6 +44,8 @@
   --color-accent-tint: var(--t-accent-tint);
   --color-ok: var(--t-ok);
   --color-ok-tint: var(--t-ok-tint);
+  --color-cyan: var(--t-cyan);
+  --font-display: "Unbounded Variable", "Plus Jakarta Sans Variable", system-ui, sans-serif;
   --shadow-card: var(--t-shadow);
   --font-sans: "Plus Jakarta Sans Variable", system-ui, sans-serif;
   --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
@@ -64,7 +54,8 @@
 @layer base {
   html { scroll-behavior: smooth; scroll-padding-top: 5.5rem; }
   body { @apply bg-bg text-ink font-sans antialiased; font-size: 1.0625rem; line-height: 1.6; }
-  h1, h2, h3 { letter-spacing: -0.025em; line-height: 1.08; text-wrap: balance; }
+  h1, h2 { font-family: var(--font-display); letter-spacing: -0.035em; line-height: 1.05; text-wrap: balance; }
+  h3 { letter-spacing: -0.015em; line-height: 1.2; }
   :focus-visible { outline: 2px solid var(--t-primary); outline-offset: 3px; border-radius: 8px; }
   ::selection { background: var(--t-primary); color: var(--t-on-primary); }
 }
@@ -82,3 +73,40 @@
   mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black 20%, transparent 75%);
 }
 input[type="range"] { accent-color: var(--t-primary); }
+
+/* Texte dégradé animé */
+.text-plasma {
+  background: linear-gradient(100deg, #a9aaff 0%, #22d3ee 40%, #8b8cff 70%, #ff9a52 100%);
+  background-size: 220% auto;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: plasma 9s ease-in-out infinite;
+}
+@keyframes plasma { 0%, 100% { background-position: 0% center; } 50% { background-position: 100% center; } }
+
+/* Carte « spotlight » : halo + bordure lumineuse qui suivent la souris */
+.spotlight { position: relative; isolation: isolate; }
+.spotlight::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: -1; pointer-events: none;
+  background: radial-gradient(420px circle at var(--x, 50%) var(--y, 0%), rgb(139 140 255 / 0.14), transparent 45%);
+  opacity: 0; transition: opacity 0.3s;
+}
+.spotlight::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none;
+  background: radial-gradient(300px circle at var(--x, 50%) var(--y, 0%), rgb(34 211 238 / 0.8), rgb(139 140 255 / 0.4) 30%, transparent 60%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  opacity: 0; transition: opacity 0.3s;
+}
+.spotlight:hover::before, .spotlight:hover::after { opacity: 1; }
+
+.glass {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.055), rgb(255 255 255 / 0.015));
+  border: 1px solid rgb(255 255 255 / 0.08);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+}
+.beam { background: linear-gradient(90deg, transparent, var(--t-cyan), var(--t-primary), transparent); }
+.noise::after {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 100; opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}

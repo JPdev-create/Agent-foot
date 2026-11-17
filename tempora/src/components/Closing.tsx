@@ -29,7 +29,7 @@ export function Steps() {
           {STEPS.map((s, i) => (
             <Reveal key={s.title} delay={i * 0.12}>
               <li className="relative text-center">
-                <span className="relative z-10 mx-auto grid size-12 place-items-center rounded-full bg-primary font-mono text-lg font-bold text-on-primary">{i + 1}</span>
+                <span className="relative z-10 mx-auto grid size-12 place-items-center rounded-full bg-gradient-to-br from-primary to-cyan shadow-[0_0_30px_-4px_rgb(34_211_238/0.6)] font-mono text-lg font-bold text-on-primary">{i + 1}</span>
                 <h3 className="mt-5 text-xl font-bold text-ink">{s.title}</h3>
                 <p className="mx-auto mt-2 max-w-xs text-soft">{s.text}</p>
               </li>
@@ -122,19 +122,19 @@ export function Trial() {
   ] as const
 
   return (
-    <section id="essai" className="relative overflow-hidden bg-[#0e1325] py-24 text-[#eef0fa] sm:py-32">
+    <section id="essai" className="relative overflow-hidden border-t border-line bg-gradient-to-b from-sunken to-[#0d0b24] py-24 text-ink sm:py-32">
       <div className="pointer-events-none absolute -right-40 -bottom-40 size-[34rem] rounded-full bg-[#4f46e5]/40 blur-[120px]" aria-hidden />
       <Container className="relative grid items-center gap-12 lg:grid-cols-2">
         <Reveal>
-          <p className="text-sm font-bold tracking-[0.12em] text-[#fdba74] uppercase">Essai gratuit</p>
-          <h2 className="mt-3 text-4xl font-extrabold sm:text-5xl">{TRIAL_DAYS} jours pour l’adopter.</h2>
+          <p className="text-sm font-bold tracking-[0.12em] text-accent uppercase">Essai gratuit</p>
+          <h2 className="mt-3 text-3xl font-bold sm:text-[2.6rem]">{TRIAL_DAYS} jours pour l’adopter.</h2>
           <p className="mt-5 max-w-md text-lg opacity-80">
             Testez {BRAND} avec toute votre équipe pendant un mois complet, sur un vrai cycle de paie. Sans engagement.
           </p>
           <ul className="mt-8 space-y-3 opacity-90">
             {['Toutes les fonctionnalités débloquées', 'Accompagnement pour la mise en route', 'Choix de la formule à la fin de l’essai'].map((t) => (
               <li key={t} className="flex items-center gap-3">
-                <CheckCircle2 className="size-5 text-[#86efac]" aria-hidden /> {t}
+                <CheckCircle2 className="size-5 text-ok" aria-hidden /> {t}
               </li>
             ))}
           </ul>
@@ -168,7 +168,7 @@ export function Trial() {
                       <option>Achat à vie</option>
                     </select>
                   </div>
-                  <motion.button type="submit" whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} className="min-h-12 cursor-pointer rounded-xl bg-primary font-semibold text-on-primary hover:bg-primary-strong sm:col-span-2">
+                  <motion.button type="submit" whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} className="min-h-12 cursor-pointer rounded-xl bg-gradient-to-r from-primary to-cyan font-semibold text-on-primary hover:brightness-110 sm:col-span-2">
                     Démarrer mon essai gratuit
                   </motion.button>
                   <p className="text-center text-sm text-mute sm:col-span-2">Sans engagement · {TRIAL_DAYS} jours gratuits</p>

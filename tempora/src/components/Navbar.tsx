@@ -40,15 +40,12 @@ export function Navbar() {
     return () => window.removeEventListener('keydown', onKey)
   }, [open])
 
-  // Ferme le menu puis fait défiler vers la section (le défilement natif était interrompu par la fermeture)
-  function go(e: React.MouseEvent<HTMLAnchorElement>, href: string) {
-    e.preventDefault()
-    setOpen(false)
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    requestAnimationFrame(() => {
-      document.querySelector(href)?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
-    })
-  }
+  // Le défilement est géré dans App (useInPageLinks) ; ici on ferme seulement le menu
+  useEffect(() => {
+    const close = () => setOpen(false)
+    window.addEventListener('tempora:navigate', close)
+    return () => window.removeEventListener('tempora:navigate', close)
+  }, [])
 
   return (
     <header
@@ -92,11 +89,11 @@ export function Navbar() {
           >
             <Container className="flex flex-col gap-1 pb-5">
               {LINKS.map(([href, label]) => (
-                <a key={href} href={href} onClick={(e) => go(e, href)} className="flex min-h-12 items-center rounded-xl px-3 text-lg text-soft hover:bg-sunken hover:text-ink">
+                <a key={href} href={href} className="flex min-h-12 items-center rounded-xl px-3 text-lg text-soft hover:bg-sunken hover:text-ink">
                   {label}
                 </a>
               ))}
-              <Button href="#essai" onClick={(e) => go(e, '#essai')} className="mt-2">
+              <Button href="#essai" className="mt-2">
                 Essai gratuit {TRIAL_DAYS} jours
               </Button>
             </Container>

@@ -1,0 +1,59 @@
+@import "tailwindcss";
+@import "@fontsource/bebas-neue";
+@import "@fontsource-variable/source-sans-3";
+
+/* ===== Design system Agent Foot (UI UX Pro Max : Vibrant & Block-based + Dark Mode OLED + Motion-Driven) =====
+   Fond : nuit de stade (#05080A). Primaire : vert pelouse électrique. Accent : or trophée.
+   Contraste : texte principal 17:1, texte secondaire ≥ 7:1, CTA lime sur noir ≥ 13:1. */
+@theme {
+  --color-night: #05080a;
+  --color-pitch: #0b1410;
+  --color-surface: #0f1a15;
+  --color-surface-2: #142219;
+  --color-line: #1f3328;
+  --color-ink: #f2f7f3;
+  --color-ink-soft: #b4c4ba;
+  --color-ink-mute: #7d9186;
+  --color-lime: #b6f24a;
+  --color-lime-strong: #9be02a;
+  --color-gold: #fbbf24;
+  --color-red: #f0574a;
+
+  --font-display: "Bebas Neue", "Impact", sans-serif;
+  --font-sans: "Source Sans 3 Variable", system-ui, sans-serif;
+
+  --radius-card: 1.25rem;
+  --shadow-glow: 0 0 0 1px rgb(182 242 74 / 0.25), 0 12px 40px -12px rgb(182 242 74 / 0.45);
+}
+
+@layer base {
+  html { scroll-behavior: smooth; scroll-padding-top: 5rem; }
+  body {
+    @apply bg-night text-ink font-sans antialiased;
+    font-size: 1.0625rem;
+    line-height: 1.6;
+  }
+  ::selection { background: var(--color-lime); color: var(--color-night); }
+  :focus-visible { outline: 2px solid var(--color-lime); outline-offset: 3px; border-radius: 6px; }
+  h1, h2, h3 { font-family: var(--font-display); letter-spacing: 0.01em; line-height: 0.95; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+
+/* Lignes de terrain en fond */
+.pitch-lines {
+  background-image:
+    linear-gradient(to right, rgb(182 242 74 / 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(182 242 74 / 0.06) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+}
+.text-gradient {
+  background: linear-gradient(100deg, var(--color-lime) 0%, #e9ff9c 45%, var(--color-gold) 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+@keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.animate-marquee { animation: marquee 40s linear infinite; }

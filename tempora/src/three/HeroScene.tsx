@@ -39,8 +39,8 @@ function Dial() {
   useEffect(() => {
     const m = ticks.current
     if (!m) return
-    const cyan = new Color('#22d3ee')
-    const indigo = new Color('#5b5cd6')
+    const cyan = new Color('#3dd6e6')
+    const indigo = new Color('#2f6fe0')
     for (let i = 0; i < 60; i++) {
       const a = (i / 60) * Math.PI * 2
       const major = i % 5 === 0
@@ -67,11 +67,11 @@ function Dial() {
     <group position={[0, 0, -0.6]}>
       <mesh>
         <torusGeometry args={[R + 0.22, 0.006, 8, 200]} />
-        <meshBasicMaterial color="#8b8cff" transparent opacity={0.5} />
+        <meshBasicMaterial color="#4d9bff" transparent opacity={0.5} />
       </mesh>
       <mesh>
         <torusGeometry args={[R - 0.25, 0.004, 8, 200]} />
-        <meshBasicMaterial color="#22d3ee" transparent opacity={0.25} />
+        <meshBasicMaterial color="#3dd6e6" transparent opacity={0.25} />
       </mesh>
       <instancedMesh ref={ticks} args={[undefined, undefined, 60]}>
         <boxGeometry args={[0.025, 0.08, 0.02]} />
@@ -80,16 +80,16 @@ function Dial() {
       {/* Traînée lumineuse derrière la trotteuse */}
       <mesh ref={sweep}>
         <ringGeometry args={[0.4, R - 0.08, 64, 1, 0, Math.PI / 3]} />
-        <meshBasicMaterial color="#22d3ee" transparent opacity={0.045} depthWrite={false} />
+        <meshBasicMaterial color="#3dd6e6" transparent opacity={0.045} depthWrite={false} />
       </mesh>
       <group ref={hand}>
         <mesh position={[0, R / 2, 0]}>
           <boxGeometry args={[0.014, R, 0.01]} />
-          <meshBasicMaterial color="#ff9a52" toneMapped={false} />
+          <meshBasicMaterial color="#ff7f50" toneMapped={false} />
         </mesh>
         <mesh position={[0, R - 0.05, 0]}>
           <sphereGeometry args={[0.055, 16, 16]} />
-          <meshBasicMaterial color="#ff9a52" toneMapped={false} />
+          <meshBasicMaterial color="#ff7f50" toneMapped={false} />
         </mesh>
       </group>
     </group>
@@ -124,9 +124,9 @@ export default function HeroScene() {
       <Canvas frameloop={visible ? 'always' : 'never'} dpr={[1, 1.75]} camera={{ position: [0, 0, 7.1], fov: 40 }} gl={{ antialias: true, alpha: true }} aria-hidden>
         <ambientLight intensity={0.4} />
         <Environment resolution={256} frames={1}>
-          <Lightformer form="rect" intensity={3} color="#8b8cff" position={[-5, 2, 3]} scale={[6, 8, 1]} />
-          <Lightformer form="rect" intensity={2.5} color="#22d3ee" position={[5, -1, 3]} scale={[6, 8, 1]} />
-          <Lightformer form="rect" intensity={1.2} color="#ff9a52" position={[0, -5, 2]} scale={[8, 2, 1]} />
+          <Lightformer form="rect" intensity={3} color="#4d9bff" position={[-5, 2, 3]} scale={[6, 8, 1]} />
+          <Lightformer form="rect" intensity={2.5} color="#3dd6e6" position={[5, -1, 3]} scale={[6, 8, 1]} />
+          <Lightformer form="rect" intensity={1.2} color="#ff7f50" position={[0, -5, 2]} scale={[8, 2, 1]} />
         </Environment>
         <Rig>
           <Dial />
@@ -134,7 +134,7 @@ export default function HeroScene() {
             <Phone />
           </Float>
         </Rig>
-        <Sparkles count={60} scale={[8, 6, 4]} size={2} speed={reduced ? 0 : 0.3} color="#8b8cff" opacity={0.6} />
+        <Sparkles count={60} scale={[8, 6, 4]} size={2} speed={reduced ? 0 : 0.3} color="#4d9bff" opacity={0.6} />
       </Canvas>
     </div>
   )

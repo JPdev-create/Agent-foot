@@ -14,14 +14,15 @@ const LINKS = [
 
 export function Logo() {
   return (
-    <a href="#top" className="flex items-center gap-2.5" aria-label={`${BRAND}, retour en haut`}>
-      <svg viewBox="0 0 64 64" className="size-9" aria-hidden>
-        <rect width="64" height="64" rx="16" fill="var(--t-primary)" />
-        <circle cx="32" cy="34" r="16" fill="none" stroke="var(--t-on-primary)" strokeWidth="4" />
-        <path d="M32 24v10l7 5" fill="none" stroke="var(--t-on-primary)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-        <rect x="27" y="9" width="10" height="5" rx="2" fill="#fdba74" />
-      </svg>
-      <span className="text-xl font-extrabold tracking-tight text-ink">{BRAND}</span>
+    <a href="#top" className="group flex items-center gap-2.5" aria-label={`${BRAND}, retour en haut`}>
+      <img
+        src={`${import.meta.env.BASE_URL}tempora-emblem.webp`}
+        alt=""
+        width={256}
+        height={229}
+        className="h-9 w-auto transition-transform duration-500 group-hover:rotate-[-8deg] group-hover:scale-105"
+      />
+      <span className="font-display text-lg font-semibold tracking-[0.08em] text-ink uppercase">{BRAND}</span>
     </a>
   )
 }

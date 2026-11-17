@@ -101,7 +101,7 @@ export function Pricing() {
           </Reveal>
 
           <Reveal delay={0.08}>
-            <motion.article whileHover={{ y: -4 }} className="relative flex h-full flex-col rounded-3xl border-2 border-primary bg-surface p-7 shadow-[0_0_60px_-15px_rgb(139_140_255/0.6)] sm:p-9">
+            <motion.article whileHover={{ y: -4 }} className="relative flex h-full flex-col rounded-3xl border-2 border-primary bg-surface p-7 shadow-[0_0_60px_-15px_rgb(77_155_255/0.6)] sm:p-9">
               <span className="absolute -top-3.5 left-7 rounded-full bg-accent px-3 py-1 text-xs font-bold tracking-wide text-on-primary uppercase">Le plus rentable</span>
               <div className="flex items-center gap-3">
                 <span className="grid size-11 place-items-center rounded-xl bg-primary text-on-primary">

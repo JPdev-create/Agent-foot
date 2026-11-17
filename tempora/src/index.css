@@ -15,12 +15,12 @@
   --t-soft: #aab1cd;
   --t-mute: #7d85a5;
   --t-line: #1c2138;
-  --t-primary: #8b8cff;
-  --t-primary-strong: #a9aaff;
+  --t-primary: #4d9bff;
+  --t-primary-strong: #7db6ff;
   --t-on-primary: #05060d;
-  --t-primary-tint: #16183a;
-  --t-cyan: #22d3ee;
-  --t-accent: #ff9a52;
+  --t-primary-tint: #0f1d3a;
+  --t-cyan: #3dd6e6;
+  --t-accent: #ff7f50;
   --t-accent-tint: #33190a;
   --t-ok: #4ade80;
   --t-ok-tint: #0e2b1a;
@@ -76,7 +76,7 @@ input[type="range"] { accent-color: var(--t-primary); }
 
 /* Texte dégradé animé */
 .text-plasma {
-  background: linear-gradient(100deg, #a9aaff 0%, #22d3ee 40%, #8b8cff 70%, #ff9a52 100%);
+  background: linear-gradient(100deg, #7db6ff 0%, #3dd6e6 40%, #4d9bff 70%, #ff7f50 100%);
   background-size: 220% auto;
   -webkit-background-clip: text; background-clip: text; color: transparent;
   animation: plasma 9s ease-in-out infinite;
@@ -87,12 +87,12 @@ input[type="range"] { accent-color: var(--t-primary); }
 .spotlight { position: relative; isolation: isolate; }
 .spotlight::before {
   content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: -1; pointer-events: none;
-  background: radial-gradient(420px circle at var(--x, 50%) var(--y, 0%), rgb(139 140 255 / 0.14), transparent 45%);
+  background: radial-gradient(420px circle at var(--x, 50%) var(--y, 0%), rgb(77 155 255 / 0.14), transparent 45%);
   opacity: 0; transition: opacity 0.3s;
 }
 .spotlight::after {
   content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none;
-  background: radial-gradient(300px circle at var(--x, 50%) var(--y, 0%), rgb(34 211 238 / 0.8), rgb(139 140 255 / 0.4) 30%, transparent 60%);
+  background: radial-gradient(300px circle at var(--x, 50%) var(--y, 0%), rgb(61 214 230 / 0.8), rgb(77 155 255 / 0.4) 30%, transparent 60%);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor; mask-composite: exclude;
   opacity: 0; transition: opacity 0.3s;

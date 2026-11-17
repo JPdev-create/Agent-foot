@@ -50,8 +50,8 @@ function Map() {
     <svg ref={ref} viewBox="0 0 640 320" className="h-auto w-full" role="img" aria-label="Carte de démonstration : tournée reliant cinq chantiers">
       <defs>
         <linearGradient id="route" x1="0" x2="1">
-          <stop offset="0" stopColor="#22d3ee" />
-          <stop offset="1" stopColor="#8b8cff" />
+          <stop offset="0" stopColor="#3dd6e6" />
+          <stop offset="1" stopColor="#4d9bff" />
         </linearGradient>
         <radialGradient id="fade" cx="50%" cy="50%" r="60%">
           <stop offset="0" stopColor="#fff" stopOpacity="1" />
@@ -81,12 +81,12 @@ function Map() {
       {SITES.map((s, i) => (
         <g key={s.name}>
           {!reduced && (
-            <circle cx={s.x} cy={s.y} r="8" fill="none" stroke={i === 0 ? '#ff9a52' : '#8b8cff'} strokeWidth="1.5">
+            <circle cx={s.x} cy={s.y} r="8" fill="none" stroke={i === 0 ? '#ff7f50' : '#4d9bff'} strokeWidth="1.5">
               <animate attributeName="r" values="8;22" dur="2.4s" begin={`${i * 0.4}s`} repeatCount="indefinite" />
               <animate attributeName="opacity" values="0.8;0" dur="2.4s" begin={`${i * 0.4}s`} repeatCount="indefinite" />
             </circle>
           )}
-          <circle cx={s.x} cy={s.y} r="7" fill={i === 0 ? '#ff9a52' : '#8b8cff'} stroke="#05060d" strokeWidth="3" />
+          <circle cx={s.x} cy={s.y} r="7" fill={i === 0 ? '#ff7f50' : '#4d9bff'} stroke="#05060d" strokeWidth="3" />
           <text x={s.x} y={s.y - 16} textAnchor="middle" fill="#aab1cd" fontSize="12" fontFamily="Plus Jakarta Sans Variable, sans-serif" fontWeight="600">
             {s.name}
           </text>
@@ -94,7 +94,7 @@ function Map() {
       ))}
       {inView && !reduced && (
         <g>
-          <circle r="9" fill="#22d3ee" opacity="0.25">
+          <circle r="9" fill="#3dd6e6" opacity="0.25">
             <animateMotion dur="9s" repeatCount="indefinite" begin="2.2s" rotate="auto">
               <mpath href="#route-path" />
             </animateMotion>

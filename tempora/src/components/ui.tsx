@@ -24,7 +24,7 @@ type BtnProps = HTMLMotionProps<'a'> & { variant?: 'primary' | 'secondary' | 'ac
 
 export function Button({ variant = 'primary', className = '', children, ...props }: BtnProps) {
   const styles = {
-    primary: 'bg-gradient-to-r from-primary to-cyan text-on-primary hover:brightness-110 shadow-[0_10px_34px_-8px_rgb(139_140_255/0.7)]',
+    primary: 'bg-gradient-to-r from-primary to-cyan text-on-primary hover:brightness-110 shadow-[0_10px_34px_-8px_rgb(77_155_255/0.7)]',
     secondary: 'glass text-ink hover:border-primary/50',
     accent: 'bg-ink text-bg hover:opacity-90',
   }[variant]

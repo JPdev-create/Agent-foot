@@ -3,7 +3,6 @@ import { CheckCircle2, Plus } from 'lucide-react'
 import { useId, useState, type FormEvent } from 'react'
 import { BRAND, LIFETIME_TIERS, MAINTENANCE_RATE, SUBSCRIPTION, TRIAL_DAYS, euro } from '../data'
 import { EASE } from './motion'
-import { Logo } from './Navbar'
 import { Container, Reveal, SectionHead } from './ui'
 
 const STEPS = [
@@ -29,7 +28,7 @@ export function Steps() {
           {STEPS.map((s, i) => (
             <Reveal key={s.title} delay={i * 0.12}>
               <li className="relative text-center">
-                <span className="relative z-10 mx-auto grid size-12 place-items-center rounded-full bg-gradient-to-br from-primary to-cyan shadow-[0_0_30px_-4px_rgb(34_211_238/0.6)] font-mono text-lg font-bold text-on-primary">{i + 1}</span>
+                <span className="relative z-10 mx-auto grid size-12 place-items-center rounded-full bg-gradient-to-br from-primary to-cyan shadow-[0_0_30px_-4px_rgb(61_214_230/0.6)] font-mono text-lg font-bold text-on-primary">{i + 1}</span>
                 <h3 className="mt-5 text-xl font-bold text-ink">{s.title}</h3>
                 <p className="mx-auto mt-2 max-w-xs text-soft">{s.text}</p>
               </li>
@@ -126,6 +125,16 @@ export function Trial() {
       <div className="pointer-events-none absolute -right-40 -bottom-40 size-[34rem] rounded-full bg-[#4f46e5]/40 blur-[120px]" aria-hidden />
       <Container className="relative grid items-center gap-12 lg:grid-cols-2">
         <Reveal>
+          <motion.img
+            src={`${import.meta.env.BASE_URL}tempora-emblem.webp`}
+            alt=""
+            width={256}
+            height={229}
+            loading="lazy"
+            animate={{ y: [0, -8, 0] }}
+            transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+            className="mb-6 w-24"
+          />
           <p className="text-sm font-bold tracking-[0.12em] text-accent uppercase">Essai gratuit</p>
           <h2 className="mt-3 text-3xl font-bold sm:text-[2.6rem]">{TRIAL_DAYS} jours pour l’adopter.</h2>
           <p className="mt-5 max-w-md text-lg opacity-80">
@@ -189,8 +198,8 @@ export function Footer() {
     <footer className="border-t border-line bg-bg py-12">
       <Container className="grid gap-10 md:grid-cols-[1.5fr_1fr_1fr]">
         <div>
-          <Logo />
-          <p className="mt-3 max-w-xs text-soft">La pointeuse en ligne pour les équipes de terrain. Pointage, planning, chantiers et kilomètres.</p>
+          <img src={`${import.meta.env.BASE_URL}tempora-logo.webp`} alt={`${BRAND}, pointeuse et gestion`} width={640} height={439} loading="lazy" className="w-44" />
+          <p className="mt-4 max-w-xs text-soft">La pointeuse en ligne pour les équipes de terrain. Pointage, planning, chantiers et kilomètres.</p>
         </div>
         <nav aria-label="Produit">
           <p className="font-bold text-ink">Produit</p>

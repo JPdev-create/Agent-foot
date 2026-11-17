@@ -62,7 +62,7 @@ const playerAccepts = (p, club) => club.rep >= CLUBS[p.club].rep - (playProb(p) 
 
 function signChance(p, bonusLevel, ci) {
   const req = (p.ovr - 42) * 1.6 + Math.max(0, p.pot - 70) * 0.8 + (p.nat !== 'BE' ? 10 : 0);
-  return clamp(0.5 + (S.rep - req) / 40 + [0, 0.15, 0.3][bonusLevel] + (p.hg && S.cm && p.hg === S.cm.id && p.club === S.cm.id ? 0.25 : 0) + DIFFS[S.diff].sign + (ci === undefined ? 0 : COM_BONUS[ci]), 0.03, 0.95);
+  return clamp(0.5 + (S.rep - req) / 40 + [0, 0.15, 0.3][bonusLevel] + (p.hg && p.club === p.hg && isMyClub(p.hg) ? 0.25 : 0) + DIFFS[S.diff].sign + (ci === undefined ? 0 : COM_BONUS[ci]), 0.03, 0.95);
 }
 function signBonusCost(p, level) {
   const v = playerValue(p);
@@ -135,7 +135,7 @@ const getP = (id) => S.players.find((p) => p.id === id);
 const clients = () => S.players.filter((p) => p.mine);
 const office = () => OFFICES[S.office];
 const weeklyCosts = () => office().weekly + Object.keys(STAFF).reduce((s, k) => s + STAFF[k].weekly * (S.stl ? S.stl[k] : S.staff[k] ? 1 : 0), 0)
-  + clients().reduce((s, p) => s + planCost(p), 0) + ACADEMY[S.acad || 0].weekly;
+  + clients().reduce((s, p) => s + planCost(p), 0) + ACADEMY[S.acad || 0].weekly + branchCosts() + fdnCosts();
 const planCost = (p) => (p.plan === 'int' ? Math.max(40, Math.round(p.sal * 0.2 / 10) * 10) : 0);
 const weeklyIncome = () => Math.round(clients().reduce((s, p) => s + p.sal * comRate(p) + (p.sp ? p.sp.w : 0), 0) + ownedIncome());
 const canRecruit = (p) => p.nat === 'BE' || S.office >= INTL_OFFICE;
@@ -189,7 +189,12 @@ function migrate() {
   if (S.eu && !S.eu.BC) S.eu.BC = { alive: clubsOf('BE1').map((c) => c.id).sort(() => Math.random() - 0.5), rounds: [], champ: null };
   if (!S.inv) S.inv = { mk: 0, gala: 0, cl: {} };
   if (!S.intl) S.intl = { nl: null, last: null };
-  if (S.owned && S.owned.length && !S.cm) newClubMgmt(S.owned[0]);
+  if (S.cm) { S.cms = [S.cm]; delete S.cm; }
+  if (!S.cms) S.cms = [];
+  (S.owned || []).forEach((id) => { if (!cmOf(id)) newClubMgmt(id); });
+  if (!S.br) S.br = [];
+  if (!S.acq) S.acq = [];
+  if (S.fdn === undefined) S.fdn = 0;
   if (!S.owned) S.owned = [];
   if (!S.inv.own) S.inv.own = {};
   if (!S.rec) S.rec = {};
@@ -264,7 +269,7 @@ function actSign(id, bonusLevel, ci) {
   const p = getP(id);
   if (p.mine) return { ok: false, msg: 'Déjà client.' };
   if (!canRecruit(p)) return { ok: false, msg: `Il faut le bureau « ${OFFICES[INTL_OFFICE].name} » pour recruter hors de Belgique.` };
-  if (clients().length >= office().maxClients) return { ok: false, msg: 'Nombre maximum de clients atteint. Agrandissez votre bureau.' };
+  if (clients().length >= maxClients()) return { ok: false, msg: 'Nombre maximum de clients atteint. Agrandissez votre agence.' };
   if (p.cd > S.t) return { ok: false, msg: `Il ne veut plus vous parler pour l'instant (encore ${p.cd - S.t} sem.).` };
   const cost = signBonusCost(p, bonusLevel);
   if (cost > 0 && cost > S.cash) return { ok: false, msg: 'Pas assez de liquidités pour cette prime.' };
@@ -931,7 +936,7 @@ function simPlayer(p, res) {
   const pp = playProb(p);
   const k = GROWTH_K[p.age] || 0;
   if (k > 0 && p.ovr < p.pot) {
-    const boost = (S.cm && p.club === S.cm.id ? 1 + (S.cm.training - 1) * 0.05 : 1) * (p.mine ? (1 + 0.12 * S.stl.coach) * PLANS[p.plan || 'std'].g : 1) * ({ pro: 1.15, amb: 1.08, fet: 0.9 }[p.tr] || 1);
+    const boost = (cmOf(p.club) ? 1 + (cmOf(p.club).training - 1) * 0.05 : 1) * (p.mine ? (1 + 0.12 * S.stl.coach) * PLANS[p.plan || 'std'].g : 1) * ({ pro: 1.15, amb: 1.08, fet: 0.9 }[p.tr] || 1);
     p.ovr = Math.min(p.pot, p.ovr + (p.pot - p.ovr) * k / 38 * (0.45 + 0.9 * pp) * rnd(0.4, 1.6) * boost);
   } else if (p.age >= 31) {
     p.ovr = Math.max(30, p.ovr - rnd(0.01, 0.08));
@@ -1020,7 +1025,7 @@ function nextWeek() {
   if (S.week === 7 || S.week === 24) news('📅', 'Le mercato ferme ses portes.');
 
   if (S.week > SEASON_WEEKS) endSeason(); else maybeEvent();
-  S.actions = office().actions;
+  S.actions = maxActions();
   checkGoals();
   if (S.cash < -DIFFS[S.diff].bank) {
     S.over = true;
@@ -1083,7 +1088,7 @@ function endSeason() {
   addRep(repGain);
   const top3 = agencyRank() <= 3;
   S.rivals.forEach((r) => { r.rep = clamp(r.rep + rnd(-1.5, 2) + (top3 && r.rep < S.rep ? rnd(0, 2.5) : 0), 10, 99); });
-  if (S.rep > 80) { const loss = (S.rep - 80) * 0.2; S.rep = Math.max(80, S.rep - loss); news('📉', `L'exigence du très haut niveau : -${loss.toFixed(1)} de réputation. Restez au sommet grâce aux titres et aux trophées !`); }
+  if (S.rep > 80) { const loss = (S.rep - 80) * 0.2 * fdnShield(); S.rep = Math.max(80, S.rep - loss); news('📉', `L'exigence du très haut niveau : -${loss.toFixed(1)} de réputation. Restez au sommet grâce aux titres et aux trophées !`); }
   const best = cl.slice().sort((a, b) => (b.ovr - b.o0) - (a.ovr - a.o0))[0];
   S.recap = {
     label: `${S.season}/${(S.season + 1) % 100}`, inc: S.ss.inc, costs: S.ss.costs,
@@ -1179,6 +1184,7 @@ function endSeason() {
   Object.keys(S.rel).forEach((id) => { S.rel[id] = Math.floor(S.rel[id] * 0.85); });
   academyIntake();
   newMissions();
-  if (S.cm) setObjective();
+  cms().forEach((cm) => setObjective(cm));
+  branchesSeason();
   news('📅', `Début de la saison ${S.season}/${(S.season + 1) % 100}. Le mercato d'été est ouvert (6 semaines).`);
 }

@@ -90,6 +90,16 @@ function slotsBlock() {
     : `<button class="row ${UI.slot === k ? 'me' : ''}" data-act="slotNew" data-id="${k}"><span class="ico">➕</span><div class="main"><b>Emplacement ${k} libre</b><small>Démarrer une nouvelle carrière ici</small></div>${UI.slot === k ? tag('Sélectionné', 'ok') : ''}</button>`).join('')}</div>`);
 }
 
+function legacyStart() {
+  const d = legacy();
+  if (!d.pts && !d.careers.length && !Object.keys(d.lv).length) return '';
+  return sec(`👑 Héritage · ${d.pts} point(s)`, `<div class="list">${Object.keys(PERKS).map((k) => { const P = PERKS[k], l = d.lv[k] || 0;
+    return `<div class="row wrap"><span class="ico">${P.icon}</span><div class="main"><b>${P.name} ${l ? `(niv. ${l}/${P.max})` : ''}</b><small>${l ? P.desc(l) : 'Pas encore débloqué'}${l < P.max ? ` · prochain : ${P.desc(l + 1)}` : ''}</small></div>
+      ${l < P.max ? `<button class="btn sm" data-act="perk" data-id="${k}" ${d.pts < P.cost(l) ? 'disabled' : ''}>${P.cost(l)} pts</button>` : tag('Max', 'gold')}</div>`; }).join('')}</div>
+    ${d.careers.length ? `<p class="hint">Carrières légendaires : ${d.careers.map((c) => `${esc(c.logo || '')} ${esc(c.n)} (${c.seasons} saisons, ${c.troph} trophées)`).join(' · ')}</p>` : ''}
+    <p class="hint">Les bonus achetés s'appliquent à chaque nouvelle carrière.</p>`);
+}
+
 function viewStart() {
   const n = UI.nw;
   if (!UI.slot) UI.slot = [1, 2, 3].find((k) => !slotInfo(k)) || curSlot();
@@ -97,6 +107,7 @@ function viewStart() {
       <p>Fondez votre agence de joueurs en Belgique, dénichez des pépites dans les petits clubs et emmenez-les jusqu'aux 5 grands championnats européens.</p></div>
     <div class="start" style="--acc:${n.color}">
       ${slotsBlock()}
+      ${legacyStart()}
       <div class="sec-h"><h2>✨ Nouvelle carrière${slotInfo(UI.slot) ? ` · ⚠️ remplacera l'emplacement ${UI.slot}` : ` · emplacement ${UI.slot}`}</h2></div>
       <div class="card">
         <label class="field"><span>Nom de l'agence</span><input id="in-name" maxlength="24" value="${esc(n.name)}"></label>
@@ -113,7 +124,7 @@ function viewStart() {
 /* ============ Barre du haut et navigation ============ */
 function topbar() {
   const o = office(), win = inWindow(S.week);
-  const dots = Array.from({ length: o.actions }, (_, i) => `<i class="${i < S.actions ? 'on' : ''}"></i>`).join('');
+  const dots = Array.from({ length: maxActions() }, (_, i) => `<i class="${i < S.actions ? 'on' : ''}"></i>`).join('');
   return `<header class="top">
     <div class="top-row">
       <div class="brand"><span class="logo">${esc(S.agency.logo || '⚽')}</span><div style="min-width:0"><b>${esc(S.agency.name)}</b><small>${seasonTxt(S.season)} · Sem. ${S.week}/${SEASON_WEEKS}</small></div></div>
@@ -230,7 +241,7 @@ function viewHome() {
     ${s && !S.over ? `<div class="kicker">${s.n > 1 ? `Bilan des ${s.n} dernières semaines` : 'Bilan de la semaine écoulée'}</div><div class="tags" style="margin:0 0 12px">${chip(`💶 ${s.dc >= 0 ? '+' : ''}${fmt(s.dc)}`, s.dc >= 0 ? 'ok' : 'bad')}${chip(`⭐ ${s.dr >= 0 ? '+' : ''}${s.dr.toFixed(1)} rép.`, s.dr >= 0 ? 'ok' : 'bad')}
       ${s.g ? chip(`⚽ ${s.g} but(s)`, 'ok') : ''}${s.offers ? chip(`📨 ${s.offers} nouvelle(s) offre(s)`, 'gold') : ''}${s.inj ? chip(`🚑 ${s.inj} blessé(s)`, 'bad') : ''}</div>` : ''}
     <div class="stats">${stat('Revenus / sem.', '+' + fmt(inc), 'pos')}${stat('Frais / sem.', '-' + fmt(costs), 'neg')}${stat('Solde', (net >= 0 ? '+' : '') + fmt(net), net < 0 ? 'neg' : 'pos')}</div>
-    <div class="split" style="margin-top:10px"><small>👥 ${clients().length}/${office().maxClients} clients</small><small class="${S.actions ? '' : 'gold'}">⚡ ${S.actions ? `${S.actions} action(s) restante(s)` : 'Plus d\'action : semaine suivante !'}</small></div></div>`);
+    <div class="split" style="margin-top:10px"><small>👥 ${clients().length}/${maxClients()} clients</small><small class="${S.actions ? '' : 'gold'}">⚡ ${S.actions ? `${S.actions} action(s) restante(s)` : 'Plus d\'action : semaine suivante !'}</small></div></div>`);
   const tips = assistantTips();
   if (tips.length) h += sec('🧠 Conseils de l\'assistant', `<div class="list">${tips.map((x) => `<button class="row" data-act="${x.act}" data-id="${x.id}"><span class="ico">${x.i}</span><div class="main"><span style="font-size:13.5px;display:block;white-space:normal">${esc(x.txt)}</span></div><span class="chev">›</span></button>`).join('')}</div>`);
   h += weekMatches();
@@ -278,7 +289,7 @@ function viewClients() {
   const sorters = { ovr: (a, b) => b.ovr - a.ovr, val: (a, b) => playerValue(b) - playerValue(a), inc: (a, b) => forYou(b) - forYou(a), mor: (a, b) => a.morale - b.morale, age: (a, b) => a.age - b.age };
   cl.sort(sorters[UI.cs]);
   const total = cl.reduce((s, p) => s + playerValue(p), 0);
-  let h = `<div class="card"><div class="stats">${stat('Clients', `${cl.length}/${office().maxClients}`)}${stat('Revenus / sem.', fmt(cl.reduce((s, p) => s + forYou(p), 0)), 'pos')}${stat('Valeur totale', fmt(total))}</div></div>`;
+  let h = `<div class="card"><div class="stats">${stat('Clients', `${cl.length}/${maxClients()}`)}${stat('Revenus / sem.', fmt(cl.reduce((s, p) => s + forYou(p), 0)), 'pos')}${stat('Valeur totale', fmt(total))}</div></div>`;
   h += seg('jv', UI.jv, [['list', '👥 Effectif'], ['stats', '📊 Stats'], ['ctr', '📝 Contrats']]);
   if (UI.jv === 'ctr') {
     const by = cl.slice().sort((a, b) => (a.free ? -1 : a.cy) - (b.free ? -1 : b.cy) || a.mandate - b.mandate);
@@ -305,7 +316,7 @@ function marketRow(p) {
   const t = [];
   if (p.cov) t.push(tag('👀 Convoité', 'bad'));
   if (p.u19 === S.season) t.push(tag('🏟️ Révélé', 'gold'));
-  if (p.hg && S.cm && p.hg === S.cm.id && p.club === S.cm.id) t.push(tag('🎓 Formé à votre club', 'gold'));
+  if (p.hg && p.club === p.hg && isMyClub(p.hg)) t.push(tag('🎓 Formé à votre club', 'gold'));
   if (p.sc >= 1 && p.potLo >= ovrOf(p) + 12 && p.age <= 20) t.push(tag('💎 Bonne affaire', 'ok'));
   if (p.sc >= 2) t.push(tag('📋 Rapport complet', 'ok')); else if (p.sc === 1) t.push(tag('🔎 Observé', 'info'));
   if (!canRecruit(p)) t.push(tag('🔒'));
@@ -459,11 +470,11 @@ function upgradeCard(icon, title, levelTxt, desc, next, act, id) {
 
 /* ---------- Mon club (président) ---------- */
 function viewMyClub() {
-  const cm = S.cm, c = CLUBS[cm.id], f = clubFinance(), pos = clubPos(), st = standings(c.league), t = S.tab[cm.id];
+  const cm = curCm(), c = CLUBS[cm.id], f = clubFinance(cm), pos = clubPos(cm), st = standings(c.league), t = S.tab[cm.id];
   const objOk = cm.obj && pos <= cm.obj.target;
   const nm = nextMatch({ club: cm.id, inj: 0, id: -1 });
   const line = (l, v, cls) => `<div class="row" style="padding:8px 13px"><div class="main"><span style="font-size:13.5px">${l}</span></div><div class="side"><b class="${cls}">${v}</b></div></div>`;
-  let h = `<div class="card goldc"><div class="card-h" style="margin-bottom:10px"><div style="display:flex;gap:12px;align-items:center">${rt(c.rep, 'xl')}<div><b style="font-size:18px">${esc(c.name)}</b>
+  let h = (cms().length > 1 ? pills('cmSel', String(CM_SEL), cms().map((x, i) => [String(i), `${LEAGUES[CLUBS[x.id].league].flag} ${esc(CLUBS[x.id].name)}`])) : '') + `<div class="card goldc"><div class="card-h" style="margin-bottom:10px"><div style="display:flex;gap:12px;align-items:center">${rt(c.rep, 'xl')}<div><b style="font-size:18px">${esc(c.name)}</b>
       <small>${LEAGUES[c.league].flag} ${LEAGUES[c.league].name} · ${pos}ᵉ sur ${st.length} · ${pts(t)} pts</small><small>Président depuis ${seasonTxt(cm.since)}</small></div></div></div>
     <div class="note ${objOk ? '' : 'warn'}" style="margin:0 0 10px">🎯 <b>Objectif :</b> ${esc(cm.obj ? cm.obj.label : '—')} · ${objOk ? '✅ en bonne voie' : `⚠️ actuellement ${pos}ᵉ`}</div>
     <div class="moral" style="margin:0"><small style="width:76px">Supporters</small>${bar(cm.fans, moralCls(cm.fans))}<b>${Math.round(cm.fans)}</b></div></div>`;
@@ -510,7 +521,7 @@ function agencyDev() {
   const line = (l, v, cls) => `<div class="row" style="padding:8px 13px"><div class="main"><span style="font-size:13.5px">${l}</span></div><div class="side"><b class="${cls}">${v}</b></div></div>`;
   let h = sec('💶 Finances hebdomadaires', `<div class="list">
     ${line('Commissions sur salaires', '+' + fmt(salCom), 'pos')}${spons ? line('Contrats de sponsoring', '+' + fmt(spons), 'pos') : ''}
-    ${line('Loyer du bureau', '-' + fmt(o.weekly), 'neg')}${staffC ? line('Personnel', '-' + fmt(staffC), 'neg') : ''}${planC ? line('Entraînements intensifs', '-' + fmt(planC), 'neg') : ''}${acadC ? line('Académie', '-' + fmt(acadC), 'neg') : ''}${S.cm ? line('Résultat de votre club', (ownedIncome() >= 0 ? '+' : '') + fmt(ownedIncome()), ownedIncome() >= 0 ? 'pos' : 'neg') : ''}
+    ${line('Loyer du bureau', '-' + fmt(o.weekly), 'neg')}${staffC ? line('Personnel', '-' + fmt(staffC), 'neg') : ''}${planC ? line('Entraînements intensifs', '-' + fmt(planC), 'neg') : ''}${acadC ? line('Académie', '-' + fmt(acadC), 'neg') : ''}${cms().length ? line(cms().length > 1 ? 'Résultat de vos clubs' : 'Résultat de votre club', (ownedIncome() >= 0 ? '+' : '') + fmt(ownedIncome()), ownedIncome() >= 0 ? 'pos' : 'neg') : ''}${S.br.length ? line(`Filiales (${S.br.length})`, '-' + fmt(branchCosts()), 'neg') : ''}${fdnLevel() ? line('Fondation', '-' + fmt(fdnCosts()), 'neg') : ''}
     ${line('<b>Solde</b>', fmt(weeklyIncome() - weeklyCosts()), weeklyIncome() - weeklyCosts() < 0 ? 'neg' : 'pos')}</div>`);
   const lg = (S.ledger || []).slice(0, UI.ledAll ? 80 : 8);
   h += sec('🧾 Journal des opérations', lg.length ? `<div class="list">${lg.map((x) => `<div class="row wrap" style="padding:9px 13px"><span class="ico" style="font-size:16px">${x.i}</span><div class="main"><b style="font-weight:550;font-size:13.5px">${esc(x.l)}</b><small>Sem. ${x.w} · ${seasonTxt(x.s)}</small></div><div class="side"><b class="${x.a >= 0 ? 'pos' : 'neg'}">${x.a >= 0 ? '+' : ''}${fmt(x.a)}</b></div></div>`).join('')}</div>`
@@ -537,13 +548,34 @@ function agencyDev() {
   return h;
 }
 
+function empireBlock() {
+  if (S.office < EMPIRE_OFFICE) {
+    return S.office >= EMPIRE_OFFICE - 1 ? sec('👑 Bientôt : l\'Empire', `<div class="card"><small>Avec le bureau « ${OFFICES[EMPIRE_OFFICE].name} », vous pourrez ouvrir des filiales à l'étranger, racheter les agences rivales, créer une fondation et acheter un club étranger.</small></div>`) : '';
+  }
+  let h = sec('🌐 Filiales à l\'étranger', `<div class="list">${Object.keys(BRANCHES).map((lg) => { const b = BRANCHES[lg], on = hasBranch(lg);
+    return `<div class="row wrap"><span class="ico">${LEAGUES[lg].flag}</span><div class="main"><b>${b.city}</b><small>${on ? `✅ Ouverte · ${fmt(b.weekly)}/sem. · influence en ${LEAGUES[lg].name}` : `+3 clients · relations avec les grands clubs · permet d'acheter un club ici · ${fmt(b.weekly)}/sem.`}</small></div>
+      ${on ? tag('Ouverte', 'ok') : `<button class="btn sm" data-act="openBranch" data-id="${lg}" ${S.cash < b.cost ? 'disabled' : ''}>${fmt(b.cost)}</button>`}</div>`; }).join('')}</div>
+    <p class="hint">${S.br.length}/7 filiales · chaque paire de filiales donne +1 action par semaine.</p>`);
+  const prey = S.rivals.slice().sort((a, b) => b.rep - a.rep);
+  h += sec('🦈 Racheter une agence rivale', `<div class="list">${prey.map((r) => `<div class="row wrap"><span class="ico">${r.fresh ? '🌱' : '🏢'}</span><div class="main"><b>${esc(r.n)}</b><small>Réputation ${Math.floor(r.rep)} · ${esc(RIVAL_STYLE[r.n] || (r.fresh ? 'Jeune agence ambitieuse' : ''))} · récupère ${clamp(Math.round(r.rep / 25), 1, 4)} joueur(s) et +3 places</small></div>
+    <button class="btn sm" data-act="buyRival" data-id="${esc(r.n)}" ${S.cash < rivalPrice(r) ? 'disabled' : ''}>${fmt(rivalPrice(r))}</button></div>`).join('')}</div>
+    ${S.acq.length ? `<p class="hint">Agences déjà absorbées : ${S.acq.map((a) => esc(a.n)).join(', ')}.</p>` : ''}`);
+  const nf = FDN[fdnLevel() + 1];
+  h += sec('💚 Fondation de l\'agence', `<div class="card"><div class="card-h"><div><b>${FDN[fdnLevel()].name}</b><small>${fdnLevel() ? `Réduit de ${fdnLevel() * 15} % l'usure de la réputation au sommet · ${fmt(fdnCosts())}/sem.` : 'Protège votre réputation au sommet et améliore votre image.'}</small></div>${tag(`Niv. ${fdnLevel()}/5`)}</div>
+    ${nf ? `<div class="note" style="display:flex;align-items:center;gap:10px;margin:0"><div style="flex:1"><b style="color:var(--txt);font-size:13.5px">→ ${nf.name}</b><small>−${(fdnLevel() + 1) * 15} % d'usure · +2 réputation · ${fmt(nf.weekly)}/sem.</small></div><button class="btn sm" data-act="fdn" ${S.cash < nf.cost ? 'disabled' : ''}>${fmt(nf.cost)}</button></div>` : '<small>✅ Niveau maximum.</small>'}</div>`);
+  h += sec('🏛️ Groupe multi-clubs', `<div class="card"><small>${cms().length ? `Vos clubs : ${cms().map((x) => `${LEAGUES[CLUBS[x.id].league].flag} ${esc(CLUBS[x.id].name)}`).join(' · ')}.` : 'Aucun club pour l\'instant.'}
+    Vous pouvez posséder un club belge et un club étranger. Pour un club étranger : statut « ${TIERS[OWN_TIER_FOREIGN][2]} » et une filiale dans son pays, puis achetez-le depuis sa page (Compétitions → classement).</small></div>`);
+  return h;
+}
+
 function agencyNet() {
   const all = [{ n: S.agency.name, rep: S.rep, me: true }, ...S.rivals].sort((a, b) => b.rep - a.rep);
   const ti = tierIdx(S.rep), nt = TIERS[ti + 1];
   let h = sec('🎖️ Statut de l\'agence', `<div class="card goldc"><div class="card-h" style="margin-bottom:${nt ? 10 : 0}px"><div style="display:flex;gap:12px;align-items:center"><span style="font-size:30px">${TIERS[ti][1]}</span><div><b>${TIERS[ti][2]}</b><small>Palier ${ti + 1}/${TIERS.length}</small></div></div></div>
     ${nt ? `<div class="split" style="margin-bottom:6px"><small>Prochain : ${nt[1]} ${nt[2]}</small><small>${Math.floor(S.rep)} / ${nt[0]} rép.</small></div>${bar((S.rep - TIERS[ti][0]) / (nt[0] - TIERS[ti][0]) * 100, 'gold')}` : ''}</div>`);
+  h += empireBlock();
   if (S.owned.length) h += sec('🏛️ Votre club', `<div class="list">${S.owned.map((id) => { const st = standings(CLUBS[id].league), pos = st.findIndex((x) => x.c.id === id) + 1;
-    return `<button class="row" data-act="myclub" data-id="1">${rt(CLUBS[id].rep, 'sm')}<div class="main"><b>${esc(CLUBS[id].name)}</b><small>${LEAGUES[CLUBS[id].league].name} · ${pos}ᵉ · ${fmt(CLUBS[id].rep * 250)}/sem.</small></div><span class="chev">›</span></button>`; }).join('')}</div>`);
+    return `<button class="row" data-act="myclub" data-id="${esc(id)}">${rt(CLUBS[id].rep, 'sm')}<div class="main"><b>${esc(CLUBS[id].name)}</b><small>${LEAGUES[CLUBS[id].league].name} · ${pos}ᵉ · ${fmt(CLUBS[id].rep * 250)}/sem.</small></div><span class="chev">›</span></button>`; }).join('')}</div>`);
   else if (tierIdx(S.rep) >= OWN_TIER - 1) h += sec('🏛️ Devenir propriétaire', `<div class="card"><small>Au statut « ${TIERS[OWN_TIER][2]} », vous pourrez racheter un club belge (depuis sa page) et le faire grandir jusqu'à l'Europe.</small></div>`);
   h += sec('🏆 Classement des agences', `<div class="list">${all.map((a, i) => `<div class="row ${a.me ? 'me' : ''}"><span class="ico" style="font-weight:800;color:var(--mut);font-size:14px">${i + 1}</span>
     <div class="main rankbar"><b>${a.me ? esc(S.agency.logo) + ' ' : ''}${esc(a.n)}</b>${a.me ? '' : `<small>${esc(RIVAL_STYLE[a.n] || '')}</small>`}${bar(a.rep, a.me ? '' : 'dim')}</div><div class="side"><b>${Math.floor(a.rep)}</b></div></div>`).join('')}</div>`);
@@ -555,10 +587,19 @@ function agencyNet() {
   return h;
 }
 
+function legacyBlock() {
+  const d = legacy();
+  return sec('👑 Héritage', `<div class="card goldc"><small>Quand votre empire est bâti, transmettez-le : vous gagnez des points d'héritage pour vos prochaines carrières (capital, réputation, actions en plus…). Vous pouvez continuer à jouer cette partie.</small>
+    <div class="stats" style="margin-top:10px">${stat('Points en jeu', legacyPoints(), 'gold')}${stat('Points en banque', d.pts)}${stat('Saisons', careerSeasons())}</div>
+    ${S.legacyDone ? '<div class="note" style="margin:10px 0 0">✅ Empire déjà transmis. Créez une nouvelle carrière (Réglages → Changer de partie) pour utiliser vos points.</div>'
+    : `<button class="btn gold" data-act="passOn" ${canPassOn() ? '' : 'disabled'}>👑 Transmettre l'empire${canPassOn() ? '' : ' (10 saisons minimum)'}</button>`}</div>`);
+}
+
 function agencyPal() {
   let h = sec('📊 Chiffres clés', `<div class="card"><div class="stats">${stat('Transferts', S.stats.transfers)}${stat('Record', fmt(S.stats.bestFee))}${stat('Gains totaux', fmt(S.stats.earned))}</div>
     <div class="stats">${stat('Trophées clients', S.stats.troph, 'gold')}${stat('Succès', `${Object.keys(S.ach).length}/${ACH.length}`)}${stat('Saison', S.season - 2025)}</div>
     ${S.stats.bestName ? `<small style="margin-top:8px">💸 Plus gros transfert : ${esc(S.stats.bestName)}</small>` : ''}</div>`);
+  h += legacyBlock();
   h += sec(`🏅 Succès`, `<div class="card"><div class="ach">${ACH.map((a) => `<button class="${S.ach[a.id] ? 'on' : ''}" data-act="achInfo" data-id="${a.id}"><span>${a.i}</span><small>${a.l}</small></button>`).join('')}</div></div>`, `<small>${Object.keys(S.ach).length}/${ACH.length}</small>`);
   const R = S.rec || {}, recs = [['goals', '⚽', 'Buts en une saison'], ['assists', '🅰️', 'Passes en une saison'], ['avg', '📈', 'Meilleure note moyenne'], ['ovr', '💪', 'Plus haut niveau'], ['value', '💎', 'Plus grosse valeur'], ['fol', '📱', 'Plus suivi']].filter(([k]) => R[k]);
   if (recs.length) h += sec('🥇 Records de l\'agence', `<div class="list">${recs.map(([k, i, l]) => `<div class="row"><span class="ico">${i}</span><div class="main"><b>${l}</b><small>${esc(R[k].n)} · ${R[k].s}</small></div><div class="side"><b>${esc(R[k].txt)}</b></div></div>`).join('')}</div>`);
@@ -589,8 +630,8 @@ function agencySet() {
 
 function viewAgence() {
   const tabs = { club: viewMyClub, dev: agencyDev, net: agencyNet, pal: agencyPal, set: agencySet };
-  if (UI.av === 'club' && !S.cm) UI.av = 'dev';
-  return seg('av', UI.av, [...(S.cm ? [['club', '🏛️ Club']] : []), ['dev', S.cm ? 'Gestion' : 'Développement'], ['net', 'Réseau'], ['pal', 'Palmarès'], ['set', 'Réglages']]) + tabs[UI.av]();
+  if (UI.av === 'club' && !cms().length) UI.av = 'dev';
+  return seg('av', UI.av, [...(cms().length ? [['club', cms().length > 1 ? '🏛️ Clubs' : '🏛️ Club']] : []), ['dev', cms().length ? 'Gestion' : 'Développement'], ['net', S.office >= EMPIRE_OFFICE ? '👑 Empire' : 'Réseau'], ['pal', 'Palmarès'], ['set', 'Réglages']]) + tabs[UI.av]();
 }
 
 /* ============ Fiche joueur ============ */
@@ -638,7 +679,7 @@ function traitLine(p) {
 }
 
 function marketSheet(p) {
-  const cd = p.cd > S.t, can = canRecruit(p), full = clients().length >= office().maxClients, noAct = S.actions < 1;
+  const cd = p.cd > S.t, can = canRecruit(p), full = clients().length >= maxClients(), noAct = S.actions < 1;
   return `${playerHead(p)}
     <div class="stats">${stat('Potentiel', potTxt(p), 'gold')}${stat('Valeur', fmt(playerValue(p)))}${stat('Salaire / sem.', fmt(p.sal))}</div>
     <div class="stats" style="margin-top:8px">${stat('Temps de jeu', pct(playProb(p)))}${stat('Saison', `${p.m} m · ${p.g} b`)}${stat('Contrat club', `${p.cy} an(s)`, p.cy <= 1 ? 'neg' : '')}</div>
@@ -654,7 +695,7 @@ function marketSheet(p) {
       <small>Plus elle est basse, plus il est facile de le convaincre.</small>
       <div class="seg" style="margin:10px 0 0;position:static;box-shadow:none">${COMS.map((c, i) => `<button class="${UI.com === i ? 'on' : ''}" data-act="com" data-id="${i}">${Math.round(c * 100)} %</button>`).join('')}</div></div>
     ${cd ? `<div class="note warn">Il refuse de discuter encore ${p.cd - S.t} semaine(s).</div>` : ''}
-    ${full ? `<div class="note warn">👥 Agence pleine (${office().maxClients} clients) : agrandissez le bureau ou libérez une place.</div>` : ''}
+    ${full ? `<div class="note warn">👥 Agence pleine (${maxClients()} clients) : agrandissez le bureau ou libérez une place.</div>` : ''}
     ${noAct && !full ? '<div class="note warn">⚡ Plus d\'action cette semaine : revenez la semaine prochaine.</div>' : ''}
     ${!can ? `<div class="note warn">🔒 Recrutement à l'étranger non débloqué (bureau « ${OFFICES[INTL_OFFICE].name} »).</div>` : ''}
     ${['🤝 Simple poignée de main', '💶 Avec prime à la signature', '💰 Avec grosse prime'].map((l, i) => {
@@ -826,11 +867,12 @@ function modalClub(id, m) {
     <div class="moral"><small style="width:70px">Relation</small>${bar(r, r >= 30 ? '' : 'dim')}<b>${r}</b></div>
     ${S.owned.includes(id) ? '' : actBtn('invClub', esc(id), '🤝', S.inv.cl[id] === S.season ? 'Partenaire cette saison ✓' : 'Devenir partenaire du club', S.inv.cl[id] === S.season ? 'Relation renforcée' : `${fmt(clubSponsorCost(c))} · relation +20`, 0, { disabled: S.inv.cl[id] === S.season || S.cash < clubSponsorCost(c) })}
     ${here.length ? `<h4>Vos joueurs ici</h4><div class="list">${here.map((p) => `<button class="row" data-act="open" data-id="${p.id}">${rt(ovrOf(p), 'sm')}<div class="main"><b>${esc(p.n)}</b><small>${POS_SHORT[p.pos]} · temps de jeu ${pct(playProb(p))}</small></div><span class="chev">›</span></button>`).join('')}</div>` : ''}
-    ${canOwn(c) ? `<h4>🏛️ Propriété</h4>${S.owned.includes(id)
-      ? `<div class="card goldc" style="padding:12px"><b>Vous êtes le président</b><small>Entraîneur ${S.cm ? esc(S.cm.coach.n) + ' ' + '★'.repeat(S.cm.coach.lvl) : ''} · supporters ${S.cm ? Math.round(S.cm.fans) : '-'}/100</small></div>
-        ${actBtn('myclub', '1', '🏛️', 'Gérer mon club', 'Finances, entraîneur, stade, formation, objectifs', 0, { primary: true })}`
-      : actBtn('buyClub', esc(id), '🏛️', 'Racheter le club', tierIdx(S.rep) < OWN_TIER ? `Statut « ${TIERS[OWN_TIER][2]} » requis · ${fmt(clubPrice(c))}` : S.owned.length ? 'Vous possédez déjà un club' : `${fmt(clubPrice(c))} · objectif : l'emmener en Europe`, 0,
-        { disabled: tierIdx(S.rep) < OWN_TIER || S.owned.length > 0 || S.cash < clubPrice(c) })}` : ''}
+    ${(() => { const mc = cmOf(id), why = buyBlock(c);
+      return `<h4>🏛️ Propriété</h4>${mc
+      ? `<div class="card goldc" style="padding:12px"><b>Vous êtes le président</b><small>Entraîneur ${esc(mc.coach.n)} ${'★'.repeat(mc.coach.lvl)} · supporters ${Math.round(mc.fans)}/100</small></div>
+        ${actBtn('myclub', esc(id), '🏛️', 'Gérer mon club', 'Finances, entraîneur, stade, formation, objectifs', 0, { primary: true })}`
+      : actBtn('buyClub', esc(id), '🏛️', 'Racheter le club', why ? `${why} · ${fmt(clubPrice(c))}` : `${fmt(clubPrice(c))} · ${isForeign(c) ? 'votre club phare à l\'étranger' : 'objectif : l\'emmener en Europe'}`, 0,
+        { disabled: !!why || S.cash < clubPrice(c) })}`; })()}
     <h4>Joueurs vedettes</h4><div class="list">${stars.map((x) => `<div class="row" style="padding:9px 13px"><span class="ico" style="font-size:16px">⭐</span><div class="main"><b style="font-weight:550">${esc(x.n)}</b></div><div class="side"><b>${x.g}</b><small>buts</small></div></div>`).join('')}</div>
     <h4>Proposer un de vos joueurs</h4>
     ${!win ? `<div class="note">🔒 Mercato fermé : ${nextWindowTxt()}.</div>` : !cands.length ? '<div class="note">Aucun client disponible.</div>'
@@ -1047,7 +1089,7 @@ const ACTIONS = {
     if (slotInfo(UI.slot) && !confirm(`Remplacer la partie de l'emplacement ${UI.slot} ?`)) return;
     setSlot(UI.slot);
     newGame(($('#in-name').value || '').trim() || n.name, $('#in-city').value, n.diff);
-    S.agency.logo = n.logo; S.agency.color = n.color; save();
+    S.agency.logo = n.logo; S.agency.color = n.color; applyLegacy(); save();
     UI.tab = 'home'; UI.modal = { type: 'help' };
   },
   // Navigation
@@ -1132,12 +1174,19 @@ const ACTIONS = {
   invMk() { toast(invMarketing()); },
   invGala() { toast(invGala()); },
   invClub(d) { toast(invClub(d.id)); keep(); },
-  myclub() { UI.modal = null; UI.tab = 'agence'; UI.av = 'club'; window.scrollTo(0, 0); },
+  myclub(d) { const i = cms().findIndex((c) => c.id === d.id); if (i >= 0) CM_SEL = i; UI.modal = null; UI.tab = 'agence'; UI.av = 'club'; window.scrollTo(0, 0); },
+  cmSel(d) { CM_SEL = +d.id; UI.coachOpen = false; },
+  empire() { UI.modal = null; UI.tab = 'agence'; UI.av = 'net'; window.scrollTo(0, 0); },
+  openBranch(d) { if (confirm(`Ouvrir la filiale de ${BRANCHES[d.id].city} pour ${fmt(BRANCHES[d.id].cost)} (+${fmt(BRANCHES[d.id].weekly)}/sem.) ?`)) { const r = openBranch(d.id); toast(r); if (r.ok) play(FANFARE); } },
+  buyRival(d) { const r0 = S.rivals.find((x) => x.n === d.id); if (r0 && confirm(`Racheter ${r0.n} pour ${fmt(rivalPrice(r0))} ?`)) { const r = buyRival(d.id); toast(r); if (r.ok) { play(FANFARE); buzz([60, 40, 120]); } } },
+  fdn() { const n = FDN[fdnLevel() + 1]; if (n && confirm(`Créer : ${n.name} pour ${fmt(n.cost)} (+${fmt(n.weekly)}/sem.) ?`)) toast(upFoundation()); },
+  passOn() { if (confirm(`Transmettre l'empire et gagner ${legacyPoints()} points d'héritage ? (une seule fois par partie, vous pourrez continuer à jouer)`)) { const r = passOn(); toast(r); if (r.ok) play(FANFARE); } },
+  perk(d) { toast(buyPerk(d.id)); },
   coachOpen() { UI.coachOpen = !UI.coachOpen; },
   hireCoach(d) { const c = coachCands()[+d.id]; if (c && confirm(`Engager ${c.n} (${c.lvl}★) pour ${fmt(coachFee(c))} ?`)) { const r = hireCoach(+d.id); toast(r); if (r.ok) UI.coachOpen = false; } },
-  infra(d) { const k = d.id; if (confirm(`Améliorer : ${INFRA[k].name} pour ${fmt(INFRA[k].cost[S.cm[k] - 1])} ?`)) { const r = upgradeInfra(k); toast(r); if (r.ok) play(CHIME); } },
+  infra(d) { const k = d.id; if (confirm(`Améliorer : ${INFRA[k].name} pour ${fmt(INFRA[k].cost[curCm()[k] - 1])} ?`)) { const r = upgradeInfra(k); toast(r); if (r.ok) play(CHIME); } },
   ticket(d) { toast(setTicket(d.id)); },
-  sellClub() { if (confirm(`Revendre ${CLUBS[S.cm.id].name} pour ${fmt(clubSaleValue())} ? Vous n'en serez plus le président.`)) { toast(sellClub()); UI.av = 'dev'; } },
+  sellClub() { if (confirm(`Revendre ${CLUBS[curCm().id].name} pour ${fmt(clubSaleValue())} ? Vous n'en serez plus le président.`)) { toast(sellClub()); if (!cms().length) UI.av = 'dev'; } },
   buyClub(d) { if (confirm(`Racheter ${CLUBS[d.id].name} pour ${fmt(clubPrice(CLUBS[d.id]))} ?`)) { const r = buyClub(d.id); toast(r); if (r.ok) { play(FANFARE); buzz([60, 40, 120]); } } keep(); },
   investClub(d) { toast(investClub(d.id)); keep(); },
   achInfo(d) { const a = ACH.find((x) => x.id === d.id); toast({ ok: !!S.ach[a.id], msg: `${a.i} ${a.l} : ${a.d}${S.ach[a.id] ? ` (débloqué en ${S.ach[a.id]})` : ' — pas encore débloqué'}` }); },

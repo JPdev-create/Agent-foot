@@ -66,6 +66,9 @@ La partie est sauvegardée automatiquement dans le navigateur.
   négociation en plusieurs tours, option d'achat après un prêt réussi, rachat de mandats par les rivaux,
   promesse de retour au pays, filtres âge/potentiel, actualité du mercato et ambassadeurs de l'agence.
 
+- **Empire (fin de partie)** : filiales dans 7 pays, rachat des agences rivales, fondation, groupe multi-clubs
+  (un club belge + un club étranger) et **héritage** : transmettez l'empire pour des bonus permanents dans vos prochaines carrières.
+
 ## Installer l'application
 
 Le jeu est une application web installable (PWA). Ouvrez le site sur le téléphone puis :
@@ -82,6 +85,7 @@ L'appli récupère la dernière version à chaque ouverture et reste jouable hor
 - `js/season.js` — cérémonie, tournois internationaux, missions, panthéon
 - `js/extra.js` — relations avec les clubs, académie, succès
 - `js/intl.js` — sélections nationales, Ligue des nations
-- `js/club.js` — gestion du club racheté
+- `js/empire.js` — filiales, rachats d'agences, fondation, héritage
+- `js/club.js` — groupe multi-clubs (achat, gestion)
 - `js/ui.js` — interface
 - `sw.js`, `manifest.webmanifest`, `icons/` — application installable

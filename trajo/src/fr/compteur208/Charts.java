@@ -353,7 +353,7 @@ final class Charts {
                                     new java.net.URL("https://tile.openstreetmap.org/" + z + "/" + x + "/" + y + ".png").openConnection();
                             con.setConnectTimeout(8000);
                             con.setReadTimeout(10000);
-                            con.setRequestProperty("User-Agent", "Compteur208/2.3 (application Android personnelle)");
+                            con.setRequestProperty("User-Agent", "Trajo/3.0 (application Android personnelle)");
                             if (con.getResponseCode() != 200) { con.disconnect(); return; }
                             java.io.InputStream in = con.getInputStream();
                             java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();

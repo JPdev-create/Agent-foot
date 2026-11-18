@@ -1,6 +1,6 @@
-# Compteur 208 🚗
+# Trajo 🚗
 
-Application Android qui enregistre **toute seule** les trajets de la Peugeot 208 :
+Application Android qui enregistre **toute seule** tes trajets en voiture :
 dès que le téléphone se connecte au **Wi-Fi du boîtier CarPlay / Android Auto**
 (par défaut `AutoBox-9678`) ou au **Bluetooth** de la voiture, le trajet démarre
 (distance GPS, durée, vitesse). Il se termine 1 min 30 après la coupure du moteur.
@@ -18,22 +18,22 @@ dès que le téléphone se connecte au **Wi-Fi du boîtier CarPlay / Android Aut
 
 ## Installation (Samsung S25 Ultra)
 
-1. Télécharge `Compteur208.apk` sur le téléphone et ouvre-le.
+1. Télécharge `Trajo.apk` sur le téléphone et ouvre-le.
 2. Autorise « Installer des applis inconnues » pour l'appli qui l'ouvre (Fichiers, Chrome…).
-3. Lance **Compteur 208** → onglet **Réglages** :
+3. Lance **Trajo** → onglet **Réglages** :
    - **Wi-Fi de la voiture** : `AutoBox-9678` est déjà rempli (modifiable)
    - **Bluetooth** (facultatif) : sélectionne le Bluetooth de la 208
    - Autorise **toutes** les lignes (localisation « Toujours autoriser », Bluetooth,
      notifications, batterie non restreinte)
    - Saisis le **kilométrage actuel** du compteur
 4. Paramètres Samsung → Batterie → Limites d'utilisation en arrière-plan →
-   **Applications jamais en veille** → ajoute Compteur 208.
+   **Applications jamais en veille** → ajoute Trajo.
 
 ## Construire l'APK
 
 ```bash
 sudo apt install aapt apksigner zipalign dalvik-exchange openjdk-17-jdk
-./build.sh   # → build/Compteur208.apk
+./build.sh   # → build/Trajo.apk
 ```
 
 Le projet est en Java pur (aucune bibliothèque externe), compilé sans Android Studio.

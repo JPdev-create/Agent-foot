@@ -195,6 +195,28 @@ abstract class BaseUi extends Activity {
         parent.addView(row, fullWidth(20));
     }
 
+    /** En-tête de l'accueil avec le logo de l'appli à gauche du titre. */
+    void headerLogo(ViewGroup parent, String title, String sub, View right) {
+        LinearLayout row = hbox();
+        ImageView logo = new ImageView(this);
+        logo.setImageResource(R.drawable.logo);
+        logo.setBackground(round(0xFF171920, 14));
+        logo.setClipToOutline(true);
+        LinearLayout.LayoutParams lpLogo = lp(dp(52), dp(52), 0);
+        lpLogo.rightMargin = dp(14);
+        row.addView(logo, lpLogo);
+        LinearLayout col = vbox();
+        TextView t = text(title, 30, TXT, W_MED);
+        t.setLetterSpacing(-0.01f);
+        col.addView(t);
+        TextView s = text(sub, 14, SUB, W_REG);
+        s.setPadding(0, dp(2), 0, 0);
+        col.addView(s);
+        row.addView(col, lp(0, -2, 1f));
+        if (right != null) row.addView(right, lp(-2, -2, 0));
+        parent.addView(row, fullWidth(20));
+    }
+
     void section(ViewGroup parent, String title) {
         TextView t = text(title.toUpperCase(Fmt.FR), 12, SUB, W_MED);
         t.setLetterSpacing(0.08f);

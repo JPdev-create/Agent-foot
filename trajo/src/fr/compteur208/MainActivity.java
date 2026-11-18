@@ -48,7 +48,7 @@ public class MainActivity extends BaseUi {
     static final int RQ_LOC = 1, RQ_BG = 2, RQ_BT = 3, RQ_NOTIF = 4, RQ_LOC_START = 5, RQ_BT_PICK = 6;
     static final int[] NAV_ICONS = {R.drawable.i_home, R.drawable.i_route, R.drawable.i_fuel, R.drawable.i_wrench, R.drawable.i_sliders};
     static final String[] NAV_LABELS = {"Accueil", "Trajets", "Pleins", "Entretien", "Réglages"};
-    static final String VERSION = "2.5";
+    static final String VERSION = "3.0";
 
     LinearLayout content;
     ScrollView scroll;
@@ -218,7 +218,7 @@ public class MainActivity extends BaseUi {
         View chip = null;
         if (s != null) chip = chip("● En route", GOOD);
         else if (Prefs.carConfigured(this)) chip = Prefs.autoEnabled(this) ? chip("Auto activé", ACC) : chip("Auto désactivé", MUTED);
-        header(content, "Compteur 208", Fmt.date(now), chip);
+        headerLogo(content, "Trajo", Fmt.date(now), chip);
 
         List<String> issues = setupIssues();
         if (!issues.isEmpty()) {
@@ -433,7 +433,7 @@ public class MainActivity extends BaseUi {
             LinearLayout in = vbox();
             in.setPadding(dp(18), dp(16), dp(18), dp(16));
             in.addView(text("Position inconnue", 15, TXT, W_MED));
-            TextView t = body("Elle s'affichera ici à la fin du prochain trajet. Tu peux aussi l'indiquer maintenant si tu es à côté de ta 208.", 13, SUB);
+            TextView t = body("Elle s'affichera ici à la fin du prochain trajet. Tu peux aussi l'indiquer maintenant si tu es à côté de ta voiture.", 13, SUB);
             t.setPadding(0, dp(4), 0, dp(12));
             in.addView(t);
             in.addView(tonalButton("Ma voiture est ici", R.drawable.i_pin, ACC, new Click() { public void run() { parkHere(); } }));
@@ -444,7 +444,7 @@ public class MainActivity extends BaseUi {
         map.setOnClickListener(new Click() {
             public void run() {
                 try {
-                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("geo:" + ll(p) + "?q=" + ll(p) + "(Ma 208)")));
+                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("geo:" + ll(p) + "?q=" + ll(p) + "(Ma voiture)")));
                 } catch (Exception e) { toast("Impossible d'ouvrir la carte"); }
             }
         });
@@ -546,7 +546,7 @@ public class MainActivity extends BaseUi {
         col.addView(text(title, 15, TXT, W_MED));
         String target = ssid != null ? ssid : car;
         TextView sub = text(standby ? "Nouveau trajet dès que la voiture repart"
-                : configured ? "Démarrage auto · " + target : "Ajoute le Wi-Fi ou le Bluetooth de ta 208", 13, SUB, W_REG);
+                : configured ? "Démarrage auto · " + target : "Ajoute le Wi-Fi ou le Bluetooth de ta voiture", 13, SUB, W_REG);
         sub.setPadding(0, dp(3), 0, 0);
         col.addView(sub);
         c.addView(col, lp(0, -2, 1f));
@@ -629,7 +629,7 @@ public class MainActivity extends BaseUi {
 
         if (trips.isEmpty()) {
             empty(content, R.drawable.i_route, "Aucun trajet pour l'instant",
-                    "Dès que ton téléphone se connecte à ta 208, le trajet s'enregistre tout seul : distance, durée, vitesse et coût.");
+                    "Dès que ton téléphone se connecte à ta voiture, le trajet s'enregistre tout seul : distance, durée, vitesse et coût.");
             return;
         }
 
@@ -784,7 +784,7 @@ public class MainActivity extends BaseUi {
                     .append(clean(Fmt.num(t.km() * cpk, 2))).append(';')
                     .append(t.src).append('\n');
         }
-        share("Trajets – Compteur 208", sb.toString());
+        share("Trajets – Trajo", sb.toString());
     }
 
     // =====================================================================
@@ -952,7 +952,7 @@ public class MainActivity extends BaseUi {
 
         if (list.isEmpty()) {
             empty(content, R.drawable.i_wrench, "Rien pour l'instant",
-                    "Vidange, révision, pneus, contrôle technique, assurance, péages… Note-les pour connaître le vrai coût de ta 208. Une vidange avec kilométrage active le rappel de la suivante.");
+                    "Vidange, révision, pneus, contrôle technique, assurance, péages… Note-les pour connaître le vrai coût de ta voiture. Une vidange avec kilométrage active le rappel de la suivante.");
             return;
         }
         section(content, "Historique");
@@ -1109,7 +1109,7 @@ public class MainActivity extends BaseUi {
                 ref > 0 ? "Relevé du " + Fmt.dateShort(Prefs.odoRefDate(this)) + " : " + Fmt.kmInt(ref) : "À renseigner",
                 est >= 0 ? Fmt.kmInt(est) : null, null, TXT, new Click() {
                     public void run() {
-                        numberSheet("Kilométrage du compteur", "Lis le kilométrage total sur le tableau de bord de ta 208.", "km", "", new NumCb() {
+                        numberSheet("Kilométrage du compteur", "Lis le kilométrage total sur le tableau de bord de ta voiture.", "km", "", new NumCb() {
                             public void set(double v) {
                                 Prefs.get(MainActivity.this).edit().putFloat("odo_ref", (float) v).putLong("odo_ref_date", System.currentTimeMillis()).apply();
                             }
@@ -1128,7 +1128,7 @@ public class MainActivity extends BaseUi {
         listRow(vg, R.drawable.i_droplet, ACC, "Consommation par défaut", "Utilisée avant 2 pleins complets",
                 Fmt.num(Prefs.defaultConso(this), 1) + " L/100", null, TXT, new Click() {
                     public void run() {
-                        numberSheet("Consommation par défaut", "Une 208 essence consomme en général entre 5 et 6,5 L/100 km.", "L/100",
+                        numberSheet("Consommation par défaut", "Une citadine essence consomme en général entre 5 et 6,5 L/100 km.", "L/100",
                                 Fmt.num(Prefs.defaultConso(MainActivity.this), 1), new NumCb() {
                                     public void set(double v) { Prefs.get(MainActivity.this).edit().putFloat("conso_def", (float) v).apply(); }
                                 });
@@ -1146,7 +1146,7 @@ public class MainActivity extends BaseUi {
         listRow(vg, R.drawable.i_wrench, ACC2, "Vidange tous les", "Pour le rappel de vidange",
                 Fmt.kmInt(Prefs.vidangeInterval(this)), null, TXT, new Click() {
                     public void run() {
-                        numberSheet("Intervalle de vidange", "Consulte le carnet d'entretien de ta 208 (souvent 15 000 à 25 000 km).", "km",
+                        numberSheet("Intervalle de vidange", "Consulte le carnet d'entretien de ta voiture (souvent 15 000 à 25 000 km).", "km",
                                 Fmt.num(Prefs.vidangeInterval(MainActivity.this), 0), new NumCb() {
                                     public void set(double v) { Prefs.get(MainActivity.this).edit().putFloat("vidange_km", (float) v).apply(); }
                                 });
@@ -1164,12 +1164,12 @@ public class MainActivity extends BaseUi {
         // --- Conseils ---
         section(content, "Conseils Samsung");
         LinearLayout tc = card(content);
-        tc.addView(body("•  Paramètres → Batterie → Limites d'utilisation en arrière-plan → ajoute Compteur 208 aux « Applications jamais en veille ».\n"
+        tc.addView(body("•  Paramètres → Batterie → Limites d'utilisation en arrière-plan → ajoute Trajo aux « Applications jamais en veille ».\n"
                 + "•  Garde le Wi-Fi, le Bluetooth et la localisation activés.\n"
                 + "•  Ouvre l'appli une fois après chaque installation ou mise à jour.\n"
                 + "•  Trajet raté ? Trajets → Ajouter.", 13, SUB));
 
-        TextView ver = text("Compteur 208 · version " + VERSION + "\nTes données restent uniquement sur ton téléphone", 11, MUTED, W_REG);
+        TextView ver = text("Trajo · version " + VERSION + "\nTes données restent uniquement sur ton téléphone", 11, MUTED, W_REG);
         ver.setGravity(Gravity.CENTER);
         ver.setLineSpacing(0, 1.3f);
         ver.setPadding(0, dp(20), 0, 0);
@@ -1241,7 +1241,7 @@ public class MainActivity extends BaseUi {
         try { bonded = ad.getBondedDevices(); } catch (SecurityException e) { toast("Autorisation Bluetooth refusée"); return; }
 
         LinearLayout f = vbox();
-        f.addView(body("Choisis le Bluetooth de ta 208 (il doit déjà être appairé avec le téléphone).", 14, SUB), fullWidth(14));
+        f.addView(body("Choisis le Bluetooth de ta voiture (il doit déjà être appairé avec le téléphone).", 14, SUB), fullWidth(14));
         LinearLayout g = vbox();
         g.setBackground(roundStroke(SURF2, 16, STROKE));
         g.setClipToOutline(true);
@@ -1268,7 +1268,7 @@ public class MainActivity extends BaseUi {
                         });
             }
         }
-        if (count == 0) f.addView(text("Aucun appareil appairé. Connecte d'abord ton téléphone à la 208 en Bluetooth.", 14, WARN, W_REG));
+        if (count == 0) f.addView(text("Aucun appareil appairé. Connecte d'abord ton téléphone à ta voiture en Bluetooth.", 14, WARN, W_REG));
         holder[0] = sheet("Bluetooth de la voiture", f, null, false, null,
                 current == null ? null : "Ne plus utiliser le Bluetooth", new Runnable() {
                     public void run() {
@@ -1288,7 +1288,7 @@ public class MainActivity extends BaseUi {
                     .append(clean(Fmt.num(f.pricePerL(), 3))).append(';').append(f.full ? "oui" : "non").append(';')
                     .append(f.station.replace(";", ",")).append('\n');
         }
-        share("Pleins – Compteur 208", sb.toString());
+        share("Pleins – Trajo", sb.toString());
     }
 
     static String clean(String s) { return s.replace(" ", "").replace(" ", ""); }

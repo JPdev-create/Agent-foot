@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Construit l'APK Android de Compteur 208, sans Android Studio.
+# Construit l'APK Android de Trajo, sans Android Studio.
 # Outils requis (Ubuntu/Debian) : sudo apt install aapt apksigner zipalign dalvik-exchange dexdump openjdk-17-jdk
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -36,6 +36,6 @@ zipalign -f 4 build/unsigned.apk build/aligned.apk
 
 echo "5/5 Signature"
 apksigner sign --ks keystore/compteur208.jks --ks-pass pass:compteur208 --key-pass pass:compteur208 \
-  --out build/Compteur208.apk build/aligned.apk
-apksigner verify build/Compteur208.apk
-echo "OK → build/Compteur208.apk"
+  --out build/Trajo.apk build/aligned.apk
+apksigner verify build/Trajo.apk
+echo "OK → build/Trajo.apk"

@@ -59,6 +59,10 @@ public class TripService extends Service implements LocationListener {
     /** En attente après coupure du contact (lien voiture perdu). */
     boolean parked;
     int fastFixes;
+    // Éco-conduite
+    int accN, brkN;
+    long fastMs, prevVT, lastAccEv, lastBrkEv;
+    float prevV = -1;
     String src = "manuel";
     long startTs, lastMoveTs, standbySince;
     double dist, vmax;
@@ -205,7 +209,8 @@ public class TripService extends Service implements LocationListener {
     void checkpoint() {
         cp(this).edit().putLong("saved", System.currentTimeMillis()).putLong("start", startTs).putLong("lastMove", lastMoveTs)
                 .putFloat("dist", (float) dist).putLong("moving", moving).putFloat("vmax", (float) vmax)
-                .putString("src", src).putString("info", info).putString("pts", encode(pts)).apply();
+                .putString("src", src).putString("info", info).putString("pts", encode(pts))
+                .putInt("acc", accN).putInt("brk", brkN).putLong("fast", fastMs).apply();
     }
 
     void clearCheckpoint() { cp(this).edit().clear().apply(); }
@@ -221,6 +226,7 @@ public class TripService extends Service implements LocationListener {
             t.dist = p.getFloat("dist", 0); t.moving = p.getLong("moving", 0); t.vmax = p.getFloat("vmax", 0);
             t.src = p.getString("src", "auto"); t.pts = p.getString("pts", "");
             t.info = p.getString("info", "") + " → Appli arrêtée par Android";
+            t.acc = p.getInt("acc", -1); t.brk = p.getInt("brk", -1); t.fast = p.getLong("fast", 0);
             Db.get(this).addTrip(t);
         }
         clearCheckpoint();
@@ -268,6 +274,7 @@ public class TripService extends Service implements LocationListener {
             dist = p.getFloat("dist", 0); moving = p.getLong("moving", 0); vmax = p.getFloat("vmax", 0);
             src = p.getString("src", source);
             info = p.getString("info", info) + " · repris après coupure";
+            accN = p.getInt("acc", 0); brkN = p.getInt("brk", 0); fastMs = p.getLong("fast", 0);
             pts.addAll(decode(p.getString("pts", "")));
         }
         checkpoint();
@@ -285,6 +292,7 @@ public class TripService extends Service implements LocationListener {
         dist = 0; vmax = 0; moving = 0; last = null; jumps = 0; curSpeed = 0; ticks = 0;
         endReason = "Terminé à la main";
         info = inf;
+        accN = 0; brkN = 0; fastMs = 0; prevV = -1; prevVT = 0; lastAccEv = 0; lastBrkEv = 0;
         pts.clear();
         live = this;
     }
@@ -338,6 +346,7 @@ public class TripService extends Service implements LocationListener {
             return;
         }
 
+        trackDriving(l);
         if (last == null) { last = l; addPoint(l); return; }
         float d = last.distanceTo(l);
         double thr = Math.max(10, l.hasAccuracy() ? l.getAccuracy() : 15); // filtre le « bruit » GPS à l'arrêt
@@ -356,6 +365,27 @@ public class TripService extends Service implements LocationListener {
         last = l;
         lastMoveTs = System.currentTimeMillis();
         addPoint(l);
+    }
+
+    /**
+     * Éco-conduite : à partir de la vitesse GPS (1 mesure/s), repère les accélérations
+     * (> 3 m/s²) et freinages (< -3,5 m/s²) brusques, et le temps passé au-dessus de 135 km/h.
+     */
+    private void trackDriving(Location l) {
+        if (!l.hasSpeed() || (l.hasAccuracy() && l.getAccuracy() > 25)) { prevV = -1; return; }
+        float v = l.getSpeed();
+        long t = l.getTime();
+        if (prevV >= 0) {
+            double dt = (t - prevVT) / 1000.0;
+            if (dt >= 0.5 && dt <= 3) {
+                double a = (v - prevV) / dt;
+                if (a > 3.0 && t - lastAccEv > 4000) { accN++; lastAccEv = t; }
+                if (a < -3.5 && t - lastBrkEv > 4000) { brkN++; lastBrkEv = t; }
+                if (v * 3.6 > 135) fastMs += (long) (dt * 1000);
+            }
+        }
+        prevV = v;
+        prevVT = t;
     }
 
     private void addPoint(Location l) { pts.add(new double[]{l.getLatitude(), l.getLongitude()}); }
@@ -390,6 +420,7 @@ public class TripService extends Service implements LocationListener {
         Db.Trip t = new Db.Trip();
         t.start = startTs; t.end = Math.max(end, startTs); t.dist = dist; t.moving = moving; t.vmax = vmax;
         t.src = src; t.pts = encode(pts); t.info = info + " → " + endReason;
+        t.acc = accN; t.brk = brkN; t.fast = fastMs;
         Db.get(this).addTrip(t);
         List<Db.Fuel> fuels = Db.get(this).fuels();
         double cost = t.km() * Calc.costPerKm(this, fuels);

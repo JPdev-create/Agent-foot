@@ -88,6 +88,6 @@ final class WifiWatch {
 
     /** Après un redémarrage ou une mise à jour, Android oublie l'inscription : on la refait. */
     public static class Boot extends BroadcastReceiver {
-        @Override public void onReceive(Context c, Intent i) { register(c); }
+        @Override public void onReceive(Context c, Intent i) { register(c); Report.schedule(c); }
     }
 }

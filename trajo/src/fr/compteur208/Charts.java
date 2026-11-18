@@ -4,6 +4,7 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.DashPathEffect;
 import android.graphics.LinearGradient;
+import android.graphics.RadialGradient;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
@@ -30,17 +31,18 @@ final class Charts {
 
     static Paint gridPaint(Context c) {
         Paint g = new Paint(Paint.ANTI_ALIAS_FLAG);
-        g.setColor(BaseUi.STROKE);
-        g.setStrokeWidth(dp(c, 1));
+        g.setColor(0x14FFFFFF);
+        g.setStrokeWidth(dp(c, 1.2f));
+        g.setStrokeCap(Paint.Cap.ROUND);
         g.setStyle(Paint.Style.STROKE);
-        g.setPathEffect(new DashPathEffect(new float[]{dp(c, 4), dp(c, 4)}, 0));
+        g.setPathEffect(new DashPathEffect(new float[]{dp(c, 0.5f), dp(c, 6)}, 0));
         return g;
     }
 
-    /** Histogramme : la barre mise en avant est en dégradé, les autres en gris. */
+    /** Histogramme : barres fines, la barre active en dégradé cobalt → cyan avec halo. */
     static final class Bars extends View {
         final double[] values; final String[] labels; final int highlight;
-        final Paint bar = new Paint(Paint.ANTI_ALIAS_FLAG), grid;
+        final Paint bar = new Paint(Paint.ANTI_ALIAS_FLAG), glow = new Paint(Paint.ANTI_ALIAS_FLAG), grid;
         final Paint lab, labHi, val, valHi;
 
         Bars(Context c, double[] values, String[] labels, int highlight) {
@@ -49,7 +51,7 @@ final class Charts {
             grid = gridPaint(c);
             lab = textPaint(c, 11, BaseUi.MUTED, false);
             labHi = textPaint(c, 11, BaseUi.TXT, true);
-            val = textPaint(c, 10, BaseUi.SUB, false);
+            val = textPaint(c, 10, BaseUi.MUTED, false);
             valHi = textPaint(c, 12, BaseUi.TXT, true);
         }
 
@@ -58,7 +60,7 @@ final class Charts {
             if (n == 0) return;
             Context c = getContext();
             float w = getWidth(), h = getHeight();
-            float top = dp(c, 22), bottom = dp(c, 24), chartH = h - top - bottom;
+            float top = dp(c, 24), bottom = dp(c, 24), chartH = h - top - bottom;
             double max = 0;
             for (double v : values) max = Math.max(max, v);
             if (max <= 0) max = 1;
@@ -66,28 +68,34 @@ final class Charts {
                 float y = top + chartH * i / 2f;
                 cv.drawLine(0, y, w, y, grid);
             }
-            float slot = w / n, bw = Math.min(slot * 0.52f, dp(c, 30)), r = dp(c, 7);
+            float slot = w / n, bw = Math.min(slot * 0.36f, dp(c, n > 12 ? 7 : 12)), r = bw / 2;
+            boolean dense = n > 12;
             for (int i = 0; i < n; i++) {
                 float cx = slot * (i + 0.5f);
                 float bh = (float) (chartH * values[i] / max);
-                if (values[i] > 0) bh = Math.max(bh, dp(c, 6));
+                if (values[i] > 0) bh = Math.max(bh, bw);
                 float y = top + chartH - bh;
                 boolean hi = i == highlight;
-                if (hi) {
-                    bar.setShader(new LinearGradient(0, y, 0, top + chartH, BaseUi.ACC2, BaseUi.ACC, Shader.TileMode.CLAMP));
+                if (hi && bh > 0) {
+                    float gr = Math.max(bw * 3f, dp(c, 26));
+                    glow.setShader(new RadialGradient(cx, top + chartH - bh / 2, gr + bh / 2,
+                            BaseUi.alpha(BaseUi.BLUE, 0x50), BaseUi.alpha(BaseUi.BLUE, 0), Shader.TileMode.CLAMP));
+                    cv.drawCircle(cx, top + chartH - bh / 2, gr + bh / 2, glow);
+                    bar.setShader(new LinearGradient(0, top + chartH, 0, y, BaseUi.BLUE, BaseUi.CYAN, Shader.TileMode.CLAMP));
                 } else {
                     bar.setShader(null);
-                    bar.setColor(0xFF2A3040);
+                    bar.setColor(0xFF232838);
                 }
                 if (bh > 0) cv.drawRoundRect(new RectF(cx - bw / 2, y, cx + bw / 2, top + chartH), r, r, bar);
-                if (values[i] > 0)
-                    cv.drawText(String.format(Fmt.FR, "%,.0f", values[i]), cx, y - dp(c, 7), hi ? valHi : val);
-                cv.drawText(labels[i], cx, h - dp(c, 6), hi ? labHi : lab);
+                if (values[i] > 0 && (!dense || hi))
+                    cv.drawText(String.format(Fmt.FR, "%,.0f", values[i]), cx, y - dp(c, 8), hi ? valHi : val);
+                if (labels[i] != null && !labels[i].isEmpty())
+                    cv.drawText(labels[i], cx, h - dp(c, 6), hi ? labHi : lab);
             }
         }
     }
 
-    /** Courbe avec remplissage dégradé (ex. : consommation au fil des pleins). */
+    /** Courbe dégradée avec remplissage (ex. : consommation au fil des pleins). */
     static final class Line extends View {
         final double[] values; final String[] labels; final int decimals;
         final Paint line = new Paint(Paint.ANTI_ALIAS_FLAG), fill = new Paint(Paint.ANTI_ALIAS_FLAG),
@@ -96,7 +104,6 @@ final class Charts {
         Line(Context c, double[] values, String[] labels, int decimals) {
             super(c);
             this.values = values; this.labels = labels; this.decimals = decimals;
-            line.setColor(BaseUi.ACC);
             line.setStyle(Paint.Style.STROKE);
             line.setStrokeWidth(dp(c, 2.5f));
             line.setStrokeJoin(Paint.Join.ROUND);
@@ -111,7 +118,7 @@ final class Charts {
             if (n < 2) return;
             Context c = getContext();
             float w = getWidth(), h = getHeight();
-            float padX = dp(c, 16), top = dp(c, 26), bottom = dp(c, 24), chartH = h - top - bottom;
+            float padX = dp(c, 16), top = dp(c, 28), bottom = dp(c, 24), chartH = h - top - bottom;
             double min = Double.MAX_VALUE, max = -Double.MAX_VALUE;
             for (double v : values) { min = Math.min(min, v); max = Math.max(max, v); }
             double span = max - min;
@@ -134,25 +141,64 @@ final class Charts {
             area.lineTo(xs[n - 1], top + chartH);
             area.lineTo(xs[0], top + chartH);
             area.close();
-            fill.setShader(new LinearGradient(0, top, 0, top + chartH, BaseUi.alpha(BaseUi.ACC, 0x55), BaseUi.alpha(BaseUi.ACC, 0x00), Shader.TileMode.CLAMP));
+            fill.setShader(new LinearGradient(0, top, 0, top + chartH, BaseUi.alpha(BaseUi.BLUE, 0x50), BaseUi.alpha(BaseUi.BLUE, 0x00), Shader.TileMode.CLAMP));
             cv.drawPath(area, fill);
+            line.setShader(new LinearGradient(0, 0, w, 0, BaseUi.BLUE, BaseUi.CYAN, Shader.TileMode.CLAMP));
             cv.drawPath(p, line);
 
             int step = Math.max(1, (int) Math.ceil(n / 6.0));
             for (int i = 0; i < n; i++) {
                 boolean last = i == n - 1;
                 if (last) {
-                    dot.setColor(BaseUi.WHITE); cv.drawCircle(xs[i], ys[i], dp(c, 6), dot);
-                    dot.setColor(BaseUi.ACC); cv.drawCircle(xs[i], ys[i], dp(c, 4), dot);
-                    cv.drawText(Fmt.num(values[i], decimals), Math.min(xs[i], w - dp(c, 22)), ys[i] - dp(c, 12), valHi);
-                } else {
-                    dot.setColor(BaseUi.ACC); cv.drawCircle(xs[i], ys[i], dp(c, 3), dot);
+                    dot.setShader(new RadialGradient(xs[i], ys[i], dp(c, 16), BaseUi.alpha(BaseUi.CYAN, 0x66), 0, Shader.TileMode.CLAMP));
+                    cv.drawCircle(xs[i], ys[i], dp(c, 16), dot);
+                    dot.setShader(null);
+                    dot.setColor(BaseUi.WHITE); cv.drawCircle(xs[i], ys[i], dp(c, 5.5f), dot);
+                    dot.setColor(BaseUi.CYAN); cv.drawCircle(xs[i], ys[i], dp(c, 3.5f), dot);
+                    cv.drawText(Fmt.num(values[i], decimals), Math.min(xs[i], w - dp(c, 22)), ys[i] - dp(c, 13), valHi);
                 }
                 if (i % step == 0 || last) {
                     float lx = Math.max(dp(c, 18), Math.min(xs[i], w - dp(c, 18)));
                     cv.drawText(labels[i], lx, h - dp(c, 6), lab);
                 }
             }
+        }
+    }
+
+    /** Anneau de score (éco-conduite) : arc de 270° en dégradé, chiffre au centre. */
+    static final class Ring extends View {
+        final int value; final String caption;
+        final Paint track = new Paint(Paint.ANTI_ALIAS_FLAG), arc = new Paint(Paint.ANTI_ALIAS_FLAG),
+                glowP = new Paint(Paint.ANTI_ALIAS_FLAG), big, small;
+        final int color;
+
+        Ring(Context c, int value, String caption, int color) {
+            super(c);
+            this.value = value; this.caption = caption; this.color = color;
+            track.setStyle(Paint.Style.STROKE); track.setStrokeCap(Paint.Cap.ROUND);
+            track.setStrokeWidth(dp(c, 11)); track.setColor(0x14FFFFFF);
+            arc.setStyle(Paint.Style.STROKE); arc.setStrokeCap(Paint.Cap.ROUND); arc.setStrokeWidth(dp(c, 11));
+            big = textPaint(c, 38, BaseUi.TXT, false);
+            big.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
+            big.setFontFeatureSettings("tnum");
+            small = textPaint(c, 11, BaseUi.SUB, true);
+            small.setLetterSpacing(0.08f);
+        }
+
+        @Override protected void onDraw(Canvas cv) {
+            Context c = getContext();
+            float s = Math.min(getWidth(), getHeight()), pad = dp(c, 12);
+            RectF r = new RectF((getWidth() - s) / 2 + pad, (getHeight() - s) / 2 + pad, (getWidth() + s) / 2 - pad, (getHeight() + s) / 2 - pad);
+            glowP.setShader(new RadialGradient(r.centerX(), r.centerY(), s / 2, BaseUi.alpha(color, 0x30), 0, Shader.TileMode.CLAMP));
+            cv.drawCircle(r.centerX(), r.centerY(), s / 2, glowP);
+            cv.drawArc(r, 135, 270, false, track);
+            if (value > 0) {
+                arc.setShader(new android.graphics.SweepGradient(r.centerX(), r.centerY(),
+                        new int[]{BaseUi.CYAN, color, color, BaseUi.CYAN}, new float[]{0f, 0.375f, 0.9f, 1f}));
+                cv.drawArc(r, 135, 270 * value / 100f, false, arc);
+            }
+            cv.drawText(value >= 0 ? String.valueOf(value) : "—", r.centerX(), r.centerY() + dp(c, 12), big);
+            cv.drawText(caption.toUpperCase(Fmt.FR), r.centerX(), r.centerY() + dp(c, 32), small);
         }
     }
 
@@ -199,6 +245,10 @@ final class Charts {
         final List<double[]> pts;
         /** Mode « voiture garée » : un seul point, carte centrée dessus. */
         boolean spot;
+        /** Mode « carte de chaleur » : tous les trajets superposés. */
+        List<List<double[]>> heat;
+        float phase;
+        android.animation.ValueAnimator radar;
         final java.util.Set<String> requested = new java.util.HashSet<>();
         final Paint glow = new Paint(Paint.ANTI_ALIAS_FLAG), line = new Paint(Paint.ANTI_ALIAS_FLAG),
                 dot = new Paint(Paint.ANTI_ALIAS_FLAG), grid = new Paint(), tilePaint = new Paint(Paint.FILTER_BITMAP_FLAG), txt, attr;
@@ -208,15 +258,39 @@ final class Charts {
             this.pts = pts;
             glow.setStyle(Paint.Style.STROKE); glow.setStrokeWidth(dp(c, 12));
             glow.setStrokeCap(Paint.Cap.ROUND); glow.setStrokeJoin(Paint.Join.ROUND);
-            glow.setColor(BaseUi.alpha(BaseUi.ACC, 0x40));
+            glow.setColor(BaseUi.alpha(BaseUi.BLUE, 0x40));
             line.setStyle(Paint.Style.STROKE); line.setStrokeWidth(dp(c, 4));
             line.setStrokeCap(Paint.Cap.ROUND); line.setStrokeJoin(Paint.Join.ROUND);
-            line.setColor(BaseUi.ACC);
+            line.setColor(BaseUi.CYAN);
             grid.setColor(0x0DFFFFFF); grid.setStrokeWidth(dp(c, 1));
             txt = textPaint(c, 14, BaseUi.SUB, false);
             attr = textPaint(c, 9, 0x99FFFFFF, false);
             attr.setTextAlign(Paint.Align.RIGHT);
             tilePaint.setColorFilter(new android.graphics.ColorMatrixColorFilter(darkMap()));
+        }
+
+        /** Carte de chaleur de plusieurs trajets. */
+        Trace(Context c, List<List<double[]>> paths, boolean heatMode) {
+            this(c, new java.util.ArrayList<double[]>());
+            heat = paths;
+            for (List<double[]> p : paths) pts.addAll(p);
+        }
+
+        @Override protected void onAttachedToWindow() {
+            super.onAttachedToWindow();
+            if (!spot) return;
+            radar = android.animation.ValueAnimator.ofFloat(0f, 1f);
+            radar.setDuration(2200);
+            radar.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+            radar.addUpdateListener(new android.animation.ValueAnimator.AnimatorUpdateListener() {
+                public void onAnimationUpdate(android.animation.ValueAnimator a) { phase = (Float) a.getAnimatedValue(); invalidate(); }
+            });
+            radar.start();
+        }
+
+        @Override protected void onDetachedFromWindow() {
+            if (radar != null) radar.cancel();
+            super.onDetachedFromWindow();
         }
 
         /** Carte centrée sur la voiture garée. */
@@ -309,14 +383,51 @@ final class Charts {
 
             if (spot) {
                 float px = (float) (wx(pts.get(0)[1], world) - ox), py = (float) (wy(pts.get(0)[0], world) - oy);
-                dot.setColor(BaseUi.alpha(BaseUi.ACC, 0x33)); cv.drawCircle(px, py, dp(c, 34), dot);
+                // Halo « radar » : deux ondes qui s'élargissent et s'estompent
+                for (int k = 0; k < 2; k++) {
+                    float ph = (phase + k * 0.5f) % 1f;
+                    dot.setColor(BaseUi.alpha(BaseUi.BLUE, (int) (0x70 * (1 - ph))));
+                    cv.drawCircle(px, py, dp(c, 18 + 44 * ph), dot);
+                }
+                dot.setShader(new android.graphics.RadialGradient(px, py, dp(c, 34), BaseUi.alpha(BaseUi.BLUE, 0x66), 0, android.graphics.Shader.TileMode.CLAMP));
+                cv.drawCircle(px, py, dp(c, 34), dot);
+                dot.setShader(null);
                 dot.setColor(BaseUi.WHITE); cv.drawCircle(px, py, dp(c, 19), dot);
-                dot.setColor(BaseUi.ACC); cv.drawCircle(px, py, dp(c, 16), dot);
+                dot.setColor(BaseUi.BLUE); cv.drawCircle(px, py, dp(c, 16), dot);
                 android.graphics.drawable.Drawable car = c.getDrawable(R.drawable.i_car).mutate();
                 car.setTint(BaseUi.WHITE);
                 int r = (int) dp(c, 10);
                 car.setBounds((int) px - r, (int) py - r, (int) px + r, (int) py + r);
                 car.draw(cv);
+                if (anyTile) cv.drawText("© les contributeurs d'OpenStreetMap", w - dp(c, 8), h - dp(c, 7), attr);
+                return;
+            }
+
+            if (heat != null) {
+                // Chaque trajet est dessiné en cyan translucide ; les passages se cumulent (mode ADD).
+                Paint hp = new Paint(Paint.ANTI_ALIAS_FLAG);
+                hp.setStyle(Paint.Style.STROKE);
+                hp.setStrokeWidth(dp(c, 3));
+                hp.setStrokeCap(Paint.Cap.ROUND);
+                hp.setStrokeJoin(Paint.Join.ROUND);
+                hp.setColor(BaseUi.alpha(BaseUi.CYAN, 0x60));
+                hp.setXfermode(new android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.ADD));
+                Paint gp = new Paint(hp);
+                gp.setStrokeWidth(dp(c, 9));
+                gp.setColor(BaseUi.alpha(BaseUi.BLUE, 0x22));
+                int save = cv.saveLayer(0, 0, w, h, null);
+                for (int pass = 0; pass < 2; pass++) {
+                    for (List<double[]> tr : heat) {
+                        if (tr.size() < 2) continue;
+                        Path hpth = new Path();
+                        for (int i = 0; i < tr.size(); i++) {
+                            float x = (float) (wx(tr.get(i)[1], world) - ox), y = (float) (wy(tr.get(i)[0], world) - oy);
+                            if (i == 0) hpth.moveTo(x, y); else hpth.lineTo(x, y);
+                        }
+                        cv.drawPath(hpth, pass == 0 ? gp : hp);
+                    }
+                }
+                cv.restoreToCount(save);
                 if (anyTile) cv.drawText("© les contributeurs d'OpenStreetMap", w - dp(c, 8), h - dp(c, 7), attr);
                 return;
             }

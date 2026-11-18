@@ -18,10 +18,10 @@ final class Db extends SQLiteOpenHelper {
         return instance;
     }
 
-    private Db(Context c) { super(c, "compteur208.db", null, 2); }
+    private Db(Context c) { super(c, "compteur208.db", null, 3); }
 
     @Override public void onCreate(SQLiteDatabase d) {
-        d.execSQL("CREATE TABLE trips(_id INTEGER PRIMARY KEY AUTOINCREMENT, start INTEGER, end_ts INTEGER, dist REAL, moving INTEGER, vmax REAL, pts TEXT, src TEXT, info TEXT)");
+        d.execSQL("CREATE TABLE trips(_id INTEGER PRIMARY KEY AUTOINCREMENT, start INTEGER, end_ts INTEGER, dist REAL, moving INTEGER, vmax REAL, pts TEXT, src TEXT, info TEXT, acc INTEGER DEFAULT -1, brk INTEGER DEFAULT -1, fast INTEGER DEFAULT 0)");
         d.execSQL("CREATE TABLE fuel(_id INTEGER PRIMARY KEY AUTOINCREMENT, date INTEGER, odo REAL, liters REAL, total REAL, full INTEGER, station TEXT)");
         d.execSQL("CREATE TABLE maint(_id INTEGER PRIMARY KEY AUTOINCREMENT, date INTEGER, odo REAL, type TEXT, cost REAL, note TEXT)");
         d.execSQL("CREATE INDEX trips_start ON trips(start)");
@@ -29,6 +29,11 @@ final class Db extends SQLiteOpenHelper {
 
     @Override public void onUpgrade(SQLiteDatabase d, int o, int n) {
         if (o < 2) d.execSQL("ALTER TABLE trips ADD COLUMN info TEXT");
+        if (o < 3) {
+            d.execSQL("ALTER TABLE trips ADD COLUMN acc INTEGER DEFAULT -1");
+            d.execSQL("ALTER TABLE trips ADD COLUMN brk INTEGER DEFAULT -1");
+            d.execSQL("ALTER TABLE trips ADD COLUMN fast INTEGER DEFAULT 0");
+        }
     }
 
     // ---------- Modèles ----------
@@ -37,6 +42,9 @@ final class Db extends SQLiteOpenHelper {
         long id = -1, start, end, moving;
         double dist, vmax; // mètres, km/h
         String pts, src, info;
+        /** Éco-conduite : accélérations et freinages brusques (-1 = non mesuré), temps au-dessus de 135 km/h (ms). */
+        int acc = -1, brk = -1;
+        long fast;
         double km() { return dist / 1000.0; }
         long duration() { return Math.max(0, end - start); }
         double avgKmh() {
@@ -65,13 +73,14 @@ final class Db extends SQLiteOpenHelper {
         ContentValues v = new ContentValues();
         v.put("start", t.start); v.put("end_ts", t.end); v.put("dist", t.dist);
         v.put("moving", t.moving); v.put("vmax", t.vmax); v.put("pts", t.pts); v.put("src", t.src); v.put("info", t.info);
+        v.put("acc", t.acc); v.put("brk", t.brk); v.put("fast", t.fast);
         return getWritableDatabase().insert("trips", null, v);
     }
 
     void deleteTrip(long id) { getWritableDatabase().delete("trips", "_id=?", new String[]{"" + id}); }
 
     List<Trip> trips(long from, long to, boolean withPts) {
-        String cols = withPts ? "_id,start,end_ts,dist,moving,vmax,src,pts" : "_id,start,end_ts,dist,moving,vmax,src";
+        String cols = "_id,start,end_ts,dist,moving,vmax,src,acc,brk,fast" + (withPts ? ",pts" : "");
         Cursor c = getReadableDatabase().rawQuery("SELECT " + cols + " FROM trips WHERE start>=? AND start<? ORDER BY start DESC",
                 new String[]{"" + from, "" + to});
         List<Trip> out = new ArrayList<>();
@@ -80,7 +89,8 @@ final class Db extends SQLiteOpenHelper {
                 Trip t = new Trip();
                 t.id = c.getLong(0); t.start = c.getLong(1); t.end = c.getLong(2); t.dist = c.getDouble(3);
                 t.moving = c.getLong(4); t.vmax = c.getDouble(5); t.src = c.getString(6);
-                if (withPts) t.pts = c.getString(7);
+                t.acc = c.getInt(7); t.brk = c.getInt(8); t.fast = c.getLong(9);
+                if (withPts) t.pts = c.getString(10);
                 out.add(t);
             }
         } finally { c.close(); }
@@ -88,13 +98,14 @@ final class Db extends SQLiteOpenHelper {
     }
 
     Trip trip(long id) {
-        Cursor c = getReadableDatabase().rawQuery("SELECT _id,start,end_ts,dist,moving,vmax,src,pts,info FROM trips WHERE _id=?", new String[]{"" + id});
+        Cursor c = getReadableDatabase().rawQuery("SELECT _id,start,end_ts,dist,moving,vmax,src,pts,info,acc,brk,fast FROM trips WHERE _id=?", new String[]{"" + id});
         try {
             if (!c.moveToNext()) return null;
             Trip t = new Trip();
             t.id = c.getLong(0); t.start = c.getLong(1); t.end = c.getLong(2); t.dist = c.getDouble(3);
             t.moving = c.getLong(4); t.vmax = c.getDouble(5); t.src = c.getString(6); t.pts = c.getString(7);
             t.info = c.getString(8);
+            t.acc = c.getInt(9); t.brk = c.getInt(10); t.fast = c.getLong(11);
             return t;
         } finally { c.close(); }
     }

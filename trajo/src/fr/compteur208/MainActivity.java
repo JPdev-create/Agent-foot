@@ -1,14 +1,13 @@
 package fr.compteur208;
 
 import android.Manifest;
-import android.animation.ObjectAnimator;
-import android.animation.ValueAnimator;
 import android.app.Dialog;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.res.ColorStateList;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
@@ -25,6 +24,7 @@ import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Switch;
@@ -32,36 +32,41 @@ import android.widget.TextView;
 
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 /**
- * Écran principal : 5 onglets (Accueil, Trajets, Pleins, Entretien, Réglages).
+ * Écran principal : 5 onglets (Accueil, Trajets, Stats, Dépenses, Réglages).
  * Pas de lambdas (voir BaseUi).
  */
 public class MainActivity extends BaseUi {
-    static final String EXTRA_START = "demarrer_trajet";
+    static final String EXTRA_START = "demarrer_trajet", EXTRA_TAB = "onglet";
     static final String[] MAINT_TYPES = {"Vidange", "Révision", "Pneus", "Freins", "Contrôle technique",
             "Batterie", "Assurance", "Péage / parking", "Lavage", "Réparation", "Autre"};
     static final int RQ_LOC = 1, RQ_BG = 2, RQ_BT = 3, RQ_NOTIF = 4, RQ_LOC_START = 5, RQ_BT_PICK = 6;
-    static final int[] NAV_ICONS = {R.drawable.i_home, R.drawable.i_route, R.drawable.i_fuel, R.drawable.i_wrench, R.drawable.i_sliders};
-    static final String[] NAV_LABELS = {"Accueil", "Trajets", "Pleins", "Entretien", "Réglages"};
-    static final String VERSION = "3.1";
+    static final int[] NAV_ICONS = {R.drawable.i_home, R.drawable.i_route, R.drawable.i_chart, R.drawable.i_fuel, R.drawable.i_sliders};
+    static final String[] NAV_LABELS = {"Accueil", "Trajets", "Stats", "Dépenses", "Réglages"};
+    static final String VERSION = "4.0";
 
+    FrameLayout root;
     LinearLayout content;
     ScrollView scroll;
     final View[] navPill = new View[5];
-    final android.widget.ImageView[] navIcon = new android.widget.ImageView[5];
+    final ImageView[] navIcon = new ImageView[5];
     final TextView[] navLabel = new TextView[5];
-    int tab = 0;
+    final View[] navDot = new View[5];
+    int tab = 0, expTab = 0;
     long detailId = -1;
 
     final Handler handler = new Handler(Looper.getMainLooper());
     TextView liveDist, liveTime, liveAvg, liveStatus;
     Charts.Gauge liveGauge;
     boolean shownLive;
+    /** Lieux dont on a déjà demandé l'adresse pendant cette session. */
+    final Set<String> geocoding = new HashSet<>();
 
     final Runnable refresher = new Runnable() {
         public void run() { refreshLive(); handler.postDelayed(this, 1000); }
@@ -74,23 +79,25 @@ public class MainActivity extends BaseUi {
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
-        LinearLayout root = vbox();
+        getWindow().setStatusBarColor(BG);
+        getWindow().setNavigationBarColor(BG);
+        root = new FrameLayout(this);
         root.setBackgroundColor(BG);
 
         scroll = new ScrollView(this);
         scroll.setVerticalScrollBarEnabled(false);
         scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        scroll.setClipToPadding(false);
         content = vbox();
-        content.setPadding(dp(20), dp(22), dp(20), dp(32));
+        content.setPadding(dp(20), dp(22), dp(20), dp(120));
         scroll.addView(content);
-        root.addView(scroll, lp(-1, 0, 1f));
+        root.addView(scroll, new FrameLayout.LayoutParams(-1, -1));
 
-        View line = new View(this);
-        line.setBackgroundColor(STROKE);
-        root.addView(line, new LinearLayout.LayoutParams(-1, Math.max(1, dp(0.7f))));
+        // Barre de navigation flottante, translucide
         LinearLayout nav = new LinearLayout(this);
-        nav.setBackgroundColor(SURF);
-        nav.setPadding(0, dp(8), 0, dp(10));
+        nav.setBackground(surface(0xE60F121A, 26).stroke(alpha(WHITE, 0x14)));
+        nav.setPadding(dp(4), dp(8), dp(4), dp(8));
+        glow(nav, 0xFF000000, 16);
         for (int i = 0; i < 5; i++) {
             final int k = i;
             LinearLayout item = vbox();
@@ -99,20 +106,33 @@ public class MainActivity extends BaseUi {
             navIcon[i] = icon(NAV_ICONS[i], MUTED);
             pill.addView(navIcon[i], new FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER));
             navPill[i] = pill;
-            item.addView(pill, lp(dp(60), dp(32), 0));
-            navLabel[i] = text(NAV_LABELS[i], 11, MUTED, W_MED);
-            navLabel[i].setPadding(0, dp(4), 0, 0);
+            item.addView(pill, lp(dp(54), dp(32), 0));
+            navLabel[i] = text(NAV_LABELS[i], 10.5f, MUTED, W_MED);
+            navLabel[i].setPadding(0, dp(3), 0, 0);
             navLabel[i].setGravity(Gravity.CENTER);
             navLabel[i].setSingleLine(true);
             item.addView(navLabel[i]);
+            View dot = new View(this);
+            GradientDrawable dg = new GradientDrawable();
+            dg.setShape(GradientDrawable.OVAL);
+            dg.setColor(CYAN);
+            dot.setBackground(dg);
+            glow(dot, CYAN, 4);
+            navDot[i] = dot;
+            LinearLayout.LayoutParams dlp = lp(dp(4), dp(4), 0);
+            dlp.topMargin = dp(3);
+            item.addView(dot, dlp);
             item.setOnClickListener(new Click() { public void run() { show(k); } });
+            pressScale(item);
             nav.addView(item, lp(0, -2, 1f));
         }
-        root.addView(nav, new LinearLayout.LayoutParams(-1, -2));
+        FrameLayout.LayoutParams np = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
+        np.leftMargin = dp(12); np.rightMargin = dp(12); np.bottomMargin = dp(12);
+        root.addView(nav, np);
         setContentView(root);
 
         Notifs.channels(this);
-        if (b != null) { tab = b.getInt("tab", 0); detailId = b.getLong("detail", -1); }
+        if (b != null) { tab = b.getInt("tab", 0); detailId = b.getLong("detail", -1); expTab = b.getInt("exp", 0); }
         handleStartIntent(getIntent());
     }
 
@@ -122,9 +142,11 @@ public class MainActivity extends BaseUi {
         handleStartIntent(i);
     }
 
-    /** Appui sur la notification « Voiture détectée » : on démarre le trajet. */
+    /** Notification « Voiture détectée » (démarre le trajet) ou bilan mensuel (ouvre les stats). */
     void handleStartIntent(Intent i) {
-        if (i == null || !i.getBooleanExtra(EXTRA_START, false)) return;
+        if (i == null) return;
+        if (i.hasExtra(EXTRA_TAB)) { tab = i.getIntExtra(EXTRA_TAB, 0); detailId = -1; i.removeExtra(EXTRA_TAB); }
+        if (!i.getBooleanExtra(EXTRA_START, false)) return;
         i.removeExtra(EXTRA_START);
         if (TripService.instance == null && granted(Manifest.permission.ACCESS_FINE_LOCATION)) {
             startForegroundService(new Intent(this, TripService.class).setAction(TripService.A_START).putExtra("src", "auto"));
@@ -137,11 +159,14 @@ public class MainActivity extends BaseUi {
         super.onSaveInstanceState(out);
         out.putInt("tab", tab);
         out.putLong("detail", detailId);
+        out.putInt("exp", expTab);
     }
 
     @Override protected void onResume() {
         super.onResume();
         WifiWatch.register(this);
+        Report.schedule(this);
+        Report.sendIfDue(this);
         render();
         handler.post(refresher);
     }
@@ -152,7 +177,7 @@ public class MainActivity extends BaseUi {
     }
 
     @Override public void onBackPressed() {
-        if (tab == 1 && detailId >= 0) { detailId = -1; render(); }
+        if (tab == 1 && detailId >= 0) { detailId = -1; transition(); }
         else if (tab != 0) show(0);
         else super.onBackPressed();
     }
@@ -166,26 +191,41 @@ public class MainActivity extends BaseUi {
     }
 
     void show(int t) {
+        boolean changed = t != tab;
         tab = t;
         detailId = -1;
-        render();
+        transition();
         scroll.scrollTo(0, 0);
+        if (changed) {
+            navPill[t].setScaleX(0.6f);
+            navPill[t].setAlpha(0f);
+            navPill[t].animate().scaleX(1f).alpha(1f).setDuration(220).start();
+        }
+    }
+
+    /** Transition douce entre écrans (fondu + léger glissement). */
+    void transition() {
+        render();
+        content.setAlpha(0f);
+        content.setTranslationY(dp(10));
+        content.animate().alpha(1f).translationY(0).setDuration(220).start();
     }
 
     void render() {
         for (int i = 0; i < 5; i++) {
             boolean on = i == tab;
-            navPill[i].setBackground(on ? round(alpha(ACC, 0x2E), 16) : null);
-            navIcon[i].setImageTintList(android.content.res.ColorStateList.valueOf(on ? ACC : MUTED));
+            navPill[i].setBackground(on ? surface(alpha(BLUE, 0x2A), 16).stroke(alpha(BLUE, 0x40)).noHighlight() : null);
+            navIcon[i].setImageTintList(ColorStateList.valueOf(on ? 0xFF7DB4FF : MUTED));
             navLabel[i].setTextColor(on ? TXT : MUTED);
+            navDot[i].setVisibility(on ? View.VISIBLE : View.INVISIBLE);
         }
         content.removeAllViews();
         liveDist = null; liveTime = null; liveAvg = null; liveStatus = null; liveGauge = null;
         switch (tab) {
             case 0: renderHome(); break;
             case 1: if (detailId >= 0) renderTripDetail(detailId); else renderTrips(); break;
-            case 2: renderFuel(); break;
-            case 3: renderMaint(); break;
+            case 2: renderStats(); break;
+            case 3: renderExpenses(); break;
             default: renderSettings(); break;
         }
     }
@@ -215,31 +255,28 @@ public class MainActivity extends BaseUi {
         TripService s = TripService.live;
         shownLive = s != null;
 
-        View chip = null;
-        if (s != null) chip = chip("● En route", GOOD);
-        else if (Prefs.carConfigured(this)) chip = Prefs.autoEnabled(this) ? chip("Auto activé", ACC) : chip("Auto désactivé", MUTED);
-        headerLogo(content, "Trajo", Fmt.date(now), chip);
+        headerLogo(content, "Trajo", Fmt.date(now), null);
 
         List<String> issues = setupIssues();
         if (!issues.isEmpty()) {
             LinearLayout banner = hbox();
-            banner.setBackground(pressable(roundStroke(alpha(WARN, 0x14), 20, alpha(WARN, 0x50)), 20));
+            banner.setBackground(pressable(surface(alpha(AMBER, 0x12), 22).stroke(alpha(AMBER, 0x4D)), 22));
             banner.setPadding(dp(16), dp(14), dp(14), dp(14));
             LinearLayout.LayoutParams bp = lp(dp(40), dp(40), 0);
             bp.rightMargin = dp(14);
-            banner.addView(bubble(R.drawable.i_shield, WARN, 40), bp);
+            banner.addView(bubble(R.drawable.i_shield, AMBER, 40), bp);
             LinearLayout col = vbox();
-            col.addView(text("Configuration à terminer", 15, TXT, W_MED));
+            col.addView(text("Configuration à terminer", 15, TXT, W_BOLD));
             TextView sub = text(issues.size() + (issues.size() > 1 ? " réglages manquants" : " réglage manquant") + " pour la détection automatique", 13, SUB, W_REG);
             sub.setPadding(0, dp(3), 0, 0);
             col.addView(sub);
             banner.addView(col, lp(0, -2, 1f));
-            banner.addView(icon(R.drawable.i_chevron, WARN), lp(dp(18), dp(18), 0));
+            banner.addView(icon(R.drawable.i_chevron, AMBER), lp(dp(18), dp(18), 0));
             banner.setOnClickListener(new Click() { public void run() { show(4); } });
+            pressScale(banner);
             content.addView(banner, fullWidth(12));
         }
 
-        // --- Données du mois ---
         long ms = Calc.monthStart(now, 0);
         List<Db.Trip> monthTrips = db.trips(ms, Long.MAX_VALUE, false);
         double mKm = 0; long mTime = 0;
@@ -249,22 +286,20 @@ public class MainActivity extends BaseUi {
         double cpk = Calc.costPerKm(this, fuels);
 
         if (s != null) heroLive(s); else heroMonth(now, mKm, monthTrips.size(), mTime, prevKm, prevStart);
-
         if (s == null) statusCard();
         if (s == null) parkingCard();
 
-        // --- Tuiles ---
         double real = Calc.realConso(fuels);
         double odo = Calc.estimatedOdo(this, fuels, maints);
+        section(content, "Tableau de bord");
         LinearLayout r1 = tilesRow(content);
-        tile(r1, R.drawable.i_euro, WARN, "Carburant ce mois", Fmt.eur(mKm * cpk), "estimation");
-        tile(r1, R.drawable.i_droplet, ACC, "Consommation",
+        tile(r1, R.drawable.i_euro, AMBER, "Carburant ce mois", Fmt.eur(mKm * cpk), "estimation");
+        tile(r1, R.drawable.i_droplet, BLUE, "Consommation",
                 Fmt.num(real > 0 ? real : Prefs.defaultConso(this), 1) + " L/100", real > 0 ? "réelle" : "valeur par défaut");
         LinearLayout r2 = tilesRow(content);
-        tile(r2, R.drawable.i_gauge, ACC2, "Compteur", odo >= 0 ? Fmt.kmInt(odo) : "—", odo >= 0 ? "estimé" : "à renseigner");
-        tile(r2, R.drawable.i_chart, GOOD, "Coût / 100 km", Fmt.eur(cpk * 100), "à " + Fmt.num(Calc.pricePerL(this, fuels), 3) + " €/L");
+        tile(r2, R.drawable.i_gauge, CYAN, "Compteur", odo >= 0 ? Fmt.kmInt(odo) : "—", odo >= 0 ? "estimé" : "à renseigner");
+        tile(r2, R.drawable.i_chart, AMBER, "Coût / 100 km", Fmt.eur(cpk * 100), "à " + Fmt.num(Calc.pricePerL(this, fuels), 3) + " €/L");
 
-        // --- Graphique ---
         double[] vals = new double[6];
         String[] labs = new String[6];
         for (int i = 0; i < 6; i++) {
@@ -276,7 +311,6 @@ public class MainActivity extends BaseUi {
         chartTitle(gc, "Kilomètres par mois", "6 mois");
         gc.addView(new Charts.Bars(this, vals, labs, 5), new LinearLayout.LayoutParams(-1, dp(180)));
 
-        // --- Records ---
         List<Db.Trip> all = db.trips(0, Long.MAX_VALUE, false);
         if (!all.isEmpty()) {
             Db.Trip longest = all.get(0);
@@ -289,61 +323,67 @@ public class MainActivity extends BaseUi {
             section(content, "Records & moyennes");
             LinearLayout g = group(content);
             final long lid = longest.id;
-            listRow(g, R.drawable.i_trophy, WARN, "Plus long trajet", Fmt.date(longest.start), Fmt.km(longest.km()), null, TXT,
-                    new Click() { public void run() { tab = 1; detailId = lid; render(); scroll.scrollTo(0, 0); } });
-            listRow(g, R.drawable.i_route, ACC, "Trajet moyen", all.size() + (all.size() > 1 ? " trajets enregistrés" : " trajet enregistré"),
+            listRow(g, R.drawable.i_trophy, AMBER, "Plus long trajet", Fmt.date(longest.start), Fmt.km(longest.km()), null, TXT,
+                    new Click() { public void run() { tab = 1; detailId = lid; transition(); scroll.scrollTo(0, 0); } });
+            listRow(g, R.drawable.i_route, BLUE, "Trajet moyen", all.size() + (all.size() > 1 ? " trajets enregistrés" : " trajet enregistré"),
                     Fmt.km(totKm / all.size()), null, TXT, null);
-            listRow(g, R.drawable.i_gauge, ACC2, "Vitesse moyenne", "Sur tous les trajets",
+            listRow(g, R.drawable.i_gauge, CYAN, "Vitesse moyenne", "Sur tous les trajets",
                     totTime > 0 ? Math.round(totKm / (totTime / 3600000.0)) + " km/h" : "—", null, TXT, null);
             listRow(g, R.drawable.i_car, GOOD, "Total enregistré", Fmt.dur(totTime) + " au volant", Fmt.kmInt(totKm), null, TXT, null);
         }
 
         vidangeCard(odo, maints);
 
-        // --- Année ---
         long ys = Calc.yearStart(now);
         double yKm = db.kmBetween(ys, Long.MAX_VALUE), yFuel = 0, yMaint = 0;
         for (Db.Fuel f : fuels) if (f.date >= ys) yFuel += f.total;
         for (Db.Maint m : maints) if (m.date >= ys) yMaint += m.cost;
         section(content, "Depuis le 1er janvier");
         LinearLayout yg = group(content);
-        listRow(yg, R.drawable.i_route, ACC, "Kilomètres", null, Fmt.km(yKm), null, TXT, null);
-        listRow(yg, R.drawable.i_fuel, WARN, "Carburant", null, Fmt.eur(yFuel), null, TXT, null);
-        listRow(yg, R.drawable.i_wrench, ACC2, "Entretien & frais", null, Fmt.eur(yMaint), null, TXT, null);
+        listRow(yg, R.drawable.i_route, BLUE, "Kilomètres", null, Fmt.km(yKm), null, TXT, null);
+        listRow(yg, R.drawable.i_fuel, AMBER, "Carburant", null, Fmt.eur(yFuel), null, TXT, null);
+        listRow(yg, R.drawable.i_wrench, VIOLET, "Entretien & frais", null, Fmt.eur(yMaint), null, TXT, null);
         listRow(yg, R.drawable.i_euro, GOOD, "Total dépensé", yKm > 0 ? Fmt.num((yFuel + yMaint) / yKm * 100, 1) + " cts par km" : null,
                 Fmt.eur(yFuel + yMaint), null, GOOD, null);
     }
 
     void chartTitle(LinearLayout parent, String title, String chipText) {
         LinearLayout row = hbox();
-        row.addView(text(title, 16, TXT, W_MED), lp(0, -2, 1f));
+        row.addView(text(title, 16, TXT, W_BOLD), lp(0, -2, 1f));
         if (chipText != null) row.addView(chip(chipText, SUB));
-        parent.addView(row, fullWidth(12));
+        parent.addView(row, fullWidth(10));
     }
 
+    /** Carte télémétrie du mois : dégradé « mesh », badge pulsant, grand chiffre. */
     void heroMonth(long now, double mKm, int trips, long mTime, double prevKm, long prevStart) {
         LinearLayout h = vbox();
-        h.setBackground(gradient(0xFF2F6BFF, 0xFF6A4DFF, 24));
+        h.setBackground(surface(0xFF0C1324, 26).stroke(alpha(WHITE, 0x1F)).blobs(new float[][]{
+                {0.05f, 0.0f, 0.95f}, {1.0f, 0.15f, 0.75f}, {0.75f, 1.15f, 0.85f}},
+                alpha(BLUE, 0xB0), alpha(CYAN, 0x70), alpha(VIOLET, 0x80)));
         h.setPadding(dp(22), dp(20), dp(22), dp(22));
-        TextView lbl = text(("Ce mois-ci · " + Fmt.month(now)).toUpperCase(Fmt.FR), 12, 0xD9FFFFFF, W_MED);
-        lbl.setLetterSpacing(0.08f);
-        h.addView(lbl);
+        glow(h, BLUE, 18);
+        LinearLayout top = hbox();
+        top.addView(label("Ce mois-ci · " + Fmt.month(now), 0xCCFFFFFF), lp(0, -2, 1f));
+        if (Prefs.carConfigured(this)) {
+            top.addView(Prefs.autoEnabled(this) ? liveBadge("Auto activé", GOOD, WHITE, 0x33000000)
+                    : chip("Auto désactivé", 0xCCFFFFFF));
+        }
+        h.addView(top);
         LinearLayout big = new LinearLayout(this);
         big.setBaselineAligned(true);
-        big.addView(number(Fmt.num(mKm, mKm < 100 ? 1 : 0), 54, WHITE));
-        big.addView(text(" km", 20, 0xCCFFFFFF, W_REG));
+        big.addView(number(Fmt.num(mKm, mKm < 100 ? 1 : 0), 64, WHITE));
+        big.addView(text(" km", 22, 0xCCFFFFFF, W_MED));
         LinearLayout.LayoutParams bp = fullWidth(2);
-        bp.topMargin = dp(4);
+        bp.topMargin = dp(6);
         h.addView(big, bp);
-        h.addView(text(trips + (trips > 1 ? " trajets" : " trajet") + "  ·  " + Fmt.dur(mTime) + " au volant", 14, 0xE0FFFFFF, W_REG));
+        h.addView(text(trips + (trips > 1 ? " trajets" : " trajet") + "  ·  " + Fmt.dur(mTime) + " au volant", 14, 0xE6FFFFFF, W_REG));
         if (prevKm > 0.5) {
             double pct = (mKm - prevKm) / prevKm * 100;
-            String arrow = pct >= 0 ? "▲ " : "▼ ";
-            TextView c = text(arrow + Math.round(Math.abs(pct)) + " % vs même période en " + Fmt.monthShort(prevStart) + ".", 12, WHITE, W_MED);
-            c.setBackground(round(0x26FFFFFF, 100));
+            TextView c = text((pct >= 0 ? "▲ " : "▼ ") + Math.round(Math.abs(pct)) + " % vs même période en " + Fmt.monthShort(prevStart) + ".", 12, WHITE, W_MED);
+            c.setBackground(surface(0x26FFFFFF, 100).stroke(alpha(WHITE, 0x26)).noHighlight());
             c.setPadding(dp(10), dp(6), dp(10), dp(6));
             LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-2, -2);
-            cp.topMargin = dp(14);
+            cp.topMargin = dp(16);
             h.addView(c, cp);
         }
         content.addView(h, fullWidth(12));
@@ -351,42 +391,30 @@ public class MainActivity extends BaseUi {
 
     void heroLive(TripService s) {
         LinearLayout h = vbox();
-        h.setBackground(gradient(0xFF0B8A50, 0xFF19B46A, 24));
+        h.setBackground(surface(0xFF06201A, 26).stroke(alpha(WHITE, 0x1F)).blobs(new float[][]{
+                {0.0f, 0.0f, 0.95f}, {1.0f, 0.9f, 0.85f}}, alpha(GOOD, 0xB0), alpha(CYAN, 0x70)));
         h.setPadding(dp(22), dp(20), dp(22), dp(20));
+        glow(h, GOOD, 18);
         LinearLayout top = hbox();
-        View dot = new View(this);
-        GradientDrawable g = new GradientDrawable();
-        g.setShape(GradientDrawable.OVAL);
-        g.setColor(WHITE);
-        dot.setBackground(g);
-        LinearLayout.LayoutParams dpp = lp(dp(8), dp(8), 0);
-        dpp.rightMargin = dp(8);
-        top.addView(dot, dpp);
-        ObjectAnimator a = ObjectAnimator.ofFloat(dot, "alpha", 1f, 0.25f);
-        a.setDuration(800);
-        a.setRepeatCount(ValueAnimator.INFINITE);
-        a.setRepeatMode(ValueAnimator.REVERSE);
-        a.start();
-        TextView lbl = text("TRAJET EN COURS", 12, WHITE, W_MED);
-        lbl.setLetterSpacing(0.08f);
-        top.addView(lbl);
+        top.addView(label("Télémétrie en direct", 0xCCFFFFFF), lp(0, -2, 1f));
+        top.addView(liveBadge("Trajet en cours", WHITE, WHITE, 0x33000000));
         h.addView(top);
 
         LinearLayout mid = hbox();
         LinearLayout left = vbox();
         LinearLayout big = new LinearLayout(this);
         big.setBaselineAligned(true);
-        liveDist = number("0,0", 50, WHITE);
+        liveDist = number("0,0", 54, WHITE);
         big.addView(liveDist);
-        big.addView(text(" km", 18, 0xCCFFFFFF, W_REG));
+        big.addView(text(" km", 20, 0xCCFFFFFF, W_MED));
         left.addView(big);
         LinearLayout stats = new LinearLayout(this);
         LinearLayout c1 = vbox(), c2 = vbox();
-        c1.addView(text("Durée", 12, 0xB3FFFFFF, W_REG));
-        liveTime = text("—", 16, WHITE, W_MED);
+        c1.addView(label("Durée", 0xB3FFFFFF));
+        liveTime = text("—", 17, WHITE, W_BOLD);
         c1.addView(liveTime);
-        c2.addView(text("Moyenne", 12, 0xB3FFFFFF, W_REG));
-        liveAvg = text("—", 16, WHITE, W_MED);
+        c2.addView(label("Moyenne", 0xB3FFFFFF));
+        liveAvg = text("—", 17, WHITE, W_BOLD);
         c2.addView(liveAvg);
         stats.addView(c1, lp(-2, -2, 0));
         LinearLayout.LayoutParams c2p = lp(-2, -2, 0);
@@ -403,12 +431,12 @@ public class MainActivity extends BaseUi {
         h.addView(mid, mp);
 
         liveStatus = text("Voiture déconnectée : le trajet se terminera une fois garé", 13, WHITE, W_MED);
-        liveStatus.setBackground(round(0x26FFFFFF, 12));
+        liveStatus.setBackground(surface(0x26FFFFFF, 12).noHighlight());
         liveStatus.setPadding(dp(12), dp(8), dp(12), dp(8));
         liveStatus.setVisibility(View.GONE);
         h.addView(liveStatus, fullWidth(10));
 
-        TextView stop = filledButton("Terminer le trajet", R.drawable.i_stop, round(WHITE, 16), 0xFF0B8A50, new Click() {
+        TextView stop = filledButton("Terminer le trajet", R.drawable.i_stop, surface(WHITE, 18).noHighlight(), 0xFF067A55, new Click() {
             public void run() {
                 startService(new Intent(MainActivity.this, TripService.class).setAction(TripService.A_STOP));
                 handler.postDelayed(rerender, 500);
@@ -421,25 +449,72 @@ public class MainActivity extends BaseUi {
         refreshLive();
     }
 
-    /** Où est garée la voiture : carte, adresse, depuis quand, boutons. */
+    /** Barre de statut : icône pulsante + bouton Play en relief. */
+    void statusCard() {
+        boolean configured = Prefs.carConfigured(this);
+        boolean onWifi = WifiWatch.onCarWifi(this);
+        String ssid = Prefs.carSsid(this), car = Prefs.carName(this);
+        LinearLayout c = hbox();
+        c.setBackground(surface(SURF, 22));
+        c.setPadding(dp(14), dp(14), dp(14), dp(14));
+        int col = configured ? BLUE : AMBER;
+        FrameLayout ic = new FrameLayout(this);
+        ic.addView(pulseDot(col, 44), new FrameLayout.LayoutParams(dp(46), dp(46), Gravity.CENTER));
+        View b = bubble(ssid != null ? R.drawable.i_wifi : R.drawable.i_bluetooth, col, 42);
+        b.setBackground(surface(0xFF141B2C, 14).stroke(alpha(col, 0x40)));
+        ic.addView(b, new FrameLayout.LayoutParams(dp(42), dp(42), Gravity.CENTER));
+        LinearLayout.LayoutParams bp = lp(dp(48), dp(48), 0);
+        bp.rightMargin = dp(12);
+        c.addView(ic, bp);
+        boolean standby = TripService.instance != null && TripService.instance.standby;
+        boolean parkedWatch = standby && TripService.instance.parked;
+        String title = parkedWatch ? "Voiture garée · reprise auto"
+                : standby ? "À l'arrêt, contact mis"
+                : !configured ? "Voiture non configurée"
+                : !Prefs.autoEnabled(this) ? "Détection désactivée"
+                : onWifi ? "Connecté à la voiture" : "En attente de la voiture";
+        LinearLayout colv = vbox();
+        colv.addView(text(title, 15, TXT, W_BOLD));
+        String target = ssid != null ? ssid : car;
+        TextView sub = text(parkedWatch ? "Le trajet redémarre tout seul si tu repars dans les 15 min"
+                : standby ? "Nouveau trajet dès que la voiture repart"
+                : configured ? "Démarrage auto · " + target : "Ajoute le Wi-Fi ou le Bluetooth de ta voiture", 13, SUB, W_REG);
+        sub.setPadding(0, dp(3), 0, 0);
+        colv.addView(sub);
+        c.addView(colv, lp(0, -2, 1f));
+        FrameLayout go = new FrameLayout(this);
+        go.setBackground(pressable(surface(BLUE, 100).gradient(BLUE, CYAN).stroke(alpha(WHITE, 0x33)), 100));
+        go.addView(icon(R.drawable.i_play, WHITE), new FrameLayout.LayoutParams(dp(18), dp(18), Gravity.CENTER));
+        go.setContentDescription("Démarrer un trajet");
+        go.setOnClickListener(new Click() { public void run() { startManual(); } });
+        glow(go, BLUE, 10);
+        pressScale(go);
+        LinearLayout.LayoutParams gp = lp(dp(50), dp(50), 0);
+        gp.leftMargin = dp(8);
+        c.addView(go, gp);
+        content.addView(c, fullWidth(12));
+    }
+
+    /** Où est garée la voiture : carte immersive, halo radar, bandeau d'adresse en verre. */
     void parkingCard() {
         final double[] p = Parking.get(this);
         section(content, "Ma voiture");
         LinearLayout c = vbox();
-        c.setBackground(roundStroke(SURF, 20, STROKE));
+        c.setBackground(surface(SURF, 22));
         c.setClipToOutline(true);
         content.addView(c, fullWidth(12));
         if (p == null) {
             LinearLayout in = vbox();
             in.setPadding(dp(18), dp(16), dp(18), dp(16));
-            in.addView(text("Position inconnue", 15, TXT, W_MED));
+            in.addView(text("Position inconnue", 15, TXT, W_BOLD));
             TextView t = body("Elle s'affichera ici à la fin du prochain trajet. Tu peux aussi l'indiquer maintenant si tu es à côté de ta voiture.", 13, SUB);
             t.setPadding(0, dp(4), 0, dp(12));
             in.addView(t);
-            in.addView(tonalButton("Ma voiture est ici", R.drawable.i_pin, ACC, new Click() { public void run() { parkHere(); } }));
+            in.addView(tonalButton("Ma voiture est ici", R.drawable.i_pin, BLUE, new Click() { public void run() { parkHere(); } }));
             c.addView(in);
             return;
         }
+        FrameLayout mapBox = new FrameLayout(this);
         Charts.Trace map = new Charts.Trace(this, p[0], p[1]);
         map.setOnClickListener(new Click() {
             public void run() {
@@ -448,16 +523,24 @@ public class MainActivity extends BaseUi {
                 } catch (Exception e) { toast("Impossible d'ouvrir la carte"); }
             }
         });
-        c.addView(map, new LinearLayout.LayoutParams(-1, dp(190)));
-
-        LinearLayout in = vbox();
-        in.setPadding(dp(18), dp(14), dp(18), dp(16));
-        in.addView(text("Garée depuis " + Parking.since((long) p[2]), 16, TXT, W_MED));
+        mapBox.addView(map, new FrameLayout.LayoutParams(-1, dp(230)));
+        LinearLayout glass = vbox();
+        glass.setBackground(surface(0xD90B0E16, 16).stroke(alpha(WHITE, 0x1A)));
+        glass.setPadding(dp(14), dp(10), dp(14), dp(11));
+        LinearLayout gt = hbox();
+        gt.addView(text("Garée depuis " + Parking.since((long) p[2]), 15, TXT, W_BOLD), lp(0, -2, 1f));
+        gt.addView(text(Fmt.time((long) p[2]), 12, SUB, W_MED));
+        glass.addView(gt);
         String cached = Parking.cachedAddress(this, p[0], p[1]);
         final TextView addr = text(cached != null ? cached : "Recherche de l'adresse…", 13, SUB, W_REG);
-        addr.setPadding(0, dp(4), 0, dp(2));
-        in.addView(addr);
-        in.addView(text(Fmt.date((long) p[2]) + " · " + Fmt.time((long) p[2]), 12, MUTED, W_REG));
+        addr.setSingleLine(true);
+        addr.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        addr.setPadding(0, dp(3), 0, 0);
+        glass.addView(addr);
+        FrameLayout.LayoutParams glp = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
+        glp.leftMargin = dp(10); glp.rightMargin = dp(10); glp.bottomMargin = dp(10);
+        mapBox.addView(glass, glp);
+        c.addView(mapBox, new LinearLayout.LayoutParams(-1, dp(230)));
         if (cached == null) {
             new Thread(new Runnable() {
                 public void run() {
@@ -469,7 +552,8 @@ public class MainActivity extends BaseUi {
             }).start();
         }
         LinearLayout btns = new LinearLayout(this);
-        btns.addView(tonalButton("Y aller", R.drawable.i_route, ACC, new Click() {
+        btns.setPadding(dp(12), dp(12), dp(12), dp(12));
+        btns.addView(tonalButton("Y aller", R.drawable.i_route, BLUE, new Click() {
             public void run() {
                 try {
                     startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(
@@ -479,13 +563,9 @@ public class MainActivity extends BaseUi {
         }), lp(0, -2, 1f));
         space(btns, 10);
         btns.addView(tonalButton("Garée ici", R.drawable.i_pin, SUB, new Click() { public void run() { parkHere(); } }), lp(0, -2, 1f));
-        LinearLayout.LayoutParams bp = fullWidth(0);
-        bp.topMargin = dp(14);
-        in.addView(btns, bp);
-        c.addView(in);
+        c.addView(btns);
     }
 
-    /** Enregistre la position actuelle du téléphone comme emplacement de la voiture. */
     void parkHere() {
         if (!granted(Manifest.permission.ACCESS_FINE_LOCATION)) {
             requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, RQ_LOC);
@@ -526,58 +606,20 @@ public class MainActivity extends BaseUi {
         render();
     }
 
-    /** Carte d'état de la détection, avec bouton « Démarrer ». */
-    void statusCard() {
-        boolean configured = Prefs.carConfigured(this);
-        boolean onWifi = WifiWatch.onCarWifi(this);
-        String ssid = Prefs.carSsid(this), car = Prefs.carName(this);
-        LinearLayout c = hbox();
-        c.setBackground(roundStroke(SURF, 20, STROKE));
-        c.setPadding(dp(16), dp(14), dp(14), dp(14));
-        LinearLayout.LayoutParams bp = lp(dp(40), dp(40), 0);
-        bp.rightMargin = dp(14);
-        c.addView(bubble(ssid != null ? R.drawable.i_wifi : R.drawable.i_bluetooth, configured ? ACC : WARN, 40), bp);
-        LinearLayout col = vbox();
-        boolean standby = TripService.instance != null && TripService.instance.standby;
-        boolean parkedWatch = standby && TripService.instance.parked;
-        String title = parkedWatch ? "Voiture garée · reprise auto"
-                : standby ? "À l'arrêt, contact mis"
-                : !configured ? "Voiture non configurée"
-                : !Prefs.autoEnabled(this) ? "Détection désactivée"
-                : onWifi ? "Connecté à la voiture" : "En attente de la voiture";
-        col.addView(text(title, 15, TXT, W_MED));
-        String target = ssid != null ? ssid : car;
-        TextView sub = text(parkedWatch ? "Le trajet redémarre tout seul si tu repars dans les 15 min"
-                : standby ? "Nouveau trajet dès que la voiture repart"
-                : configured ? "Démarrage auto · " + target : "Ajoute le Wi-Fi ou le Bluetooth de ta voiture", 13, SUB, W_REG);
-        sub.setPadding(0, dp(3), 0, 0);
-        col.addView(sub);
-        c.addView(col, lp(0, -2, 1f));
-        FrameLayout go = new FrameLayout(this);
-        go.setBackground(pressable(round(alpha(ACC, 0x26), 100), 100));
-        go.addView(icon(R.drawable.i_play, ACC), new FrameLayout.LayoutParams(dp(18), dp(18), Gravity.CENTER));
-        go.setContentDescription("Démarrer un trajet");
-        go.setOnClickListener(new Click() { public void run() { startManual(); } });
-        LinearLayout.LayoutParams gp = lp(dp(46), dp(46), 0);
-        gp.leftMargin = dp(8);
-        c.addView(go, gp);
-        content.addView(c, fullWidth(12));
-    }
-
     void vidangeCard(double odo, List<Db.Maint> maints) {
         if (odo < 0) return;
         for (Db.Maint m : maints) {
             if (!"Vidange".equals(m.type) || m.odo <= 0) continue;
             double interval = Prefs.vidangeInterval(this);
             double done = odo - m.odo, left = interval - done;
-            int color = left < 0 ? BAD : left < 1500 ? WARN : GOOD;
+            int color = left < 0 ? BAD : left < 1500 ? AMBER : VIOLET;
             LinearLayout c = card(content);
             LinearLayout row = hbox();
             LinearLayout.LayoutParams bp = lp(dp(40), dp(40), 0);
             bp.rightMargin = dp(14);
             row.addView(bubble(R.drawable.i_droplet, color, 40), bp);
             LinearLayout col = vbox();
-            col.addView(text("Prochaine vidange", 15, TXT, W_MED));
+            col.addView(text("Prochaine vidange", 15, TXT, W_BOLD));
             TextView sub = text(left >= 0 ? "Dans environ " + Fmt.kmInt(left) : "Dépassée de " + Fmt.kmInt(-left), 13, color, W_MED);
             sub.setPadding(0, dp(3), 0, 0);
             col.addView(sub);
@@ -625,9 +667,9 @@ public class MainActivity extends BaseUi {
         header(content, "Trajets", trips.size() + (trips.size() > 1 ? " trajets · " : " trajet · ") + Fmt.km(total), null);
 
         LinearLayout actions = new LinearLayout(this);
-        actions.addView(tonalButton("Ajouter", R.drawable.i_plus, ACC, new Click() { public void run() { manualTripDialog(); } }), lp(0, -2, 1f));
+        actions.addView(primaryButton("Ajouter", R.drawable.i_plus, new Click() { public void run() { manualTripDialog(); } }), lp(0, -2, 1f));
         space(actions, 12);
-        actions.addView(tonalButton("Exporter", R.drawable.i_download, ACC, new Click() { public void run() { exportTrips(); } }), lp(0, -2, 1f));
+        actions.addView(tonalButton("Exporter", R.drawable.i_download, TXT, new Click() { public void run() { exportTrips(); } }), lp(0, -2, 1f));
         content.addView(actions, fullWidth(16));
 
         if (trips.isEmpty()) {
@@ -636,7 +678,6 @@ public class MainActivity extends BaseUi {
             return;
         }
 
-        // Kilomètres par jour de la semaine
         double[] wd = new double[7];
         Calendar cal = Calendar.getInstance();
         for (Db.Trip t : trips) {
@@ -648,9 +689,8 @@ public class MainActivity extends BaseUi {
         LinearLayout wc = card(content);
         chartTitle(wc, "Par jour de la semaine", "km");
         wc.addView(new Charts.Bars(this, wd, new String[]{"lun", "mar", "mer", "jeu", "ven", "sam", "dim"}, best),
-                new LinearLayout.LayoutParams(-1, dp(160)));
+                new LinearLayout.LayoutParams(-1, dp(170)));
 
-        // Liste groupée par jour
         Map<Long, List<Db.Trip>> days = new LinkedHashMap<>();
         int shown = 0;
         for (Db.Trip t : trips) {
@@ -664,29 +704,77 @@ public class MainActivity extends BaseUi {
             double dk = 0;
             for (Db.Trip t : e.getValue()) dk += t.km();
             section(content, Fmt.date(e.getKey()) + "  ·  " + Fmt.km(dk));
-            LinearLayout g = group(content);
-            for (Db.Trip t : e.getValue()) {
-                final long id = t.id;
-                boolean auto = "auto".equals(t.src);
-                listRow(g, R.drawable.i_route, auto ? ACC : SUB,
-                        Fmt.time(t.start) + "  →  " + Fmt.time(t.end),
-                        Fmt.dur(t.duration()) + " · " + Math.round(t.avgKmh()) + " km/h" + (auto ? "" : " · " + t.src),
-                        Fmt.km(t.km()), "≈ " + Fmt.eur(t.km() * cpk), TXT,
-                        new Click() { public void run() { detailId = id; render(); scroll.scrollTo(0, 0); } });
-            }
+            for (Db.Trip t : e.getValue()) tripCard(t, cpk);
         }
+    }
+
+    /** Carte de trajet façon chronologie : horaire, pilules durée / vitesse, distance et coût. */
+    void tripCard(Db.Trip t, double cpk) {
+        final long id = t.id;
+        boolean auto = "auto".equals(t.src);
+        LinearLayout c = hbox();
+        c.setBackground(pressable(surface(SURF, 20), 20));
+        c.setPadding(dp(14), dp(14), dp(16), dp(14));
+        LinearLayout left = vbox();
+        LinearLayout time = hbox();
+        time.setBackground(surface(SURF2, 100).noHighlight());
+        time.setPadding(dp(10), dp(6), dp(12), dp(6));
+        LinearLayout.LayoutParams tip = lp(dp(14), dp(14), 0);
+        tip.rightMargin = dp(6);
+        time.addView(icon(R.drawable.i_route, auto ? CYAN : SUB), tip);
+        time.addView(text(Fmt.time(t.start) + "  →  " + Fmt.time(t.end), 14, TXT, W_BOLD));
+        left.addView(time, new LinearLayout.LayoutParams(-2, -2));
+        LinearLayout pills = hbox();
+        pills.addView(pill(R.drawable.i_clock, Fmt.dur(t.duration())));
+        space(pills, 6);
+        pills.addView(pill(R.drawable.i_gauge, Math.round(t.avgKmh()) + " km/h"));
+        int sc = Stats.score(t);
+        if (sc >= 0) { space(pills, 6); pills.addView(pill(R.drawable.i_droplet, "Éco " + sc)); }
+        LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(-2, -2);
+        pp.topMargin = dp(8);
+        left.addView(pills, pp);
+        if (!auto) {
+            TextView src = text(t.src == null ? "manuel" : t.src, 11, MUTED, W_REG);
+            src.setPadding(dp(2), dp(6), 0, 0);
+            left.addView(src);
+        }
+        c.addView(left, lp(0, -2, 1f));
+        LinearLayout right = vbox();
+        right.setGravity(Gravity.END);
+        TextView km = number(Fmt.km(t.km()), 20, TXT);
+        km.setGravity(Gravity.END);
+        right.addView(km);
+        TextView eur = text("≈ " + Fmt.eur(t.km() * cpk), 13, AMBER, W_MED);
+        eur.setGravity(Gravity.END);
+        eur.setPadding(0, dp(4), 0, 0);
+        right.addView(eur);
+        c.addView(right);
+        c.setOnClickListener(new Click() { public void run() { detailId = id; transition(); scroll.scrollTo(0, 0); } });
+        pressScale(c);
+        content.addView(c, fullWidth(10));
+    }
+
+    View pill(int iconRes, String s) {
+        LinearLayout p = hbox();
+        p.setBackground(surface(alpha(WHITE, 0x08), 100).stroke(alpha(WHITE, 0x10)).noHighlight());
+        p.setPadding(dp(8), dp(4), dp(10), dp(4));
+        LinearLayout.LayoutParams ip = lp(dp(12), dp(12), 0);
+        ip.rightMargin = dp(5);
+        p.addView(icon(iconRes, SUB), ip);
+        p.addView(text(s, 12, SUB, W_MED));
+        return p;
     }
 
     void renderTripDetail(final long id) {
         final Db db = Db.get(this);
         Db.Trip t = db.trip(id);
         LinearLayout back = hbox();
-        back.addView(icon(R.drawable.i_back, ACC), lp(dp(20), dp(20), 0));
-        TextView bt = text("Trajets", 15, ACC, W_MED);
+        back.addView(icon(R.drawable.i_back, BLUE), lp(dp(20), dp(20), 0));
+        TextView bt = text("Trajets", 15, BLUE, W_MED);
         bt.setPadding(dp(8), 0, 0, 0);
         back.addView(bt);
         back.setPadding(0, 0, 0, dp(16));
-        back.setOnClickListener(new Click() { public void run() { detailId = -1; render(); } });
+        back.setOnClickListener(new Click() { public void run() { detailId = -1; transition(); } });
         content.addView(back, new LinearLayout.LayoutParams(-2, -2));
         if (t == null) { empty(content, R.drawable.i_info, "Trajet introuvable", "Il a peut-être été supprimé."); return; }
 
@@ -695,42 +783,48 @@ public class MainActivity extends BaseUi {
         header(content, Fmt.km(t.km()), Fmt.date(t.start) + " · " + Fmt.time(t.start) + " → " + Fmt.time(t.end), null);
 
         LinearLayout map = vbox();
-        map.setBackground(roundStroke(SURF, 20, STROKE));
+        map.setBackground(surface(SURF, 22));
         map.setClipToOutline(true);
         final List<double[]> tracePts = TripService.decode(t.pts);
         map.addView(new Charts.Trace(this, tracePts), new LinearLayout.LayoutParams(-1, dp(320)));
         content.addView(map, fullWidth(12));
         if (tracePts.size() >= 2) {
-            content.addView(tonalButton("Ouvrir dans Google Maps", R.drawable.i_pin, ACC, new Click() {
+            content.addView(tonalButton("Ouvrir dans Google Maps", R.drawable.i_pin, BLUE, new Click() {
                 public void run() { openInMaps(tracePts); }
             }), fullWidth(12));
         }
 
         LinearLayout r1 = tilesRow(content);
-        tile(r1, R.drawable.i_clock, ACC, "Durée", Fmt.dur(t.duration()), t.moving > 0 ? Fmt.dur(t.moving) + " en mouvement" : null);
-        tile(r1, R.drawable.i_gauge, ACC2, "Vitesse moyenne", Math.round(t.avgKmh()) + " km/h", t.vmax > 0 ? "max " + Math.round(t.vmax) + " km/h" : null);
+        tile(r1, R.drawable.i_clock, BLUE, "Durée", Fmt.dur(t.duration()), t.moving > 0 ? Fmt.dur(t.moving) + " en mouvement" : null);
+        tile(r1, R.drawable.i_gauge, CYAN, "Vitesse moy.", Math.round(t.avgKmh()) + " km/h", t.vmax > 0 ? "max " + Math.round(t.vmax) + " km/h" : null);
         LinearLayout r2 = tilesRow(content);
-        tile(r2, R.drawable.i_droplet, GOOD, "Carburant", Fmt.num(t.km() * conso / 100, 2) + " L", Fmt.num(conso, 1) + " L/100");
-        tile(r2, R.drawable.i_euro, WARN, "Coût estimé", Fmt.eur(t.km() * conso / 100 * price), Fmt.num(price, 3) + " €/L");
+        tile(r2, R.drawable.i_droplet, BLUE, "Carburant", Fmt.num(t.km() * conso / 100, 2) + " L", Fmt.num(conso, 1) + " L/100");
+        tile(r2, R.drawable.i_euro, AMBER, "Coût estimé", Fmt.eur(t.km() * conso / 100 * price), Fmt.num(price, 3) + " €/L");
+        int sc = Stats.score(t);
+        if (sc >= 0) {
+            LinearLayout r3 = tilesRow(content);
+            tile(r3, R.drawable.i_trophy, GOOD, "Éco-conduite", sc + " / 100", Stats.ecoLabel(sc));
+            tile(r3, R.drawable.i_info, VIOLET, "Brusques", t.acc + " accél. · " + t.brk + " frein.",
+                    t.fast > 60000 ? Fmt.dur(t.fast) + " > 135 km/h" : null);
+        }
 
         LinearLayout g = group(content);
         listRow(g, R.drawable.i_pin, GOOD, "Départ", null, Fmt.time(t.start), null, TXT, null);
-        listRow(g, R.drawable.i_pin, ACC2, "Arrivée", null, Fmt.time(t.end), null, TXT, null);
+        listRow(g, R.drawable.i_pin, VIOLET, "Arrivée", null, Fmt.time(t.end), null, TXT, null);
         boolean auto = "auto".equals(t.src);
-        listRow(g, auto ? R.drawable.i_wifi : R.drawable.i_edit, auto ? ACC : SUB, "Enregistrement",
+        listRow(g, auto ? R.drawable.i_wifi : R.drawable.i_edit, auto ? BLUE : SUB, "Enregistrement",
                 t.info, auto ? "Automatique" : Fmt.cap(t.src == null ? "manuel" : t.src), null, TXT, null);
 
         space(content, 4);
         content.addView(tonalButton("Supprimer ce trajet", R.drawable.i_trash, BAD, new Click() {
             public void run() {
                 confirmDelete("Supprimer ce trajet ?", "Il disparaîtra de l'historique et des statistiques.", new Runnable() {
-                    public void run() { db.deleteTrip(id); detailId = -1; render(); }
+                    public void run() { db.deleteTrip(id); detailId = -1; transition(); }
                 });
             }
         }), fullWidth(0));
     }
 
-    /** Ouvre le trajet dans Google Maps (départ, arrivée et quelques points de passage). */
     void openInMaps(List<double[]> p) {
         StringBuilder u = new StringBuilder("https://www.google.com/maps/dir/?api=1&travelmode=driving");
         u.append("&origin=").append(ll(p.get(0))).append("&destination=").append(ll(p.get(p.size() - 1)));
@@ -777,22 +871,226 @@ public class MainActivity extends BaseUi {
     void exportTrips() {
         List<Db.Trip> trips = Db.get(this).trips(0, Long.MAX_VALUE, false);
         double cpk = Calc.costPerKm(this, Db.get(this).fuels());
-        StringBuilder sb = new StringBuilder("date;depart;arrivee;distance_km;duree_min;vitesse_moy_kmh;vitesse_max_kmh;cout_estime_eur;source\n");
+        StringBuilder sb = new StringBuilder("date;depart;arrivee;distance_km;duree_min;vitesse_moy_kmh;vitesse_max_kmh;cout_estime_eur;score_eco;source\n");
         for (int i = trips.size() - 1; i >= 0; i--) {
             Db.Trip t = trips.get(i);
+            int sc = Stats.score(t);
             sb.append(Fmt.dateShort(t.start)).append(';').append(Fmt.time(t.start)).append(';').append(Fmt.time(t.end)).append(';')
                     .append(clean(Fmt.num(t.km(), 2))).append(';')
                     .append(Math.round(t.duration() / 60000.0)).append(';')
                     .append(Math.round(t.avgKmh())).append(';').append(Math.round(t.vmax)).append(';')
                     .append(clean(Fmt.num(t.km() * cpk, 2))).append(';')
+                    .append(sc >= 0 ? String.valueOf(sc) : "").append(';')
                     .append(t.src).append('\n');
         }
         share("Trajets – Trajo", sb.toString());
     }
 
     // =====================================================================
-    // Pleins
+    // Stats
     // =====================================================================
+
+    void renderStats() {
+        Db db = Db.get(this);
+        long now = System.currentTimeMillis();
+        List<Db.Trip> all = db.trips(0, Long.MAX_VALUE, false);
+        header(content, "Stats", "Analyse de ta conduite", null);
+        if (all.isEmpty()) {
+            empty(content, R.drawable.i_chart, "Pas encore de statistiques",
+                    "Fais quelques trajets : score d'éco-conduite, semaines, heures, trajets favoris et carte de chaleur apparaîtront ici.");
+            return;
+        }
+
+        // --- Éco-conduite (30 jours) ---
+        Stats.Eco eco = Stats.eco(all, now - 30L * 86_400_000L);
+        int ecoColor = eco.score < 0 ? MUTED : eco.score >= 70 ? GOOD : eco.score >= 50 ? AMBER : BAD;
+        LinearLayout ec = vbox();
+        ec.setBackground(surface(SURF, 22).blobs(new float[][]{{0.15f, 0.2f, 0.7f}}, alpha(ecoColor, 0x2A)));
+        ec.setPadding(dp(16), dp(16), dp(18), dp(16));
+        content.addView(ec, fullWidth(12));
+        LinearLayout er = hbox();
+        er.addView(new Charts.Ring(this, eco.score, "sur 100", ecoColor), lp(dp(140), dp(140), 0));
+        LinearLayout ecol = vbox();
+        ecol.setPadding(dp(8), 0, 0, 0);
+        ecol.addView(label("Éco-conduite · 30 jours", SUB));
+        TextView el = text(eco.score >= 0 ? Stats.ecoLabel(eco.score) : "En attente", 20, TXT, W_BOLD);
+        el.setPadding(0, dp(6), 0, dp(8));
+        ecol.addView(el);
+        if (eco.trips > 0) {
+            ecol.addView(miniStat("Accélérations brusques", String.valueOf(eco.acc)));
+            ecol.addView(miniStat("Freinages brusques", String.valueOf(eco.brk)));
+            ecol.addView(miniStat("Au-dessus de 135 km/h", Fmt.dur(eco.fast)));
+        } else {
+            ecol.addView(text("Mesuré à partir des prochains trajets", 13, SUB, W_REG));
+        }
+        er.addView(ecol, lp(0, -2, 1f));
+        ec.addView(er);
+        LinearLayout tipBox = hbox();
+        tipBox.setBackground(surface(alpha(WHITE, 0x08), 14).stroke(alpha(WHITE, 0x10)));
+        tipBox.setPadding(dp(12), dp(10), dp(12), dp(10));
+        LinearLayout.LayoutParams tip = lp(dp(18), dp(18), 0);
+        tip.rightMargin = dp(10);
+        tipBox.addView(icon(R.drawable.i_info, ecoColor == MUTED ? BLUE : ecoColor), tip);
+        tipBox.addView(body(Stats.ecoTip(eco), 13, TXT), lp(0, -2, 1f));
+        LinearLayout.LayoutParams tbp = fullWidth(0);
+        tbp.topMargin = dp(12);
+        ec.addView(tipBox, tbp);
+
+        // --- Semaine par semaine ---
+        double[] wk = new double[8];
+        String[] wl = new String[8];
+        for (int i = 0; i < 8; i++) {
+            long a = Stats.weekStart(now, i - 7), b = Stats.weekStart(now, i - 6);
+            wk[i] = db.kmBetween(a, b);
+            wl[i] = Fmt.dayMonth(a).replace(".", "");
+        }
+        LinearLayout wc = card(content);
+        chartTitle(wc, "Semaine par semaine", "8 semaines");
+        LinearLayout cmp = hbox();
+        cmp.addView(kpi("Cette semaine", Fmt.km(wk[7]), BLUE), lp(0, -2, 1f));
+        cmp.addView(kpi("Semaine dernière", Fmt.km(wk[6]), SUB), lp(0, -2, 1f));
+        if (wk[6] > 0.5) {
+            double pct = (wk[7] - wk[6]) / wk[6] * 100;
+            cmp.addView(chip((pct >= 0 ? "▲ " : "▼ ") + Math.round(Math.abs(pct)) + " %", pct >= 0 ? CYAN : SUB));
+        }
+        wc.addView(cmp, fullWidth(6));
+        wc.addView(new Charts.Bars(this, wk, wl, 7), new LinearLayout.LayoutParams(-1, dp(170)));
+
+        // --- Heures de conduite ---
+        double[] hrs = Stats.byHour(all);
+        int peak = 0;
+        for (int i = 1; i < 24; i++) if (hrs[i] > hrs[peak]) peak = i;
+        String[] hl = new String[24];
+        for (int i = 0; i < 24; i++) hl[i] = i % 6 == 0 ? i + " h" : "";
+        LinearLayout hc = card(content);
+        chartTitle(hc, "Heures de conduite", "km");
+        hc.addView(text("Tu roules surtout entre " + peak + " h et " + (peak + 1) % 24 + " h", 13, SUB, W_REG), fullWidth(4));
+        hc.addView(new Charts.Bars(this, hrs, hl, peak), new LinearLayout.LayoutParams(-1, dp(160)));
+
+        // --- Trajets favoris ---
+        List<Db.Trip> withPts = db.trips(0, Long.MAX_VALUE, true);
+        List<Stats.Route> routes = Stats.routes(withPts);
+        section(content, "Trajets favoris");
+        if (routes.isEmpty()) {
+            LinearLayout c = card(content);
+            c.addView(body("Les trajets que tu fais au moins 2 fois (ex. : maison → travail) apparaîtront ici, avec leur durée et distance moyennes.", 13, SUB));
+        } else {
+            LinearLayout g = group(content);
+            int n = 0;
+            for (final Stats.Route r : routes) {
+                if (++n > 6) break;
+                final String an = placeLabel(r.a), bn = placeLabel(r.b);
+                listRow(g, R.drawable.i_route, CYAN, an + "  →  " + bn,
+                        r.count + " trajets · " + Fmt.dur(r.dur / r.count) + " en moyenne",
+                        Fmt.km(r.km / r.count), "moyenne", TXT, new Click() {
+                            public void run() { renamePlaces(r, an, bn); }
+                        });
+            }
+            TextView hint = text("Touche un trajet pour nommer les lieux (Maison, Travail…).", 12, MUTED, W_REG);
+            hint.setPadding(dp(4), 0, 0, dp(4));
+            content.addView(hint);
+        }
+
+        // --- Carte de chaleur ---
+        List<List<double[]>> paths = new ArrayList<>();
+        for (Db.Trip t : withPts) {
+            List<double[]> p = TripService.decode(t.pts);
+            if (p.size() >= 2) paths.add(p);
+        }
+        if (!paths.isEmpty()) {
+            section(content, "Carte de chaleur");
+            LinearLayout mc = vbox();
+            mc.setBackground(surface(SURF, 22));
+            mc.setClipToOutline(true);
+            mc.addView(new Charts.Trace(this, paths, true), new LinearLayout.LayoutParams(-1, dp(320)));
+            TextView cap = text(paths.size() + " trajets superposés · plus c'est lumineux, plus tu y passes souvent", 12, SUB, W_REG);
+            cap.setPadding(dp(16), dp(12), dp(16), dp(14));
+            mc.addView(cap);
+            content.addView(mc, fullWidth(12));
+        }
+
+        // --- Bilans mensuels ---
+        section(content, "Bilans mensuels");
+        LinearLayout mg = group(content);
+        int shown = 0;
+        for (int i = 0; i < 12 && shown < 6; i++) {
+            Stats.Month m = Stats.month(this, Calc.monthStart(now, -i));
+            if (m.trips == 0 && m.fuel == 0 && m.maint == 0) continue;
+            shown++;
+            listRow(mg, R.drawable.i_calendar, i == 0 ? BLUE : VIOLET, Fmt.month(m.start) + (i == 0 ? " (en cours)" : ""),
+                    m.trips + (m.trips > 1 ? " trajets" : " trajet") + " · " + Fmt.dur(m.time) + " au volant",
+                    Fmt.km(m.km), Fmt.eur(m.fuel + m.maint) + " dépensés", TXT, null);
+        }
+        if (shown == 0) listRow(mg, R.drawable.i_calendar, SUB, "Aucun mois complet pour l'instant", null, null, null, TXT, null);
+        TextView note = text("Le bilan du mois précédent arrive aussi en notification le 1er du mois.", 12, MUTED, W_REG);
+        note.setPadding(dp(4), 0, 0, 0);
+        content.addView(note);
+    }
+
+    View miniStat(String label, String value) {
+        LinearLayout r = hbox();
+        r.setPadding(0, dp(3), 0, dp(3));
+        r.addView(text(label, 13, SUB, W_REG), lp(0, -2, 1f));
+        r.addView(text(value, 13, TXT, W_BOLD));
+        return r;
+    }
+
+    View kpi(String label, String value, int color) {
+        LinearLayout c = vbox();
+        c.addView(label(label, SUB));
+        TextView v = number(value, 20, color == SUB ? TXT : color);
+        v.setPadding(0, dp(4), 0, 0);
+        c.addView(v);
+        return c;
+    }
+
+    /** Nom d'un lieu de trajet favori ; lance la recherche d'adresse si besoin. */
+    String placeLabel(final Stats.Place p) {
+        String n = Stats.placeName(this, p);
+        if (n != null) return n;
+        final String key = Parking.key(p.lat, p.lon);
+        if (geocoding.add(key)) {
+            new Thread(new Runnable() {
+                public void run() {
+                    String a = Parking.lookupAddress(MainActivity.this, p.lat, p.lon);
+                    if (a != null) runOnUiThread(new Runnable() { public void run() { if (tab == 2) render(); } });
+                }
+            }).start();
+        }
+        return "Lieu n°" + (p.idx + 1);
+    }
+
+    void renamePlaces(final Stats.Route r, String an, String bn) {
+        LinearLayout f = vbox();
+        f.addView(body("Donne un nom aux deux lieux de ce trajet. Ils seront reconnus dans tous tes trajets.", 14, SUB), fullWidth(16));
+        final EditText a = field(f, "Départ", an.startsWith("Lieu n°") ? "" : an, "Ex. : Maison", false, null);
+        final EditText b = field(f, "Arrivée", bn.startsWith("Lieu n°") ? "" : bn, "Ex. : Travail", false, null);
+        sheet("Nommer les lieux", f, "Enregistrer", false, new Save() {
+            public boolean run() {
+                Stats.nameplace(MainActivity.this, r.a.lat, r.a.lon, a.getText().toString());
+                Stats.nameplace(MainActivity.this, r.b.lat, r.b.lon, b.getText().toString());
+                render();
+                return true;
+            }
+        }, null, null);
+    }
+
+    // =====================================================================
+    // Dépenses (Pleins + Entretien)
+    // =====================================================================
+
+    void renderExpenses() {
+        Db db = Db.get(this);
+        long ys = Calc.yearStart(System.currentTimeMillis());
+        double fuel = 0, maint = 0;
+        for (Db.Fuel f : db.fuels()) if (f.date >= ys) fuel += f.total;
+        for (Db.Maint m : db.maints()) if (m.date >= ys) maint += m.cost;
+        header(content, "Dépenses", "Cette année : " + Fmt.eur(fuel + maint), null);
+        content.addView(segmented(new String[]{"Pleins", "Entretien"}, expTab, new SegCb() {
+            public void select(int i) { if (i != expTab) { expTab = i; transition(); } }
+        }), fullWidth(16));
+        if (expTab == 0) renderFuel(); else renderMaint();
+    }
 
     void renderFuel() {
         Db db = Db.get(this);
@@ -800,7 +1098,6 @@ public class MainActivity extends BaseUi {
         long ys = Calc.yearStart(System.currentTimeMillis());
         double yEur = 0, yL = 0;
         for (Db.Fuel f : fuels) if (f.date >= ys) { yEur += f.total; yL += f.liters; }
-        header(content, "Pleins", fuels.size() + (fuels.size() > 1 ? " pleins enregistrés" : " plein enregistré"), null);
         content.addView(primaryButton("Ajouter un plein", R.drawable.i_plus, new Click() { public void run() { fuelDialog(null); } }), fullWidth(16));
 
         if (fuels.isEmpty()) {
@@ -811,10 +1108,10 @@ public class MainActivity extends BaseUi {
 
         double real = Calc.realConso(fuels);
         LinearLayout r1 = tilesRow(content);
-        tile(r1, R.drawable.i_euro, WARN, "Cette année", Fmt.eur(yEur), null);
-        tile(r1, R.drawable.i_droplet, ACC, "Litres", Fmt.num(yL, 1) + " L", null);
+        tile(r1, R.drawable.i_euro, AMBER, "Cette année", Fmt.eur(yEur), fuels.size() + (fuels.size() > 1 ? " pleins" : " plein"));
+        tile(r1, R.drawable.i_droplet, BLUE, "Litres", Fmt.num(yL, 1) + " L", null);
         LinearLayout r2 = tilesRow(content);
-        tile(r2, R.drawable.i_fuel, ACC2, "Prix moyen", yL > 0 ? Fmt.num(yEur / yL, 3) + " €/L" : "—", null);
+        tile(r2, R.drawable.i_fuel, AMBER, "Prix moyen", yL > 0 ? Fmt.num(yEur / yL, 3) + " €/L" : "—", null);
         tile(r2, R.drawable.i_gauge, GOOD, "Consommation", real > 0 ? Fmt.num(real, 1) + " L/100" : "—", real > 0 ? "réelle" : "2 pleins complets requis");
 
         Map<Long, double[]> seg = Calc.segments(fuels);
@@ -844,7 +1141,7 @@ public class MainActivity extends BaseUi {
             String sub = Fmt.num(f.liters, 2) + " L · " + Fmt.num(f.pricePerL(), 3) + " €/L" + (f.full ? "" : " · partiel")
                     + (f.station.isEmpty() ? "" : " · " + f.station);
             String vs = sgm != null ? Fmt.num(sgm[0] / sgm[1] * 100, 1) + " L/100" : (f.odo > 0 ? Fmt.kmInt(f.odo) : null);
-            listRow(g, R.drawable.i_fuel, WARN, Fmt.dateMed(f.date), sub, Fmt.eur(f.total), vs, TXT,
+            listRow(g, R.drawable.i_fuel, AMBER, Fmt.dateMed(f.date), sub, Fmt.eur(f.total), vs, TXT,
                     new Click() { public void run() { fuelDialog(f); } });
         }
     }
@@ -874,7 +1171,7 @@ public class MainActivity extends BaseUi {
         LinearLayout[] cols = twoColumns(form);
         final EditText liters = field(cols[0], "Litres", f.liters > 0 ? Fmt.num(f.liters, 2) : "", "0,00", true, "L");
         final EditText total = field(cols[1], "Montant", f.total > 0 ? Fmt.num(f.total, 2) : "", "0,00", true, "€");
-        final TextView ppl = chip("", ACC);
+        final TextView ppl = chip("", AMBER);
         ppl.setVisibility(View.GONE);
         LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(-2, -2);
         pp.bottomMargin = dp(16);
@@ -894,8 +1191,8 @@ public class MainActivity extends BaseUi {
         w.afterTextChanged(null);
 
         LinearLayout tg = vbox();
-        tg.setBackground(roundStroke(SURF2, 14, STROKE));
-        final Switch full = switchRow(tg, R.drawable.i_fuel, ACC, "Plein complet", "Réservoir rempli jusqu'au déclic", f.full);
+        tg.setBackground(surface(SURF2, 16));
+        final Switch full = switchRow(tg, R.drawable.i_fuel, AMBER, "Plein complet", "Réservoir rempli jusqu'au déclic", f.full);
         form.addView(tg, fullWidth(16));
         final EditText station = field(form, "Station (facultatif)", f.station, "Ex. : Total Access", false, null);
 
@@ -920,10 +1217,6 @@ public class MainActivity extends BaseUi {
         });
     }
 
-    // =====================================================================
-    // Entretien
-    // =====================================================================
-
     static int maintIcon(String type) {
         if ("Vidange".equals(type) || "Lavage".equals(type)) return R.drawable.i_droplet;
         if ("Pneus".equals(type) || "Freins".equals(type)) return R.drawable.i_car;
@@ -935,10 +1228,9 @@ public class MainActivity extends BaseUi {
     }
 
     static int maintColor(String type) {
-        if ("Vidange".equals(type)) return WARN;
+        if ("Péage / parking".equals(type) || "Lavage".equals(type)) return BLUE;
         if ("Contrôle technique".equals(type) || "Assurance".equals(type)) return GOOD;
-        if ("Péage / parking".equals(type) || "Lavage".equals(type)) return ACC;
-        return ACC2;
+        return VIOLET;
     }
 
     void renderMaint() {
@@ -948,7 +1240,6 @@ public class MainActivity extends BaseUi {
         int n = 0;
         long ys = Calc.yearStart(System.currentTimeMillis());
         for (Db.Maint m : list) if (m.date >= ys) { sum += m.cost; n++; }
-        header(content, "Entretien", "Cette année : " + Fmt.eur(sum) + (n > 0 ? " · " + n + (n > 1 ? " dépenses" : " dépense") : ""), null);
         content.addView(primaryButton("Ajouter une dépense", R.drawable.i_plus, new Click() { public void run() { maintDialog(null); } }), fullWidth(16));
 
         vidangeCard(Calc.estimatedOdo(this, db.fuels(), list), list);
@@ -958,6 +1249,9 @@ public class MainActivity extends BaseUi {
                     "Vidange, révision, pneus, contrôle technique, assurance, péages… Note-les pour connaître le vrai coût de ta voiture. Une vidange avec kilométrage active le rappel de la suivante.");
             return;
         }
+        LinearLayout r1 = tilesRow(content);
+        tile(r1, R.drawable.i_wrench, VIOLET, "Cette année", Fmt.eur(sum), n + (n > 1 ? " dépenses" : " dépense"));
+        tile(r1, R.drawable.i_calendar, VIOLET, "Dernière", Fmt.dateMed(list.get(0).date), list.get(0).type);
         section(content, "Historique");
         LinearLayout g = group(content);
         for (final Db.Maint m : list) {
@@ -973,8 +1267,7 @@ public class MainActivity extends BaseUi {
         final Db db = Db.get(this);
         LinearLayout form = vbox();
 
-        // Sélecteur de type en pastilles
-        TextView tl = text("Type", 13, SUB, W_MED);
+        TextView tl = label("Type", SUB);
         tl.setPadding(dp(2), 0, 0, dp(8));
         form.addView(tl);
         final int[] sel = {0};
@@ -990,6 +1283,7 @@ public class MainActivity extends BaseUi {
             cv[i].setOnClickListener(new Click() {
                 public void run() { sel[0] = k; styleChips(cv, sel[0]); }
             });
+            pressScale(cv[i]);
             LinearLayout.LayoutParams p = lp(-2, -2, 0);
             p.rightMargin = dp(8);
             chips.addView(cv[i], p);
@@ -1030,7 +1324,8 @@ public class MainActivity extends BaseUi {
         for (int i = 0; i < cv.length; i++) {
             boolean on = i == sel;
             cv[i].setTextColor(on ? WHITE : SUB);
-            cv[i].setBackground(on ? round(ACC, 100) : roundStroke(SURF2, 100, STROKE));
+            cv[i].setBackground(on ? surface(VIOLET, 100).gradient(VIOLET, 0xFF7C3AED).stroke(alpha(WHITE, 0x26))
+                    : surface(SURF2, 100).noHighlight());
         }
     }
 
@@ -1041,24 +1336,60 @@ public class MainActivity extends BaseUi {
     void renderSettings() {
         header(content, "Réglages", "Détection, véhicule et autorisations", null);
 
+        // --- Carte récapitulative du véhicule ---
+        String ssid = Prefs.carSsid(this);
+        String car = Prefs.carName(this);
+        boolean onWifi = WifiWatch.onCarWifi(this);
+        Db db = Db.get(this);
+        double est = Calc.estimatedOdo(this, db.fuels(), db.maints());
+        LinearLayout vc = vbox();
+        vc.setBackground(surface(0xFF0E1322, 24).stroke(alpha(WHITE, 0x1A)).blobs(new float[][]{{1f, 0f, 0.9f}, {0f, 1f, 0.7f}},
+                alpha(BLUE, 0x55), alpha(CYAN, 0x30)));
+        vc.setPadding(dp(18), dp(18), dp(18), dp(18));
+        glow(vc, BLUE, 10);
+        LinearLayout vt = hbox();
+        ImageView logo = new ImageView(this);
+        logo.setImageResource(R.drawable.logo);
+        logo.setBackground(surface(0xFF171920, 14));
+        logo.setClipToOutline(true);
+        LinearLayout.LayoutParams llp = lp(dp(52), dp(52), 0);
+        llp.rightMargin = dp(14);
+        vt.addView(logo, llp);
+        LinearLayout vcol = vbox();
+        vcol.addView(label("Véhicule connecté", 0xB3FFFFFF));
+        TextView vn = number(est >= 0 ? Fmt.kmInt(est) : "Ma voiture", 22, WHITE);
+        vn.setPadding(0, dp(4), 0, 0);
+        vcol.addView(vn);
+        vt.addView(vcol, lp(0, -2, 1f));
+        if (Prefs.autoEnabled(this) && Prefs.carConfigured(this)) vt.addView(liveBadge("Auto", GOOD, WHITE, 0x33000000));
+        vc.addView(vt);
+        LinearLayout chipsRow = hbox();
+        chipsRow.addView(linkChip(R.drawable.i_wifi, ssid == null ? "Wi-Fi non configuré" : ssid, ssid != null && onWifi));
+        space(chipsRow, 8);
+        chipsRow.addView(linkChip(R.drawable.i_bluetooth, car == null ? "Bluetooth facultatif" : car, false));
+        HorizontalScrollView chs = new HorizontalScrollView(this);
+        chs.setHorizontalScrollBarEnabled(false);
+        chs.addView(chipsRow);
+        LinearLayout.LayoutParams chp = fullWidth(0);
+        chp.topMargin = dp(14);
+        vc.addView(chs, chp);
+        content.addView(vc, fullWidth(12));
+
         // --- Détection ---
         section(content, "Détection automatique");
         LinearLayout g = group(content);
-        Switch auto = switchRow(g, R.drawable.i_car, ACC, "Enregistrement automatique", "Démarre et termine les trajets tout seul", Prefs.autoEnabled(this));
+        Switch auto = switchRow(g, R.drawable.i_car, BLUE, "Enregistrement automatique", "Démarre et termine les trajets tout seul", Prefs.autoEnabled(this));
         auto.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             public void onCheckedChanged(CompoundButton b, boolean on) {
                 Prefs.get(MainActivity.this).edit().putBoolean("auto", on).apply();
             }
         });
-        String ssid = Prefs.carSsid(this);
-        boolean onWifi = WifiWatch.onCarWifi(this);
-        listRow(g, R.drawable.i_wifi, ACC, "Wi-Fi de la voiture", ssid == null ? "Non configuré" : ssid,
+        listRow(g, R.drawable.i_wifi, BLUE, "Wi-Fi de la voiture", ssid == null ? "Non configuré" : ssid,
                 ssid == null ? null : (onWifi ? "Connecté" : null), null, GOOD,
                 new Click() { public void run() { wifiSheet(); } });
-        String car = Prefs.carName(this);
-        listRow(g, R.drawable.i_bluetooth, ACC, "Bluetooth de la voiture", car == null ? "Facultatif" : car, null, null, TXT,
+        listRow(g, R.drawable.i_bluetooth, BLUE, "Bluetooth de la voiture", car == null ? "Facultatif" : car, null, null, TXT,
                 new Click() { public void run() { pickCar(); } });
-        TextView note = body("Le trajet démarre dès que le téléphone se connecte au Wi-Fi ou au Bluetooth de la voiture, et se termine 1 min 30 après la déconnexion.", 12, MUTED);
+        TextView note = body("Le trajet démarre dès que le téléphone se connecte au Wi-Fi ou au Bluetooth de la voiture, et se termine une fois garé.", 12, MUTED);
         note.setPadding(dp(4), 0, dp(4), dp(4));
         content.addView(note);
 
@@ -1086,7 +1417,7 @@ public class MainActivity extends BaseUi {
                         public void run() { requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT}, RQ_BT); }
                     });
         if (Build.VERSION.SDK_INT >= 33)
-            permRow(pg, R.drawable.i_bell, "Notifications", "Trajet en cours et résumés",
+            permRow(pg, R.drawable.i_bell, "Notifications", "Trajet en cours, résumés et bilans",
                     granted(Manifest.permission.POST_NOTIFICATIONS), new Click() {
                         public void run() { requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, RQ_NOTIF); }
                     });
@@ -1105,10 +1436,8 @@ public class MainActivity extends BaseUi {
         // --- Véhicule ---
         section(content, "Véhicule");
         LinearLayout vg = group(content);
-        Db db = Db.get(this);
-        double est = Calc.estimatedOdo(this, db.fuels(), db.maints());
         double ref = Prefs.odoRef(this);
-        listRow(vg, R.drawable.i_gauge, ACC2, "Kilométrage du compteur",
+        listRow(vg, R.drawable.i_gauge, CYAN, "Kilométrage du compteur",
                 ref > 0 ? "Relevé du " + Fmt.dateShort(Prefs.odoRefDate(this)) + " : " + Fmt.kmInt(ref) : "À renseigner",
                 est >= 0 ? Fmt.kmInt(est) : null, null, TXT, new Click() {
                     public void run() {
@@ -1119,7 +1448,7 @@ public class MainActivity extends BaseUi {
                         });
                     }
                 });
-        listRow(vg, R.drawable.i_clock, ACC, "Couper le trajet après un arrêt de", "Contact mis, voiture immobile",
+        listRow(vg, R.drawable.i_clock, BLUE, "Couper le trajet après un arrêt de", "Contact mis, voiture immobile",
                 Fmt.num(Prefs.pauseMinutes(this), 0) + " min", null, TXT, new Click() {
                     public void run() {
                         numberSheet("Arrêt qui coupe un trajet", "Si la voiture reste immobile, contact mis, plus longtemps que ça, le trajet est enregistré et un nouveau démarre quand elle repart. Les feux rouges et bouchons ne coupent pas le trajet en dessous de cette durée.", "min",
@@ -1128,7 +1457,7 @@ public class MainActivity extends BaseUi {
                                 });
                     }
                 });
-        listRow(vg, R.drawable.i_droplet, ACC, "Consommation par défaut", "Utilisée avant 2 pleins complets",
+        listRow(vg, R.drawable.i_droplet, BLUE, "Consommation par défaut", "Utilisée avant 2 pleins complets",
                 Fmt.num(Prefs.defaultConso(this), 1) + " L/100", null, TXT, new Click() {
                     public void run() {
                         numberSheet("Consommation par défaut", "Une citadine essence consomme en général entre 5 et 6,5 L/100 km.", "L/100",
@@ -1137,7 +1466,7 @@ public class MainActivity extends BaseUi {
                                 });
                     }
                 });
-        listRow(vg, R.drawable.i_euro, WARN, "Prix du litre par défaut", "Utilisé avant le premier plein",
+        listRow(vg, R.drawable.i_euro, AMBER, "Prix du litre par défaut", "Utilisé avant le premier plein",
                 Fmt.num(Prefs.defaultPrice(this), 3) + " €", null, TXT, new Click() {
                     public void run() {
                         numberSheet("Prix du litre par défaut", "Le prix de ton dernier plein le remplace automatiquement.", "€/L",
@@ -1146,7 +1475,7 @@ public class MainActivity extends BaseUi {
                                 });
                     }
                 });
-        listRow(vg, R.drawable.i_wrench, ACC2, "Vidange tous les", "Pour le rappel de vidange",
+        listRow(vg, R.drawable.i_wrench, VIOLET, "Vidange tous les", "Pour le rappel de vidange",
                 Fmt.kmInt(Prefs.vidangeInterval(this)), null, TXT, new Click() {
                     public void run() {
                         numberSheet("Intervalle de vidange", "Consulte le carnet d'entretien de ta voiture (souvent 15 000 à 25 000 km).", "km",
@@ -1159,11 +1488,10 @@ public class MainActivity extends BaseUi {
         // --- Données ---
         section(content, "Données");
         LinearLayout dg = group(content);
-        listRow(dg, R.drawable.i_download, ACC, "Exporter les trajets", "Fichier CSV (Excel, Sheets)", null, null, TXT,
+        listRow(dg, R.drawable.i_download, BLUE, "Exporter les trajets", "Fichier CSV (Excel, Sheets)", null, null, TXT,
                 new Click() { public void run() { exportTrips(); } });
-        listRow(dg, R.drawable.i_download, ACC, "Exporter les pleins", "Fichier CSV (Excel, Sheets)", null, null, TXT,
+        listRow(dg, R.drawable.i_download, BLUE, "Exporter les pleins", "Fichier CSV (Excel, Sheets)", null, null, TXT,
                 new Click() { public void run() { exportFuel(); } });
-
         listRow(dg, R.drawable.i_info, SUB, "Journal de détection", "Pourquoi un trajet a démarré ou non", null, null, TXT,
                 new Click() { public void run() { journalSheet(); } });
 
@@ -1182,28 +1510,48 @@ public class MainActivity extends BaseUi {
         content.addView(ver, fullWidth(0));
     }
 
+    View linkChip(int iconRes, String s, boolean connected) {
+        LinearLayout p = hbox();
+        int col = connected ? GOOD : 0xCCFFFFFF;
+        p.setBackground(surface(connected ? alpha(GOOD, 0x22) : 0x1FFFFFFF, 100).stroke(connected ? alpha(GOOD, 0x55) : alpha(WHITE, 0x1A)).noHighlight());
+        p.setPadding(dp(10), dp(6), dp(12), dp(6));
+        LinearLayout.LayoutParams ip = lp(dp(14), dp(14), 0);
+        ip.rightMargin = dp(6);
+        p.addView(icon(iconRes, col), ip);
+        p.addView(text(s + (connected ? " · connecté" : ""), 12, col, W_MED));
+        return p;
+    }
+
+    /** Ligne d'autorisation avec badge net : « ✓ OK » émeraude ou « Autoriser » ambre. */
     void permRow(LinearLayout g, int iconRes, String title, String sub, boolean ok, Click fix) {
-        listRow(g, iconRes, ok ? GOOD : WARN, title, sub, ok ? "OK" : "Autoriser", null, ok ? GOOD : WARN, ok ? null : fix);
+        if (g.getChildCount() > 0) divider(g);
+        LinearLayout row = hbox();
+        row.setPadding(dp(16), dp(13), dp(14), dp(13));
+        LinearLayout.LayoutParams bp = lp(dp(40), dp(40), 0);
+        bp.rightMargin = dp(14);
+        row.addView(bubble(iconRes, ok ? GOOD : AMBER, 40), bp);
+        LinearLayout mid = vbox();
+        mid.addView(text(title, 15, TXT, W_MED));
+        TextView s = text(sub, 13, SUB, W_REG);
+        s.setPadding(0, dp(3), 0, 0);
+        mid.addView(s);
+        row.addView(mid, lp(0, -2, 1f));
+        TextView badge = text(ok ? "✓  OK" : "Autoriser", 12, ok ? GOOD : 0xFF1A1206, W_BOLD);
+        badge.setBackground(ok ? surface(alpha(GOOD, 0x1F), 100).stroke(alpha(GOOD, 0x55)).noHighlight()
+                : surface(AMBER, 100).gradient(AMBER, 0xFFFBBF24).noHighlight());
+        badge.setPadding(dp(12), dp(6), dp(12), dp(6));
+        if (!ok) glow(badge, AMBER, 6);
+        LinearLayout.LayoutParams blp = lp(-2, -2, 0);
+        blp.leftMargin = dp(8);
+        row.addView(badge, blp);
+        if (!ok) {
+            row.setBackground(pressable(null, 0));
+            row.setOnClickListener(fix);
+        }
+        g.addView(row);
     }
 
     interface NumCb { void set(double v); }
-
-    void journalSheet() {
-        LinearLayout f = vbox();
-        String log = EventLog.get(this);
-        TextView t = text(log.isEmpty() ? "Rien pour l'instant." : log, 12, SUB, W_REG);
-        t.setTypeface(android.graphics.Typeface.MONOSPACE);
-        t.setLineSpacing(0, 1.3f);
-        t.setTextIsSelectable(true);
-        f.addView(t, fullWidth(8));
-        final String all = log;
-        f.addView(tonalButton("Partager le journal", R.drawable.i_download, ACC, new Click() {
-            public void run() { share("Journal Trajo", all); }
-        }), fullWidth(0));
-        sheet("Journal de détection", f, null, false, null, "Vider le journal", new Runnable() {
-            public void run() { EventLog.clear(MainActivity.this); }
-        });
-    }
 
     void numberSheet(String title, String help, String suffix, String current, final NumCb cb) {
         LinearLayout f = vbox();
@@ -1220,6 +1568,23 @@ public class MainActivity extends BaseUi {
         }, null, null);
     }
 
+    void journalSheet() {
+        LinearLayout f = vbox();
+        String log = EventLog.get(this);
+        TextView t = text(log.isEmpty() ? "Rien pour l'instant." : log, 12, SUB, W_REG);
+        t.setTypeface(android.graphics.Typeface.MONOSPACE);
+        t.setLineSpacing(0, 1.3f);
+        t.setTextIsSelectable(true);
+        f.addView(t, fullWidth(8));
+        final String all = log;
+        f.addView(tonalButton("Partager le journal", R.drawable.i_download, BLUE, new Click() {
+            public void run() { share("Journal Trajo", all); }
+        }), fullWidth(0));
+        sheet("Journal de détection", f, null, false, null, "Vider le journal", new Runnable() {
+            public void run() { EventLog.clear(MainActivity.this); }
+        });
+    }
+
     void wifiSheet() {
         LinearLayout f = vbox();
         f.addView(body("C'est le Wi-Fi créé par ton boîtier CarPlay / Android Auto sans fil (ex. : AutoBox-9678). Le téléphone s'y connecte quand la voiture démarre.", 14, SUB), fullWidth(16));
@@ -1227,7 +1592,7 @@ public class MainActivity extends BaseUi {
         final EditText e = field(f, "Nom du Wi-Fi", ssid == null ? "" : ssid, "AutoBox-9678", false, null);
         final String cur = WifiWatch.currentSsid(this);
         if (cur != null) {
-            f.addView(tonalButton("Utiliser « " + cur + " »", R.drawable.i_wifi, ACC, new Click() {
+            f.addView(tonalButton("Utiliser « " + cur + " »", R.drawable.i_wifi, BLUE, new Click() {
                 public void run() { e.setText(cur); }
             }), fullWidth(4));
         } else {
@@ -1266,7 +1631,7 @@ public class MainActivity extends BaseUi {
         LinearLayout f = vbox();
         f.addView(body("Choisis le Bluetooth de ta voiture (il doit déjà être appairé avec le téléphone).", 14, SUB), fullWidth(14));
         LinearLayout g = vbox();
-        g.setBackground(roundStroke(SURF2, 16, STROKE));
+        g.setBackground(surface(SURF2, 18));
         g.setClipToOutline(true);
         f.addView(g, fullWidth(4));
         final Dialog[] holder = new Dialog[1];
@@ -1280,7 +1645,7 @@ public class MainActivity extends BaseUi {
                 if ((pass == 0) != looksCar) continue;
                 count++;
                 boolean sel = d.getAddress().equalsIgnoreCase(current == null ? "" : current);
-                listRow(g, looksCar ? R.drawable.i_car : R.drawable.i_bluetooth, sel ? GOOD : ACC, n, sel ? "Sélectionné" : null,
+                listRow(g, looksCar ? R.drawable.i_car : R.drawable.i_bluetooth, sel ? GOOD : BLUE, n, sel ? "Sélectionné" : null,
                         null, null, TXT, new Click() {
                             public void run() {
                                 Prefs.get(MainActivity.this).edit().putString("car_addr", d.getAddress()).putString("car_name", n).apply();
@@ -1291,7 +1656,7 @@ public class MainActivity extends BaseUi {
                         });
             }
         }
-        if (count == 0) f.addView(text("Aucun appareil appairé. Connecte d'abord ton téléphone à ta voiture en Bluetooth.", 14, WARN, W_REG));
+        if (count == 0) f.addView(text("Aucun appareil appairé. Connecte d'abord ton téléphone à ta voiture en Bluetooth.", 14, AMBER, W_REG));
         holder[0] = sheet("Bluetooth de la voiture", f, null, false, null,
                 current == null ? null : "Ne plus utiliser le Bluetooth", new Runnable() {
                     public void run() {

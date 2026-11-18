@@ -25,6 +25,8 @@ final class Prefs {
     static double defaultConso(Context c) { return get(c).getFloat("conso_def", 5.5f); }
     /** Prix du litre utilisé tant qu'aucun plein n'est enregistré (€/L). */
     static double defaultPrice(Context c) { return get(c).getFloat("prix_def", 1.85f); }
+    /** Arrêt (contact mis) au-delà duquel le trajet est coupé en deux (minutes). */
+    static double pauseMinutes(Context c) { return get(c).getFloat("pause_min", 3f); }
     static double vidangeInterval(Context c) { return get(c).getFloat("vidange_km", 15000f); }
 
     /** Relevé de compteur saisi à la main (km) et sa date, -1 si jamais saisi. */

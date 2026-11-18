@@ -48,7 +48,7 @@ public class MainActivity extends BaseUi {
     static final int RQ_LOC = 1, RQ_BG = 2, RQ_BT = 3, RQ_NOTIF = 4, RQ_LOC_START = 5, RQ_BT_PICK = 6;
     static final int[] NAV_ICONS = {R.drawable.i_home, R.drawable.i_route, R.drawable.i_fuel, R.drawable.i_wrench, R.drawable.i_sliders};
     static final String[] NAV_LABELS = {"Accueil", "Trajets", "Pleins", "Entretien", "Réglages"};
-    static final String VERSION = "2.4";
+    static final String VERSION = "2.5";
 
     LinearLayout content;
     ScrollView scroll;
@@ -126,7 +126,7 @@ public class MainActivity extends BaseUi {
     void handleStartIntent(Intent i) {
         if (i == null || !i.getBooleanExtra(EXTRA_START, false)) return;
         i.removeExtra(EXTRA_START);
-        if (TripService.live == null && granted(Manifest.permission.ACCESS_FINE_LOCATION)) {
+        if (TripService.instance == null && granted(Manifest.permission.ACCESS_FINE_LOCATION)) {
             startForegroundService(new Intent(this, TripService.class).setAction(TripService.A_START).putExtra("src", "auto"));
             tab = 0;
             detailId = -1;
@@ -538,12 +538,15 @@ public class MainActivity extends BaseUi {
         bp.rightMargin = dp(14);
         c.addView(bubble(ssid != null ? R.drawable.i_wifi : R.drawable.i_bluetooth, configured ? ACC : WARN, 40), bp);
         LinearLayout col = vbox();
-        String title = !configured ? "Voiture non configurée"
+        boolean standby = TripService.instance != null && TripService.instance.standby;
+        String title = standby ? "À l'arrêt, contact mis"
+                : !configured ? "Voiture non configurée"
                 : !Prefs.autoEnabled(this) ? "Détection désactivée"
                 : onWifi ? "Connecté à la voiture" : "En attente de la voiture";
         col.addView(text(title, 15, TXT, W_MED));
         String target = ssid != null ? ssid : car;
-        TextView sub = text(configured ? "Démarrage auto · " + target : "Ajoute le Wi-Fi ou le Bluetooth de ta 208", 13, SUB, W_REG);
+        TextView sub = text(standby ? "Nouveau trajet dès que la voiture repart"
+                : configured ? "Démarrage auto · " + target : "Ajoute le Wi-Fi ou le Bluetooth de ta 208", 13, SUB, W_REG);
         sub.setPadding(0, dp(3), 0, 0);
         col.addView(sub);
         c.addView(col, lp(0, -2, 1f));
@@ -1111,6 +1114,15 @@ public class MainActivity extends BaseUi {
                                 Prefs.get(MainActivity.this).edit().putFloat("odo_ref", (float) v).putLong("odo_ref_date", System.currentTimeMillis()).apply();
                             }
                         });
+                    }
+                });
+        listRow(vg, R.drawable.i_clock, ACC, "Couper le trajet après un arrêt de", "Contact mis, voiture immobile",
+                Fmt.num(Prefs.pauseMinutes(this), 0) + " min", null, TXT, new Click() {
+                    public void run() {
+                        numberSheet("Arrêt qui coupe un trajet", "Si la voiture reste immobile, contact mis, plus longtemps que ça, le trajet est enregistré et un nouveau démarre quand elle repart. Les feux rouges et bouchons ne coupent pas le trajet en dessous de cette durée.", "min",
+                                Fmt.num(Prefs.pauseMinutes(MainActivity.this), 0), new NumCb() {
+                                    public void set(double v) { Prefs.get(MainActivity.this).edit().putFloat("pause_min", (float) Math.max(1, v)).apply(); }
+                                });
                     }
                 });
         listRow(vg, R.drawable.i_droplet, ACC, "Consommation par défaut", "Utilisée avant 2 pleins complets",

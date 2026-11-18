@@ -48,7 +48,7 @@ public class MainActivity extends BaseUi {
     static final int RQ_LOC = 1, RQ_BG = 2, RQ_BT = 3, RQ_NOTIF = 4, RQ_LOC_START = 5, RQ_BT_PICK = 6;
     static final int[] NAV_ICONS = {R.drawable.i_home, R.drawable.i_route, R.drawable.i_fuel, R.drawable.i_wrench, R.drawable.i_sliders};
     static final String[] NAV_LABELS = {"Accueil", "Trajets", "Pleins", "Entretien", "Réglages"};
-    static final String VERSION = "2.3";
+    static final String VERSION = "2.4";
 
     LinearLayout content;
     ScrollView scroll;
@@ -251,6 +251,7 @@ public class MainActivity extends BaseUi {
         if (s != null) heroLive(s); else heroMonth(now, mKm, monthTrips.size(), mTime, prevKm, prevStart);
 
         if (s == null) statusCard();
+        if (s == null) parkingCard();
 
         // --- Tuiles ---
         double real = Calc.realConso(fuels);
@@ -418,6 +419,111 @@ public class MainActivity extends BaseUi {
         h.addView(stop, stp);
         content.addView(h, fullWidth(12));
         refreshLive();
+    }
+
+    /** Où est garée la voiture : carte, adresse, depuis quand, boutons. */
+    void parkingCard() {
+        final double[] p = Parking.get(this);
+        section(content, "Ma voiture");
+        LinearLayout c = vbox();
+        c.setBackground(roundStroke(SURF, 20, STROKE));
+        c.setClipToOutline(true);
+        content.addView(c, fullWidth(12));
+        if (p == null) {
+            LinearLayout in = vbox();
+            in.setPadding(dp(18), dp(16), dp(18), dp(16));
+            in.addView(text("Position inconnue", 15, TXT, W_MED));
+            TextView t = body("Elle s'affichera ici à la fin du prochain trajet. Tu peux aussi l'indiquer maintenant si tu es à côté de ta 208.", 13, SUB);
+            t.setPadding(0, dp(4), 0, dp(12));
+            in.addView(t);
+            in.addView(tonalButton("Ma voiture est ici", R.drawable.i_pin, ACC, new Click() { public void run() { parkHere(); } }));
+            c.addView(in);
+            return;
+        }
+        Charts.Trace map = new Charts.Trace(this, p[0], p[1]);
+        map.setOnClickListener(new Click() {
+            public void run() {
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("geo:" + ll(p) + "?q=" + ll(p) + "(Ma 208)")));
+                } catch (Exception e) { toast("Impossible d'ouvrir la carte"); }
+            }
+        });
+        c.addView(map, new LinearLayout.LayoutParams(-1, dp(190)));
+
+        LinearLayout in = vbox();
+        in.setPadding(dp(18), dp(14), dp(18), dp(16));
+        in.addView(text("Garée depuis " + Parking.since((long) p[2]), 16, TXT, W_MED));
+        String cached = Parking.cachedAddress(this, p[0], p[1]);
+        final TextView addr = text(cached != null ? cached : "Recherche de l'adresse…", 13, SUB, W_REG);
+        addr.setPadding(0, dp(4), 0, dp(2));
+        in.addView(addr);
+        in.addView(text(Fmt.date((long) p[2]) + " · " + Fmt.time((long) p[2]), 12, MUTED, W_REG));
+        if (cached == null) {
+            new Thread(new Runnable() {
+                public void run() {
+                    final String a = Parking.lookupAddress(MainActivity.this, p[0], p[1]);
+                    runOnUiThread(new Runnable() {
+                        public void run() { addr.setText(a != null ? a : String.format(java.util.Locale.FRANCE, "%.5f, %.5f", p[0], p[1])); }
+                    });
+                }
+            }).start();
+        }
+        LinearLayout btns = new LinearLayout(this);
+        btns.addView(tonalButton("Y aller", R.drawable.i_route, ACC, new Click() {
+            public void run() {
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(
+                            "https://www.google.com/maps/dir/?api=1&travelmode=walking&destination=" + ll(p))));
+                } catch (Exception e) { toast("Impossible d'ouvrir Google Maps"); }
+            }
+        }), lp(0, -2, 1f));
+        space(btns, 10);
+        btns.addView(tonalButton("Garée ici", R.drawable.i_pin, SUB, new Click() { public void run() { parkHere(); } }), lp(0, -2, 1f));
+        LinearLayout.LayoutParams bp = fullWidth(0);
+        bp.topMargin = dp(14);
+        in.addView(btns, bp);
+        c.addView(in);
+    }
+
+    /** Enregistre la position actuelle du téléphone comme emplacement de la voiture. */
+    void parkHere() {
+        if (!granted(Manifest.permission.ACCESS_FINE_LOCATION)) {
+            requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, RQ_LOC);
+            return;
+        }
+        final android.location.LocationManager lm = getSystemService(android.location.LocationManager.class);
+        toast("Recherche de ta position…");
+        try {
+            if (Build.VERSION.SDK_INT >= 30) {
+                lm.getCurrentLocation(android.location.LocationManager.GPS_PROVIDER, null, getMainExecutor(),
+                        new java.util.function.Consumer<android.location.Location>() {
+                            public void accept(android.location.Location l) { parked(l != null ? l : lastKnown(lm)); }
+                        });
+            } else {
+                parked(lastKnown(lm));
+            }
+        } catch (SecurityException e) {
+            toast("Autorisation de localisation refusée");
+        }
+    }
+
+    android.location.Location lastKnown(android.location.LocationManager lm) {
+        try {
+            android.location.Location a = lm.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER);
+            android.location.Location b = lm.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER);
+            if (a == null) return b;
+            if (b == null) return a;
+            return a.getTime() >= b.getTime() ? a : b;
+        } catch (SecurityException e) {
+            return null;
+        }
+    }
+
+    void parked(android.location.Location l) {
+        if (l == null) { toast("Position introuvable : active la localisation et réessaie dehors"); return; }
+        Parking.setHere(this, l.getLatitude(), l.getLongitude());
+        toast("Position de la voiture enregistrée");
+        render();
     }
 
     /** Carte d'état de la détection, avec bouton « Démarrer ». */

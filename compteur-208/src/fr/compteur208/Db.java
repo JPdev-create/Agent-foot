@@ -99,6 +99,12 @@ final class Db extends SQLiteOpenHelper {
         } finally { c.close(); }
     }
 
+    /** Dernier trajet qui a un tracé GPS (pour savoir où la voiture est garée). */
+    Trip lastTripWithTrace() {
+        Cursor c = getReadableDatabase().rawQuery("SELECT _id FROM trips WHERE pts IS NOT NULL AND pts != '' ORDER BY end_ts DESC LIMIT 1", null);
+        try { return c.moveToNext() ? trip(c.getLong(0)) : null; } finally { c.close(); }
+    }
+
     /** Kilomètres parcourus (trajets enregistrés) entre deux dates. */
     double kmBetween(long from, long to) {
         Cursor c = getReadableDatabase().rawQuery("SELECT SUM(dist) FROM trips WHERE start>=? AND start<?", new String[]{"" + from, "" + to});

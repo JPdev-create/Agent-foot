@@ -197,6 +197,8 @@ final class Charts {
         static final android.util.LruCache<String, android.graphics.Bitmap> MEM = new android.util.LruCache<>(48);
 
         final List<double[]> pts;
+        /** Mode « voiture garée » : un seul point, carte centrée dessus. */
+        boolean spot;
         final java.util.Set<String> requested = new java.util.HashSet<>();
         final Paint glow = new Paint(Paint.ANTI_ALIAS_FLAG), line = new Paint(Paint.ANTI_ALIAS_FLAG),
                 dot = new Paint(Paint.ANTI_ALIAS_FLAG), grid = new Paint(), tilePaint = new Paint(Paint.FILTER_BITMAP_FLAG), txt, attr;
@@ -215,6 +217,13 @@ final class Charts {
             attr = textPaint(c, 9, 0x99FFFFFF, false);
             attr.setTextAlign(Paint.Align.RIGHT);
             tilePaint.setColorFilter(new android.graphics.ColorMatrixColorFilter(darkMap()));
+        }
+
+        /** Carte centrée sur la voiture garée. */
+        Trace(Context c, double lat, double lon) {
+            this(c, new java.util.ArrayList<double[]>());
+            pts.add(new double[]{lat, lon});
+            spot = true;
         }
 
         /**
@@ -262,7 +271,7 @@ final class Charts {
             float cell = dp(c, 28);
             for (float x = cell; x < w; x += cell) cv.drawLine(x, 0, x, h, grid);
             for (float y = cell; y < h; y += cell) cv.drawLine(0, y, w, y, grid);
-            if (pts.size() < 2) { cv.drawText("Pas de tracé GPS pour ce trajet", w / 2, h / 2, txt); return; }
+            if (pts.size() < (spot ? 1 : 2)) { cv.drawText("Pas de tracé GPS pour ce trajet", w / 2, h / 2, txt); return; }
 
             double minLat = 90, maxLat = -90, minLon = 180, maxLon = -180;
             for (double[] p : pts) {
@@ -271,8 +280,8 @@ final class Charts {
             }
             float tile = dp(c, 192);       // taille d'une tuile à l'écran (source 256 px)
             float pad = dp(c, 36);
-            int z = 17;
-            for (; z > 2; z--) {
+            int z = spot ? 16 : 17;
+            for (; z > 2 && !spot; z--) {
                 double world = tile * Math.pow(2, z);
                 double bw = wx(maxLon, world) - wx(minLon, world), bh = wy(minLat, world) - wy(maxLat, world);
                 if (bw <= w - 2 * pad && bh <= h - 2 * pad) break;
@@ -296,6 +305,20 @@ final class Charts {
                     float left = (float) (tx * tile - ox), top = (float) (ty * tile - oy);
                     cv.drawBitmap(b, null, new RectF(left, top, left + tile, top + tile), tilePaint);
                 }
+            }
+
+            if (spot) {
+                float px = (float) (wx(pts.get(0)[1], world) - ox), py = (float) (wy(pts.get(0)[0], world) - oy);
+                dot.setColor(BaseUi.alpha(BaseUi.ACC, 0x33)); cv.drawCircle(px, py, dp(c, 34), dot);
+                dot.setColor(BaseUi.WHITE); cv.drawCircle(px, py, dp(c, 19), dot);
+                dot.setColor(BaseUi.ACC); cv.drawCircle(px, py, dp(c, 16), dot);
+                android.graphics.drawable.Drawable car = c.getDrawable(R.drawable.i_car).mutate();
+                car.setTint(BaseUi.WHITE);
+                int r = (int) dp(c, 10);
+                car.setBounds((int) px - r, (int) py - r, (int) px + r, (int) py + r);
+                car.draw(cv);
+                if (anyTile) cv.drawText("© les contributeurs d'OpenStreetMap", w - dp(c, 8), h - dp(c, 7), attr);
+                return;
             }
 
             Path path = new Path();

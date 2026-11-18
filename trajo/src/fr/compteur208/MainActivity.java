@@ -48,7 +48,7 @@ public class MainActivity extends BaseUi {
     static final int RQ_LOC = 1, RQ_BG = 2, RQ_BT = 3, RQ_NOTIF = 4, RQ_LOC_START = 5, RQ_BT_PICK = 6;
     static final int[] NAV_ICONS = {R.drawable.i_home, R.drawable.i_route, R.drawable.i_fuel, R.drawable.i_wrench, R.drawable.i_sliders};
     static final String[] NAV_LABELS = {"Accueil", "Trajets", "Pleins", "Entretien", "Réglages"};
-    static final String VERSION = "3.0";
+    static final String VERSION = "3.1";
 
     LinearLayout content;
     ScrollView scroll;
@@ -539,13 +539,16 @@ public class MainActivity extends BaseUi {
         c.addView(bubble(ssid != null ? R.drawable.i_wifi : R.drawable.i_bluetooth, configured ? ACC : WARN, 40), bp);
         LinearLayout col = vbox();
         boolean standby = TripService.instance != null && TripService.instance.standby;
-        String title = standby ? "À l'arrêt, contact mis"
+        boolean parkedWatch = standby && TripService.instance.parked;
+        String title = parkedWatch ? "Voiture garée · reprise auto"
+                : standby ? "À l'arrêt, contact mis"
                 : !configured ? "Voiture non configurée"
                 : !Prefs.autoEnabled(this) ? "Détection désactivée"
                 : onWifi ? "Connecté à la voiture" : "En attente de la voiture";
         col.addView(text(title, 15, TXT, W_MED));
         String target = ssid != null ? ssid : car;
-        TextView sub = text(standby ? "Nouveau trajet dès que la voiture repart"
+        TextView sub = text(parkedWatch ? "Le trajet redémarre tout seul si tu repars dans les 15 min"
+                : standby ? "Nouveau trajet dès que la voiture repart"
                 : configured ? "Démarrage auto · " + target : "Ajoute le Wi-Fi ou le Bluetooth de ta voiture", 13, SUB, W_REG);
         sub.setPadding(0, dp(3), 0, 0);
         col.addView(sub);
@@ -1161,6 +1164,9 @@ public class MainActivity extends BaseUi {
         listRow(dg, R.drawable.i_download, ACC, "Exporter les pleins", "Fichier CSV (Excel, Sheets)", null, null, TXT,
                 new Click() { public void run() { exportFuel(); } });
 
+        listRow(dg, R.drawable.i_info, SUB, "Journal de détection", "Pourquoi un trajet a démarré ou non", null, null, TXT,
+                new Click() { public void run() { journalSheet(); } });
+
         // --- Conseils ---
         section(content, "Conseils Samsung");
         LinearLayout tc = card(content);
@@ -1181,6 +1187,23 @@ public class MainActivity extends BaseUi {
     }
 
     interface NumCb { void set(double v); }
+
+    void journalSheet() {
+        LinearLayout f = vbox();
+        String log = EventLog.get(this);
+        TextView t = text(log.isEmpty() ? "Rien pour l'instant." : log, 12, SUB, W_REG);
+        t.setTypeface(android.graphics.Typeface.MONOSPACE);
+        t.setLineSpacing(0, 1.3f);
+        t.setTextIsSelectable(true);
+        f.addView(t, fullWidth(8));
+        final String all = log;
+        f.addView(tonalButton("Partager le journal", R.drawable.i_download, ACC, new Click() {
+            public void run() { share("Journal Trajo", all); }
+        }), fullWidth(0));
+        sheet("Journal de détection", f, null, false, null, "Vider le journal", new Runnable() {
+            public void run() { EventLog.clear(MainActivity.this); }
+        });
+    }
 
     void numberSheet(String title, String help, String suffix, String current, final NumCb cb) {
         LinearLayout f = vbox();

@@ -61,9 +61,28 @@ final class WifiWatch {
 
     /** Réveillé par Android quand un Wi-Fi se connecte. */
     public static class Receiver extends BroadcastReceiver {
-        @Override public void onReceive(Context c, Intent i) {
+        @Override public void onReceive(final Context c, Intent i) {
             if (!Prefs.autoEnabled(c)) return;
-            if (onCarWifi(c)) BtReceiver.carConnected(c);
+            if (onCarWifi(c)) { EventLog.add(c, "Wi-Fi voiture connecté"); BtReceiver.carConnected(c); return; }
+            // Le nom du Wi-Fi n'est pas toujours lisible tout de suite : on réessaie quelques secondes.
+            final PendingResult pr = goAsync();
+            final android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
+            final int[] tries = {0};
+            h.postDelayed(new Runnable() {
+                public void run() {
+                    if (onCarWifi(c)) {
+                        EventLog.add(c, "Wi-Fi voiture connecté (après " + (tries[0] + 1) * 2 + " s)");
+                        BtReceiver.carConnected(c);
+                        pr.finish();
+                    } else if (++tries[0] < 4) {
+                        h.postDelayed(this, 2000);
+                    } else {
+                        String cur = currentSsid(c);
+                        EventLog.add(c, "Wi-Fi connecté mais pas celui de la voiture (" + (cur == null ? "nom illisible" : cur) + ")");
+                        pr.finish();
+                    }
+                }
+            }, 2000);
         }
     }
 

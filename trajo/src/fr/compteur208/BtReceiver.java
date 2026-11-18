@@ -21,6 +21,7 @@ public class BtReceiver extends BroadcastReceiver {
         if (d == null || !car.equalsIgnoreCase(d.getAddress())) return;
 
         String a = i.getAction();
+        EventLog.add(c, BluetoothDevice.ACTION_ACL_CONNECTED.equals(a) ? "Bluetooth voiture connecté" : "Bluetooth voiture déconnecté");
         if (BluetoothDevice.ACTION_ACL_CONNECTED.equals(a)) {
             // Sans « Toujours autoriser », Android refuse le GPS en arrière-plan :
             // on propose plutôt de démarrer d'un appui sur la notification.
@@ -35,13 +36,18 @@ public class BtReceiver extends BroadcastReceiver {
 
     /** La voiture vient d'être détectée (Bluetooth ou Wi-Fi) : on démarre le trajet. */
     static void carConnected(Context c) {
-        if (TripService.instance == null && !canTrackInBackground(c)) { Notifs.cannotStart(c); return; }
+        if (TripService.instance == null && !canTrackInBackground(c)) {
+            EventLog.add(c, "Démarrage impossible : localisation « Toujours autoriser » manquante");
+            Notifs.cannotStart(c);
+            return;
+        }
         try {
             if (TripService.instance != null)
                 c.startService(new Intent(c, TripService.class).setAction(TripService.A_BT_ON));
             else
                 c.startForegroundService(new Intent(c, TripService.class).setAction(TripService.A_START).putExtra("src", "auto"));
         } catch (Exception e) {
+            EventLog.add(c, "Démarrage refusé par Android (" + e.getClass().getSimpleName() + ")");
             Notifs.cannotStart(c);
         }
     }

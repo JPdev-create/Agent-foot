@@ -41,6 +41,8 @@ public class TripService extends Service implements LocationListener {
     static final long IDLE_STOP_MS = 20 * 60_000;
     /** À l'arrêt contact mis : on arrête de surveiller au bout de 3 h. */
     static final long STANDBY_MAX_MS = 3 * 3_600_000L;
+    /** Voiture coupée : on surveille encore ce temps-là pour reprendre tout seul au redémarrage. */
+    static final long PARKED_WATCH_MS = 15 * 60_000L;
     /** En dessous, le trajet n'est pas gardé (ex. : voiture démarrée puis coupée). */
     static final double MIN_DIST_M = 300;
     /** Distance depuis la place de stationnement qui signifie « la voiture repart ». */
@@ -54,6 +56,9 @@ public class TripService extends Service implements LocationListener {
     final Handler handler = new Handler(Looper.getMainLooper());
     LocationManager lm;
     boolean started, standby, btPendingStop;
+    /** En attente après coupure du contact (lien voiture perdu). */
+    boolean parked;
+    int fastFixes;
     String src = "manuel";
     long startTs, lastMoveTs, standbySince;
     double dist, vmax;
@@ -77,10 +82,11 @@ public class TripService extends Service implements LocationListener {
     final Runnable stopLater = new Runnable() {
         public void run() {
             if (!started || !btPendingStop) return;
-            if (standby) { stopAll(); return; }
+            if (standby) { goParked(); return; }
             if (System.currentTimeMillis() - lastMoveTs >= BT_GRACE_MS) {
                 endReason = linkReason;
-                finish();
+                enterStandby();
+                goParked();
             } else {
                 handler.postDelayed(this, 15_000);
             }
@@ -115,6 +121,15 @@ public class TripService extends Service implements LocationListener {
     private void carLinkBack() {
         btPendingStop = false;
         handler.removeCallbacks(stopLater);
+        if (standby && parked) newSegment(null, "voiture redémarrée");
+        updateNotif();
+    }
+
+    /** Voiture coupée : trajet enregistré, on surveille encore un moment le redémarrage. */
+    private void goParked() {
+        parked = true;
+        standbySince = System.currentTimeMillis();
+        EventLog.add(this, "Voiture garée, surveillance du redémarrage pendant 15 min");
         updateNotif();
     }
 
@@ -123,7 +138,11 @@ public class TripService extends Service implements LocationListener {
             if (!started) return;
             long now = System.currentTimeMillis();
             if (standby) {
-                if (now - standbySince > STANDBY_MAX_MS) { stopAll(); return; }
+                if (now - standbySince > (parked ? PARKED_WATCH_MS : STANDBY_MAX_MS)) {
+                    EventLog.add(TripService.this, "Fin de surveillance");
+                    stopAll();
+                    return;
+                }
             } else if ("auto".equals(src) && !btPendingStop && now - lastMoveTs > pauseMs(TripService.this)) {
                 // Arrêté contact mis : on clôt ce trajet et on attend que la voiture reparte.
                 endReason = "Arrêt de " + Fmt.dur(now - lastMoveTs) + " (contact mis)";
@@ -164,6 +183,8 @@ public class TripService extends Service implements LocationListener {
                 promote(); // déjà actif : on reste au premier plan
                 if (standby && A_START.equals(a) && "manuel".equals(i.getStringExtra("src"))) {
                     newSegment(null, "Démarré à la main");
+                } else if (standby && parked) {
+                    newSegment(null, "voiture redémarrée");
                 }
             }
         }
@@ -252,11 +273,14 @@ public class TripService extends Service implements LocationListener {
         checkpoint();
         handler.post(tick);
         if ("auto".equals(src)) watchCarWifi();
+        EventLog.add(this, "Trajet démarré (" + info + ")");
     }
 
     /** Remet les compteurs à zéro pour un nouveau trajet. */
     private void resetTrip(String inf) {
         standby = false;
+        parked = false;
+        fastFixes = 0;
         startTs = lastMoveTs = System.currentTimeMillis();
         dist = 0; vmax = 0; moving = 0; last = null; jumps = 0; curSpeed = 0; ticks = 0;
         endReason = "Terminé à la main";
@@ -275,6 +299,8 @@ public class TripService extends Service implements LocationListener {
         live = null;
         pts.clear();
         dist = 0;
+        fastFixes = 0;
+        EventLog.add(this, "Trajet terminé : " + endReason);
     }
 
     /** La voiture repart : nouveau trajet, qui commence à la place de stationnement. */
@@ -287,6 +313,7 @@ public class TripService extends Service implements LocationListener {
         }
         anchor = null;
         checkpoint();
+        EventLog.add(this, "Nouveau trajet : " + why);
         updateNotif();
         if (now != null) onLocationChanged(now);
     }
@@ -299,8 +326,15 @@ public class TripService extends Service implements LocationListener {
         if (standby) {
             if (anchor == null) { anchor = l; return; }
             boolean far = anchor.distanceTo(l) > Math.max(RESTART_DIST_M, l.hasAccuracy() ? l.getAccuracy() * 3 : 0);
-            boolean fast = l.hasSpeed() && l.getSpeed() > 5 && (!l.hasAccuracy() || l.getAccuracy() < 20);
-            if (far || fast) newSegment(l, "reprise après un arrêt");
+            boolean fast = l.hasSpeed() && l.getSpeed() > 6 && (!l.hasAccuracy() || l.getAccuracy() < 25);
+            fastFixes = fast ? fastFixes + 1 : 0;
+            if (parked) {
+                // Voiture coupée : on peut marcher avec le téléphone, donc seule une vraie vitesse
+                // de voiture (> 22 km/h sur 3 mesures de suite) relance un trajet.
+                if (fastFixes >= 3) newSegment(l, "la voiture roule de nouveau");
+            } else if (far || fastFixes >= 1) {
+                newSegment(l, "reprise après un arrêt");
+            }
             return;
         }
 
@@ -334,7 +368,10 @@ public class TripService extends Service implements LocationListener {
     private void updateNotif() {
         if (!started) return;
         String title, text;
-        if (standby) {
+        if (standby && parked) {
+            title = "🅿️ Voiture garée";
+            text = "Si tu repars dans les 15 min, le trajet démarrera tout seul";
+        } else if (standby) {
             title = "🅿️ À l'arrêt, contact mis";
             text = "Un nouveau trajet démarrera dès que la voiture repartira";
         } else {
@@ -368,7 +405,9 @@ public class TripService extends Service implements LocationListener {
 
     /** Arrête tout, sans enregistrer. */
     void stopAll() {
+        if (started) EventLog.add(this, "Surveillance arrêtée");
         started = false;
+        parked = false;
         standby = false;
         live = null;
         instance = null;

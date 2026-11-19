@@ -21,6 +21,8 @@ public class BtReceiver extends BroadcastReceiver {
         if (d == null || !car.equalsIgnoreCase(d.getAddress())) return;
 
         String a = i.getAction();
+        // Mémorise l'état du Bluetooth voiture (sert à savoir si on est bien dans la voiture).
+        Prefs.get(c).edit().putBoolean("bt_on", BluetoothDevice.ACTION_ACL_CONNECTED.equals(a)).apply();
         EventLog.add(c, BluetoothDevice.ACTION_ACL_CONNECTED.equals(a) ? "Bluetooth voiture connecté" : "Bluetooth voiture déconnecté");
         if (BluetoothDevice.ACTION_ACL_CONNECTED.equals(a)) {
             // Sans « Toujours autoriser », Android refuse le GPS en arrière-plan :

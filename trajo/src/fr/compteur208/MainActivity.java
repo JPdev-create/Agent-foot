@@ -49,7 +49,7 @@ public class MainActivity extends BaseUi {
     static final int RQ_LOC = 1, RQ_BG = 2, RQ_BT = 3, RQ_NOTIF = 4, RQ_LOC_START = 5, RQ_BT_PICK = 6;
     static final int[] NAV_ICONS = {R.drawable.i_home, R.drawable.i_route, R.drawable.i_chart, R.drawable.i_fuel, R.drawable.i_sliders};
     static final String[] NAV_LABELS = {"Accueil", "Trajets", "Stats", "Dépenses", "Réglages"};
-    static final String VERSION = "4.0";
+    static final String VERSION = "4.1";
 
     FrameLayout root;
     LinearLayout content;
@@ -240,7 +240,7 @@ public class MainActivity extends BaseUi {
         liveTime.setText(Fmt.dur(el));
         liveAvg.setText(el > 60000 ? Math.round(km / (el / 3600000.0)) + " km/h" : "—");
         liveGauge.setValue(s.curSpeed * 3.6f);
-        liveStatus.setVisibility(s.btPendingStop ? View.VISIBLE : View.GONE);
+        liveStatus.setVisibility(s.frozen ? View.VISIBLE : View.GONE);
     }
 
     // =====================================================================
@@ -430,7 +430,7 @@ public class MainActivity extends BaseUi {
         mp.topMargin = dp(8);
         h.addView(mid, mp);
 
-        liveStatus = text("Voiture déconnectée : le trajet se terminera une fois garé", 13, WHITE, W_MED);
+        liveStatus = text("Voiture déconnectée : km en pause, le trajet s'arrête si elle ne revient pas", 13, WHITE, W_MED);
         liveStatus.setBackground(surface(0x26FFFFFF, 12).noHighlight());
         liveStatus.setPadding(dp(12), dp(8), dp(12), dp(8));
         liveStatus.setVisibility(View.GONE);
@@ -476,7 +476,7 @@ public class MainActivity extends BaseUi {
         LinearLayout colv = vbox();
         colv.addView(text(title, 15, TXT, W_BOLD));
         String target = ssid != null ? ssid : car;
-        TextView sub = text(parkedWatch ? "Le trajet redémarre tout seul si tu repars dans les 15 min"
+        TextView sub = text(parkedWatch ? "Nouveau trajet si le téléphone se reconnecte à la voiture"
                 : standby ? "Nouveau trajet dès que la voiture repart"
                 : configured ? "Démarrage auto · " + target : "Ajoute le Wi-Fi ou le Bluetooth de ta voiture", 13, SUB, W_REG);
         sub.setPadding(0, dp(3), 0, 0);
@@ -1389,7 +1389,7 @@ public class MainActivity extends BaseUi {
                 new Click() { public void run() { wifiSheet(); } });
         listRow(g, R.drawable.i_bluetooth, BLUE, "Bluetooth de la voiture", car == null ? "Facultatif" : car, null, null, TXT,
                 new Click() { public void run() { pickCar(); } });
-        TextView note = body("Le trajet démarre dès que le téléphone se connecte au Wi-Fi ou au Bluetooth de la voiture, et se termine une fois garé.", 12, MUTED);
+        TextView note = body("Seuls les km parcourus connecté au Wi-Fi ou au Bluetooth de la voiture sont comptés. Si la connexion est perdue plus de 2 min, le trajet s'arrête.", 12, MUTED);
         note.setPadding(dp(4), 0, dp(4), dp(4));
         content.addView(note);
 

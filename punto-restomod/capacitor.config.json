@@ -1,0 +1,10 @@
+{
+  "appId": "com.jpdev.puntorestomod",
+  "appName": "Punto Restomod",
+  "webDir": "dist",
+  "backgroundColor": "#0a0b0e",
+  "android": {
+    "allowMixedContent": false,
+    "webContentsDebuggingEnabled": true
+  }
+}

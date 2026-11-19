@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0b0e" />
+  <title>Punto Restomod</title>
+  <link rel="stylesheet" href="./src/style.css" />
+</head>
+<body>
+  <div id="viewport"></div>
+
+  <!-- Écran de chargement -->
+  <div id="loader">
+    <div class="brand"><span class="scorpion">◆</span> PUNTO <b>RESTOMOD</b></div>
+    <div class="bar"><i id="loader-bar"></i></div>
+    <div id="loader-text">Préparation de l'atelier…</div>
+  </div>
+
+  <!-- Barre du haut -->
+  <header id="topbar">
+    <div class="title">
+      <small>ABARTH · PUNTO EVO</small>
+      <strong>Restomod</strong>
+    </div>
+    <div class="top-actions">
+      <button id="btn-daynight" class="icon-btn" aria-label="Jour / Nuit">
+        <svg class="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1"/></svg>
+        <svg class="moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z"/></svg>
+      </button>
+      <button id="btn-menu" class="icon-btn" aria-label="Menu">
+        <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Sélecteur de vue -->
+  <nav id="views">
+    <button data-view="exterior" class="active">Extérieur</button>
+    <button data-view="driver">Conducteur</button>
+    <button data-view="passenger">Passager</button>
+    <button data-view="detail" id="btn-detail">Détails</button>
+  </nav>
+  <div id="detail-menu" class="popover hidden">
+    <button data-detail="wheel">Jante & étrier</button>
+    <button data-detail="front">Optique Matrix LED</button>
+    <button data-detail="rear">Diffuseur carbone</button>
+    <button data-detail="spoiler">Becquet</button>
+  </div>
+
+  <!-- Atelier -->
+  <section id="workshop">
+    <div id="panel"></div>
+    <div id="tabs">
+      <button data-tab="paint" class="active"><svg viewBox="0 0 24 24"><path d="M4 15c0-4 4-11 8-11s8 7 8 11a8 8 0 0 1-16 0z"/></svg><span>Peinture</span></button>
+      <button data-tab="carbon"><svg viewBox="0 0 24 24"><path d="M3 9l9-5 9 5-9 5-9-5zM3 15l9 5 9-5"/></svg><span>Carbone</span></button>
+      <button data-tab="wheels"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/><path d="M12 3v6.5M12 14.5V21M3.5 9l6.2 2M14.3 13l6.2 2M5.5 19l4.5-5.2M14 10.2L18.5 5"/></svg><span>Jantes</span></button>
+      <button data-tab="chassis"><svg viewBox="0 0 24 24"><path d="M4 18h16M7 18v-4l2-5h6l2 5v4M9 9V6M15 9V6"/></svg><span>Châssis</span></button>
+      <button data-tab="lights"><svg viewBox="0 0 24 24"><path d="M3 12c3-5 7-6 10-6v12c-3 0-7-1-10-6zM16 8h5M16 12h5M16 16h5"/></svg><span>Éclairage</span></button>
+      <button data-tab="interior"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3.5 13.5h5l2 3.5h3l2-3.5h5M12 17v4"/></svg><span>Intérieur</span></button>
+    </div>
+  </section>
+
+  <!-- Menu latéral -->
+  <aside id="drawer" class="hidden">
+    <div class="drawer-card">
+      <h3>Modèle 3D</h3>
+      <p id="model-status" class="muted">Voiture de démonstration</p>
+      <label class="btn primary file-btn">
+        Charger un fichier .glb
+        <input id="file-input" type="file" />
+      </label>
+      <div class="row">
+        <button id="btn-rotate-model" class="btn">Pivoter 90°</button>
+        <button id="btn-reset-model" class="btn">Revenir à la démo</button>
+      </div>
+      <details id="model-report"><summary>Rapport de nomenclature</summary><div id="report-body"></div></details>
+
+      <h3>Mes versions</h3>
+      <div class="row">
+        <input id="version-name" placeholder="Nom (ex. Version circuit)" />
+        <button id="btn-save-version" class="btn primary">Sauver</button>
+      </div>
+      <ul id="versions"></ul>
+
+      <h3>Affichage</h3>
+      <label class="switch"><input type="checkbox" id="opt-autorotate" /><span>Rotation automatique</span></label>
+      <label class="switch"><input type="checkbox" id="opt-quality" /><span>Qualité maximale</span></label>
+      <button id="btn-close-drawer" class="btn">Fermer</button>
+    </div>
+  </aside>
+
+  <div id="toast" class="hidden"></div>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

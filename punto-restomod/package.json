@@ -1,0 +1,22 @@
+{
+  "name": "punto-restomod",
+  "version": "0.1.0",
+  "description": "Configurateur 3D restomod Fiat Punto Abarth (Android)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "android:sync": "npm run build && npx cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/core": "^8.6.2",
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/cli": "^8.6.2",
+    "vite": "^8.3.8"
+  },
+  "private": true,
+  "type": "module"
+}

@@ -1,0 +1,82 @@
+name: Punto Restomod APK
+
+on:
+  push:
+    paths:
+      - 'punto-restomod/**'
+      - '.github/workflows/punto-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: punto-restomod
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: punto-restomod/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      # Garde la même clé de signature d'un build à l'autre :
+      # les nouvelles versions s'installent par-dessus l'ancienne sur le téléphone.
+      - name: Restaurer la clé de signature debug
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: punto-debug-keystore-v1
+
+      - name: Créer la clé de signature si absente
+        run: |
+          mkdir -p ~/.android
+          if [ ! -f ~/.android/debug.keystore ]; then
+            keytool -genkeypair -v -keystore ~/.android/debug.keystore -storepass android \
+              -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+      - name: Installer et construire l'app web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Générer le projet Android
+        run: |
+          npx cap add android
+          npx cap sync android
+
+      - name: Compiler l'APK
+        working-directory: punto-restomod/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk ../PuntoRestomod.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PuntoRestomod-apk
+          path: punto-restomod/PuntoRestomod.apk
+
+      - name: Publier dans les Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: punto-restomod-build-${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          name: Punto Restomod — build ${{ github.run_number }}
+          body: |
+            APK du configurateur Punto Restomod (branche `${{ github.ref_name }}`).
+            Sur le téléphone : télécharge **PuntoRestomod.apk**, ouvre-le et autorise l'installation.
+          files: punto-restomod/PuntoRestomod.apk
+          make_latest: true

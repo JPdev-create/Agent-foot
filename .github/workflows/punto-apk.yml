@@ -57,11 +57,26 @@ jobs:
           npx cap add android
           npx cap sync android
 
+      # Maven Central limite parfois les runners GitHub (HTTP 429) : on ajoute le miroir Google en secours
+      - name: Configurer un miroir Maven
+        run: |
+          mkdir -p ~/.gradle/init.d
+          cat > ~/.gradle/init.d/mirror.gradle <<'GRADLE'
+          def mirror = 'https://maven-central.storage-download.googleapis.com/maven2/'
+          beforeSettings { settings ->
+            settings.pluginManagement.repositories { maven { url mirror } }
+          }
+          allprojects {
+            buildscript { repositories { maven { url mirror } } }
+            repositories { maven { url mirror } }
+          }
+          GRADLE
+
       - name: Compiler l'APK
         working-directory: punto-restomod/android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon || (sleep 20 && ./gradlew assembleDebug --no-daemon --refresh-dependencies)
           cp app/build/outputs/apk/debug/app-debug.apk ../PuntoRestomod.apk
 
       - uses: actions/upload-artifact@v4

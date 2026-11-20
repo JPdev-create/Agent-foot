@@ -68,8 +68,14 @@ public class TripService extends Service implements LocationListener {
     boolean frozen;
     long lostTs;
     int misses;
-    /** Lien perdu + plus de vitesse de voiture pendant ce délai => fin du trajet. */
+    /** Lien perdu + voiture réellement arrêtée (GPS) pendant ce délai => fin du trajet. */
     static final long STOP_WHILE_LOST_MS = 90_000L;
+    /** Le lien doit manquer au moins ce temps (l'AutoBox se déconnecte souvent quelques secondes). */
+    static final long LINK_ABSENT_MS = 2 * 60_000L;
+    /** Recollage : un nouveau trajet qui repart du même endroit peu après est fusionné avec le précédent. */
+    static final long MERGE_GAP_MS = 5 * 60_000L;
+    /** Depuis quand le GPS mesure une vitesse < 7 km/h (0 = le véhicule roule) ; dernière mesure GPS. */
+    long slowSince, lastFixTs;
     /** Dernier instant où le véhicule roulait (> 15 km/h) et état du trajet à ce moment. */
     long lastDriveTs;
     double snapDist, snapVmax;
@@ -140,7 +146,7 @@ public class TripService extends Service implements LocationListener {
         wifiCb = WifiWatch.carCallback(this, new Runnable() {
             public void run() {
                 if (!started) return;
-                if (WifiWatch.onCarWifi(TripService.this)) carLinkBack();
+                if (linkPresent()) carLinkBack();
                 else carLinkLost("Wi-Fi de la voiture perdu");
             }
         });
@@ -209,7 +215,9 @@ public class TripService extends Service implements LocationListener {
                     else if (sawAbsent) { newSegment(null, "voiture reconnectée"); handler.postDelayed(this, 5000); return; }
                 }
                 ticks++;
-            } else if (frozen && now - lastDriveTs > STOP_WHILE_LOST_MS) {
+            } else if (frozen && now - lostTs >= LINK_ABSENT_MS
+                    && ((slowSince > 0 && now - slowSince >= STOP_WHILE_LOST_MS)
+                        || (now - lastFixTs >= 5 * 60_000L && now - lastMoveTs >= 5 * 60_000L))) {
                 // Lien perdu et la voiture ne roule plus : fin du trajet au dernier instant où elle roulait.
                 rollback();
                 endReason = linkReason;
@@ -255,7 +263,7 @@ public class TripService extends Service implements LocationListener {
             endReason = "Terminé à la main";
             if (started) finish(); else stopSelf();
         } else if (A_BT_OFF.equals(a)) {
-            if (started) carLinkLost("Bluetooth de la voiture déconnecté"); else stopSelf();
+            if (started) { if (!linkPresent()) carLinkLost("Bluetooth de la voiture déconnecté"); } else stopSelf();
         } else {
             btPendingStop = false;
             handler.removeCallbacks(stopLater);
@@ -374,6 +382,7 @@ public class TripService extends Service implements LocationListener {
         misses = 0;
         btPendingStop = false;
         lastDriveTs = System.currentTimeMillis();
+        slowSince = 0; lastFixTs = 0;
         snapDist = 0; snapVmax = 0; snapMoving = 0; snapPts = 0; snapAcc = 0; snapBrk = 0; snapFast = 0;
         fastFixes = 0;
         startTs = lastMoveTs = System.currentTimeMillis();
@@ -433,6 +442,11 @@ public class TripService extends Service implements LocationListener {
         }
 
         trackDriving(l);
+        lastFixTs = System.currentTimeMillis();
+        if (l.hasSpeed()) {
+            if (l.getSpeed() < 2f) { if (slowSince == 0) slowSince = lastFixTs; }
+            else if (l.getSpeed() > 3f) slowSince = 0;
+        }
         if (last == null) { last = l; addPoint(l); return; }
         float d = last.distanceTo(l);
         double thr = Math.max(10, l.hasAccuracy() ? l.getAccuracy() : 15); // filtre le « bruit » GPS à l'arrêt
@@ -451,6 +465,7 @@ public class TripService extends Service implements LocationListener {
         last = l;
         lastMoveTs = System.currentTimeMillis();
         addPoint(l);
+        if (!l.hasSpeed() && v > 3) slowSince = 0;
         if ((l.hasSpeed() ? l.getSpeed() : v) >= 4.2) snapshot();   // > 15 km/h : le véhicule roule
     }
 
@@ -510,16 +525,50 @@ public class TripService extends Service implements LocationListener {
 
     /** Enregistre le trajet courant s'il est assez long. */
     private void saveTrip(long end) {
-        if (dist < MIN_DIST_M) return;
         Db.Trip t = new Db.Trip();
         t.start = startTs; t.end = Math.max(end, startTs); t.dist = dist; t.moving = moving; t.vmax = vmax;
         t.src = src; t.pts = encode(pts); t.info = info + " → " + endReason;
         t.acc = accN; t.brk = brkN; t.fast = fastMs;
-        Db.get(this).addTrip(t);
+        Db db = Db.get(this);
+        Db.Trip prev = db.lastTrip();
+        if (prev != null && mergeable(prev, t)) {
+            List<double[]> a = decode(prev.pts), b = decode(t.pts);
+            double gap = (!a.isEmpty() && !b.isEmpty())
+                    ? Stats.dist(a.get(a.size() - 1)[0], a.get(a.size() - 1)[1], b.get(0)[0], b.get(0)[1]) : 0;
+            a.addAll(b);
+            prev.end = t.end;
+            prev.dist += t.dist + gap;
+            prev.moving += t.moving;
+            prev.vmax = Math.max(prev.vmax, t.vmax);
+            if (prev.acc >= 0) { prev.acc += t.acc; prev.brk += t.brk; prev.fast += t.fast; }
+            prev.pts = encode(a);
+            String pi = prev.info == null ? "" : prev.info;
+            prev.info = (pi.contains(" → ") ? pi.substring(0, pi.lastIndexOf(" → ")) : pi) + " · recollé → " + endReason;
+            db.updateTrip(prev);
+            EventLog.add(this, "Trajet recollé au précédent (" + Fmt.km(prev.km()) + " au total)");
+            t = prev;
+        } else {
+            if (dist < MIN_DIST_M) return;
+            db.addTrip(t);
+        }
         List<Db.Fuel> fuels = Db.get(this).fuels();
         double cost = t.km() * Calc.costPerKm(this, fuels);
         Notifs.info(this, "Trajet enregistré ✅",
                 Fmt.km(t.km()) + " en " + Fmt.dur(t.duration()) + " · environ " + Fmt.eur(cost) + " de carburant");
+    }
+
+    /** Même voiture, repart du même endroit peu après la fin du trajet précédent : c'est la suite. */
+    private boolean mergeable(Db.Trip prev, Db.Trip t) {
+        if (!"auto".equals(prev.src) || !"auto".equals(t.src)) return false;
+        // Seulement après une coupure de connexion (pas après un vrai arrêt « contact mis », voulu séparé).
+        String pi = prev.info == null ? "" : prev.info;
+        String endPart = pi.contains(" → ") ? pi.substring(pi.lastIndexOf(" → ")) : "";
+        if (!(endPart.contains("déconnect") || endPart.contains("perdu"))) return false;
+        if (t.start - prev.end > MERGE_GAP_MS || t.start < prev.end - 60_000) return false;
+        List<double[]> a = decode(prev.pts), b = decode(t.pts);
+        if (a.isEmpty() || b.isEmpty()) return false;
+        double[] e = a.get(a.size() - 1), s0 = b.get(0);
+        return Stats.dist(e[0], e[1], s0[0], s0[1]) < 1500;
     }
 
     /** Termine le trajet (s'il y en a un) et arrête le service. */

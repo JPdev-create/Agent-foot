@@ -77,6 +77,20 @@ final class Db extends SQLiteOpenHelper {
         return getWritableDatabase().insert("trips", null, v);
     }
 
+    void updateTrip(Trip t) {
+        ContentValues v = new ContentValues();
+        v.put("start", t.start); v.put("end_ts", t.end); v.put("dist", t.dist);
+        v.put("moving", t.moving); v.put("vmax", t.vmax); v.put("pts", t.pts); v.put("src", t.src); v.put("info", t.info);
+        v.put("acc", t.acc); v.put("brk", t.brk); v.put("fast", t.fast);
+        getWritableDatabase().update("trips", v, "_id=?", new String[]{"" + t.id});
+    }
+
+    /** Le trajet enregistré le plus récent. */
+    Trip lastTrip() {
+        Cursor c = getReadableDatabase().rawQuery("SELECT _id FROM trips ORDER BY end_ts DESC LIMIT 1", null);
+        try { return c.moveToNext() ? trip(c.getLong(0)) : null; } finally { c.close(); }
+    }
+
     void deleteTrip(long id) { getWritableDatabase().delete("trips", "_id=?", new String[]{"" + id}); }
 
     List<Trip> trips(long from, long to, boolean withPts) {

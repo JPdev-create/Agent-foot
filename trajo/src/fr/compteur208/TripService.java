@@ -233,6 +233,9 @@ public class TripService extends Service implements LocationListener {
                 else if (!frozen && ++misses >= 3) carLinkLost("Voiture déconnectée");
             }
             updateNotif();
+            // Partage avec les groupes : position toutes les 15 s pendant le trajet.
+            if (!standby && ticks % 3 == 0 && last != null)
+                Cloud.pushLive(TripService.this, last.getLatitude(), last.getLongitude(), curSpeed * 3.6f, startTs, dist / 1000, pts);
             if (!standby && ++ticks % 4 == 0) checkpoint();
             handler.postDelayed(this, 5000);
         }
@@ -385,6 +388,7 @@ public class TripService extends Service implements LocationListener {
     /** La voiture est arrêtée contact mis : on enregistre le trajet et on attend qu'elle reparte. */
     private void enterStandby() {
         saveTrip(Math.max(startTs, lastMoveTs));
+        sharePark();
         clearCheckpoint();
         standby = true;
         standbySince = System.currentTimeMillis();
@@ -489,12 +493,19 @@ public class TripService extends Service implements LocationListener {
             text = "Un nouveau trajet démarrera dès que la voiture repartira";
         } else {
             text = Fmt.km(dist / 1000) + " · " + Fmt.dur(System.currentTimeMillis() - startTs)
-                    + " · " + Math.round(curSpeed * 3.6) + " km/h";
+                    + " · " + Math.round(curSpeed * 3.6) + " km/h"
+                    + (Cloud.sharingActive(this) ? " · 📡 position partagée" : "");
             title = frozen ? "🚗 Trajet en cours (voiture non détectée)" : "🚗 Trajet en cours";
         }
         try {
             getSystemService(NotificationManager.class).notify(Notifs.ID_TRIP, Notifs.trip(this, title, text));
         } catch (Exception ignored) {}
+    }
+
+    /** Indique aux groupes où la voiture est garée (dernier point du trajet). */
+    private void sharePark() {
+        double[] p = !pts.isEmpty() ? pts.get(pts.size() - 1) : (last != null ? new double[]{last.getLatitude(), last.getLongitude()} : null);
+        if (p != null) Cloud.pushParked(this, p[0], p[1], System.currentTimeMillis());
     }
 
     /** Enregistre le trajet courant s'il est assez long. */
@@ -513,7 +524,7 @@ public class TripService extends Service implements LocationListener {
 
     /** Termine le trajet (s'il y en a un) et arrête le service. */
     void finish() {
-        if (started && !standby) saveTrip(Math.min(System.currentTimeMillis(), lastMoveTs + 60_000));
+        if (started && !standby) { saveTrip(Math.min(System.currentTimeMillis(), lastMoveTs + 60_000)); sharePark(); }
         stopAll();
     }
 

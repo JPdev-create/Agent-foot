@@ -47,9 +47,10 @@ public class MainActivity extends BaseUi {
     static final String[] MAINT_TYPES = {"Vidange", "Révision", "Pneus", "Freins", "Contrôle technique",
             "Batterie", "Assurance", "Péage / parking", "Lavage", "Réparation", "Autre"};
     static final int RQ_LOC = 1, RQ_BG = 2, RQ_BT = 3, RQ_NOTIF = 4, RQ_LOC_START = 5, RQ_BT_PICK = 6;
-    static final int[] NAV_ICONS = {R.drawable.i_home, R.drawable.i_route, R.drawable.i_chart, R.drawable.i_fuel, R.drawable.i_sliders};
-    static final String[] NAV_LABELS = {"Accueil", "Trajets", "Stats", "Dépenses", "Réglages"};
-    static final String VERSION = "4.2";
+    static final int[] NAV_ICONS = {R.drawable.i_home, R.drawable.i_route, R.drawable.i_chart, R.drawable.i_fuel, R.drawable.i_users};
+    static final String[] NAV_LABELS = {"Accueil", "Trajets", "Stats", "Dépenses", "Groupes"};
+    static final int TAB_GROUPS = 4, TAB_SETTINGS = 5;
+    static final String VERSION = "5.0";
 
     FrameLayout root;
     LinearLayout content;
@@ -65,6 +66,21 @@ public class MainActivity extends BaseUi {
     TextView liveDist, liveTime, liveAvg, liveStatus;
     Charts.Gauge liveGauge;
     boolean shownLive;
+    // ---- Groupes ----
+    org.json.JSONArray groupsCache;
+    org.json.JSONObject groupCache;
+    String openGroup, groupError;
+    long groupLoadedAt;
+    String[] pendingInvite;
+    final Runnable groupPoll = new Runnable() {
+        public void run() {
+            if (tab == TAB_GROUPS && Cloud.hasProfile(MainActivity.this)) {
+                if (openGroup != null) loadGroup(); else loadGroups();
+            }
+            handler.postDelayed(this, 10_000);
+        }
+    };
+
     /** Lieux dont on a déjà demandé l'adresse pendant cette session. */
     final Set<String> geocoding = new HashSet<>();
 
@@ -146,6 +162,14 @@ public class MainActivity extends BaseUi {
     void handleStartIntent(Intent i) {
         if (i == null) return;
         if (i.hasExtra(EXTRA_TAB)) { tab = i.getIntExtra(EXTRA_TAB, 0); detailId = -1; i.removeExtra(EXTRA_TAB); }
+        if (i.getData() != null && "trajo".equals(i.getData().getScheme())) {
+            pendingInvite = Cloud.parseInvite(i.getData().toString());
+            i.setData(null);
+            tab = TAB_GROUPS;
+            handler.post(new Runnable() {
+                public void run() { if (pendingInvite != null) { String[] p = pendingInvite; pendingInvite = null; handleInvite(p); } }
+            });
+        }
         if (!i.getBooleanExtra(EXTRA_START, false)) return;
         i.removeExtra(EXTRA_START);
         if (TripService.instance == null && granted(Manifest.permission.ACCESS_FINE_LOCATION)) {
@@ -169,15 +193,18 @@ public class MainActivity extends BaseUi {
         Report.sendIfDue(this);
         render();
         handler.post(refresher);
+        handler.post(groupPoll);
     }
 
     @Override protected void onPause() {
         super.onPause();
         handler.removeCallbacks(refresher);
+        handler.removeCallbacks(groupPoll);
     }
 
     @Override public void onBackPressed() {
         if (tab == 1 && detailId >= 0) { detailId = -1; transition(); }
+        else if (tab == TAB_GROUPS && openGroup != null) { closeGroup(); }
         else if (tab != 0) show(0);
         else super.onBackPressed();
     }
@@ -194,9 +221,10 @@ public class MainActivity extends BaseUi {
         boolean changed = t != tab;
         tab = t;
         detailId = -1;
+        if (t == TAB_GROUPS && changed) { openGroup = null; groupCache = null; loadGroupsIfReady(); }
         transition();
         scroll.scrollTo(0, 0);
-        if (changed) {
+        if (changed && t < navPill.length) {
             navPill[t].setScaleX(0.6f);
             navPill[t].setAlpha(0f);
             navPill[t].animate().scaleX(1f).alpha(1f).setDuration(220).start();
@@ -226,6 +254,7 @@ public class MainActivity extends BaseUi {
             case 1: if (detailId >= 0) renderTripDetail(detailId); else renderTrips(); break;
             case 2: renderStats(); break;
             case 3: renderExpenses(); break;
+            case TAB_GROUPS: renderGroups(); break;
             default: renderSettings(); break;
         }
     }
@@ -255,7 +284,7 @@ public class MainActivity extends BaseUi {
         TripService s = TripService.live;
         shownLive = s != null;
 
-        headerLogo(content, "Trajo", Fmt.date(now), null);
+        headerLogo(content, "Trajo", Fmt.date(now), gearButton());
 
         List<String> issues = setupIssues();
         if (!issues.isEmpty()) {
@@ -272,7 +301,7 @@ public class MainActivity extends BaseUi {
             col.addView(sub);
             banner.addView(col, lp(0, -2, 1f));
             banner.addView(icon(R.drawable.i_chevron, AMBER), lp(dp(18), dp(18), 0));
-            banner.setOnClickListener(new Click() { public void run() { show(4); } });
+            banner.setOnClickListener(new Click() { public void run() { show(TAB_SETTINGS); } });
             pressScale(banner);
             content.addView(banner, fullWidth(12));
         }
@@ -1335,7 +1364,15 @@ public class MainActivity extends BaseUi {
     // =====================================================================
 
     void renderSettings() {
-        header(content, "Réglages", "Détection, véhicule et autorisations", null);
+        LinearLayout back = hbox();
+        back.addView(icon(R.drawable.i_back, BLUE), lp(dp(20), dp(20), 0));
+        TextView bt = text("Accueil", 15, BLUE, W_MED);
+        bt.setPadding(dp(8), 0, 0, 0);
+        back.addView(bt);
+        back.setPadding(0, 0, 0, dp(16));
+        back.setOnClickListener(new Click() { public void run() { show(0); } });
+        content.addView(back, new LinearLayout.LayoutParams(-2, -2));
+        header(content, "Réglages", "Détection, véhicule, groupes et autorisations", null);
 
         // --- Carte récapitulative du véhicule ---
         String ssid = Prefs.carSsid(this);
@@ -1375,6 +1412,23 @@ public class MainActivity extends BaseUi {
         chp.topMargin = dp(14);
         vc.addView(chs, chp);
         content.addView(vc, fullWidth(12));
+
+        // --- Compte & groupes ---
+        section(content, "Compte & groupes");
+        LinearLayout ag = group(content);
+        if (Cloud.configured(this)) {
+            listRow(ag, R.drawable.i_users, VIOLET, "Mon pseudo", Cloud.name(this) == null ? "À choisir" : Cloud.name(this), null, null, TXT,
+                    new Click() { public void run() { profileSheet(); } });
+            Switch sh = switchRow(ag, R.drawable.i_share, GOOD, "Partager ma position", "Avec mes groupes, seulement pendant les trajets + voiture garée", Cloud.shareEnabled(this));
+            sh.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+                public void onCheckedChanged(CompoundButton b, boolean on) { Cloud.setShareEnabled(MainActivity.this, on); }
+            });
+            listRow(ag, R.drawable.i_sliders, SUB, "Serveur", Uri.parse(Cloud.url(this)).getHost(), null, null, TXT,
+                    new Click() { public void run() { serverSheet(); } });
+        } else {
+            listRow(ag, R.drawable.i_users, VIOLET, "Groupes non activés", "Rejoins une invitation ou connecte ton serveur", null, null, TXT,
+                    new Click() { public void run() { show(TAB_GROUPS); } });
+        }
 
         // --- Détection ---
         section(content, "Détection automatique");
@@ -1717,5 +1771,685 @@ public class MainActivity extends BaseUi {
     boolean batteryOk() {
         PowerManager pm = getSystemService(PowerManager.class);
         return pm != null && pm.isIgnoringBatteryOptimizations(getPackageName());
+    }
+
+    // =====================================================================
+    // Groupes : partage de trajets en direct
+    // =====================================================================
+
+    View gearButton() {
+        FrameLayout g = new FrameLayout(this);
+        g.setBackground(pressable(surface(SURF, 100), 100));
+        g.addView(icon(R.drawable.i_sliders, SUB), new FrameLayout.LayoutParams(dp(20), dp(20), Gravity.CENTER));
+        g.setContentDescription("Réglages");
+        g.setOnClickListener(new Click() { public void run() { show(TAB_SETTINGS); } });
+        pressScale(g);
+        g.setLayoutParams(new LinearLayout.LayoutParams(dp(46), dp(46)));
+        return g;
+    }
+
+    /** Petit rond coloré avec l'initiale (pulsant si la personne roule). */
+    View avatar(String name, int colorIdx, int sizeDp, boolean live) {
+        FrameLayout f = new FrameLayout(this);
+        int col = Cloud.COLORS[Math.abs(colorIdx) % Cloud.COLORS.length];
+        if (live) f.addView(pulseDot(col, sizeDp), new FrameLayout.LayoutParams(dp(sizeDp), dp(sizeDp), Gravity.CENTER));
+        TextView t = text(name == null || name.isEmpty() ? "?" : name.substring(0, 1).toUpperCase(Fmt.FR), sizeDp * 0.42f, WHITE, W_BOLD);
+        t.setGravity(Gravity.CENTER);
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{col, alpha(col, 0xAA)});
+        g.setShape(GradientDrawable.OVAL);
+        g.setStroke(Math.max(1, dp(1.5f)), alpha(WHITE, 0x33));
+        t.setBackground(g);
+        int s = live ? Math.round(sizeDp * 0.82f) : sizeDp;
+        f.addView(t, new FrameLayout.LayoutParams(dp(s), dp(s), Gravity.CENTER));
+        return f;
+    }
+
+    static String ago(long ms) {
+        long s = Math.max(0, ms / 1000);
+        if (s < 60) return "à l'instant";
+        if (s < 3600) return "il y a " + (s / 60) + " min";
+        if (s < 86400) return "il y a " + (s / 3600) + " h";
+        return "il y a " + (s / 86400) + " j";
+    }
+
+    void loadGroupsIfReady() { if (Cloud.hasProfile(this)) loadGroups(); }
+
+    void loadGroups() {
+        Cloud.IO.execute(new Runnable() {
+            public void run() {
+                try {
+                    final org.json.JSONArray a = Cloud.myGroups(MainActivity.this);
+                    runOnUiThread(new Runnable() { public void run() { groupsCache = a; groupError = null; if (tab == TAB_GROUPS && openGroup == null) render(); } });
+                } catch (final Exception e) {
+                    runOnUiThread(new Runnable() { public void run() { groupError = e.getMessage(); if (tab == TAB_GROUPS && openGroup == null && groupsCache == null) render(); } });
+                }
+            }
+        });
+    }
+
+    void loadGroup() {
+        final String id = openGroup;
+        if (id == null) return;
+        Cloud.IO.execute(new Runnable() {
+            public void run() {
+                try {
+                    final org.json.JSONObject o = Cloud.groupState(MainActivity.this, id);
+                    runOnUiThread(new Runnable() {
+                        public void run() {
+                            if (!id.equals(openGroup)) return;
+                            groupCache = o; groupLoadedAt = System.currentTimeMillis(); groupError = null;
+                            if (tab == TAB_GROUPS) render();
+                        }
+                    });
+                } catch (final Exception e) {
+                    runOnUiThread(new Runnable() {
+                        public void run() {
+                            groupError = e.getMessage();
+                            if (String.valueOf(e.getMessage()).contains("plus partie")) { closeGroup(); toast(e.getMessage()); }
+                            else if (tab == TAB_GROUPS) render();
+                        }
+                    });
+                }
+            }
+        });
+    }
+
+    void openGroup(String id) {
+        openGroup = id;
+        groupCache = null;
+        transition();
+        scroll.scrollTo(0, 0);
+        loadGroup();
+    }
+
+    void closeGroup() {
+        openGroup = null;
+        groupCache = null;
+        transition();
+        loadGroups();
+    }
+
+    /** Lance une action serveur en arrière-plan, puis `then` sur l'écran (avec un message en cas d'erreur). */
+    interface Job { void run() throws Exception; }
+
+    void async(final Job job, final Runnable then) {
+        Cloud.IO.execute(new Runnable() {
+            public void run() {
+                try {
+                    job.run();
+                    runOnUiThread(new Runnable() { public void run() { if (then != null) then.run(); } });
+                } catch (final Exception e) {
+                    runOnUiThread(new Runnable() { public void run() { toast(e.getMessage() == null ? "Erreur réseau" : e.getMessage()); } });
+                }
+            }
+        });
+    }
+
+    void renderGroups() {
+        if (openGroup != null) { renderGroup(); return; }
+        header(content, "Groupes", "Trajets en direct avec tes proches", gearButton());
+
+        if (!Cloud.configured(this)) {
+            LinearLayout h = vbox();
+            h.setBackground(surface(0xFF0E1322, 24).stroke(alpha(WHITE, 0x1A)).blobs(new float[][]{{0f, 0f, 0.9f}, {1f, 1f, 0.8f}},
+                    alpha(VIOLET, 0x66), alpha(BLUE, 0x55)));
+            h.setPadding(dp(20), dp(20), dp(20), dp(20));
+            glow(h, VIOLET, 12);
+            h.addView(bubble(R.drawable.i_users, WHITE, 48), lp(dp(48), dp(48), 0));
+            space(h, 14);
+            h.addView(text("Partage en direct", 22, WHITE, W_BOLD));
+            space(h, 6);
+            h.addView(body("•  Crée un groupe (famille, amis) et invite tes proches par un lien.\n"
+                    + "•  Vois leurs trajets en direct : position, vitesse, trace.\n"
+                    + "•  Retrouve où chacun a garé sa voiture.\n"
+                    + "•  Chacun choisit ce qu'il partage, et peut arrêter à tout moment.", 14, 0xD9FFFFFF));
+            content.addView(h, fullWidth(16));
+            content.addView(primaryButton("J'ai reçu une invitation", R.drawable.i_share, new Click() { public void run() { pasteInvite(); } }), fullWidth(12));
+            content.addView(tonalButton("Créer mon espace (administrateur)", R.drawable.i_sliders, VIOLET, new Click() { public void run() { serverSheet(); } }), fullWidth(12));
+            TextView n = text("L'administrateur connecte une fois Trajo à son serveur gratuit (Supabase). Les personnes invitées n'ont rien à configurer : le lien d'invitation suffit.", 12, MUTED, W_REG);
+            n.setLineSpacing(0, 1.3f);
+            n.setPadding(dp(4), 0, dp(4), 0);
+            content.addView(n);
+            return;
+        }
+        if (!Cloud.hasProfile(this)) {
+            LinearLayout c = card(content);
+            c.addView(text("Choisis ton pseudo", 18, TXT, W_BOLD));
+            c.addView(body("C'est le nom que verront les membres de tes groupes.", 13, SUB), fullWidth(14));
+            c.addView(primaryButton("Choisir mon pseudo", R.drawable.i_edit, new Click() { public void run() { profileSheet(); } }));
+            return;
+        }
+
+        // Profil
+        LinearLayout pr = hbox();
+        pr.setBackground(pressable(surface(SURF, 22), 22));
+        pr.setPadding(dp(14), dp(12), dp(14), dp(12));
+        LinearLayout.LayoutParams ap = lp(dp(44), dp(44), 0);
+        ap.rightMargin = dp(12);
+        pr.addView(avatar(Cloud.name(this), Cloud.color(this), 44, false), ap);
+        LinearLayout pc = vbox();
+        pc.addView(text(Cloud.name(this), 16, TXT, W_BOLD));
+        TextView ps = text(Cloud.shareEnabled(this) ? "Partage pendant les trajets activé" : "Partage désactivé", 12, Cloud.shareEnabled(this) ? GOOD : AMBER, W_MED);
+        ps.setPadding(0, dp(2), 0, 0);
+        pc.addView(ps);
+        pr.addView(pc, lp(0, -2, 1f));
+        pr.addView(icon(R.drawable.i_edit, MUTED), lp(dp(18), dp(18), 0));
+        pr.setOnClickListener(new Click() { public void run() { profileSheet(); } });
+        pressScale(pr);
+        content.addView(pr, fullWidth(12));
+
+        LinearLayout actions = new LinearLayout(this);
+        actions.addView(primaryButton("Créer", R.drawable.i_plus, new Click() { public void run() { createGroupSheet(); } }), lp(0, -2, 1f));
+        space(actions, 12);
+        actions.addView(tonalButton("Rejoindre", R.drawable.i_share, TXT, new Click() { public void run() { pasteInvite(); } }), lp(0, -2, 1f));
+        content.addView(actions, fullWidth(8));
+
+        if (groupsCache == null) {
+            if (groupError != null) {
+                LinearLayout c = card(content);
+                c.addView(text("Impossible de joindre le serveur", 15, AMBER, W_BOLD));
+                c.addView(body(groupError, 13, SUB));
+            } else {
+                TextView l = text("Chargement des groupes…", 13, SUB, W_REG);
+                l.setPadding(dp(4), dp(16), 0, 0);
+                content.addView(l);
+            }
+            loadGroups();
+            return;
+        }
+        if (groupsCache.length() == 0) {
+            empty(content, R.drawable.i_users, "Aucun groupe",
+                    "Crée un groupe puis envoie le lien d'invitation à tes proches. Ils pourront accepter ou refuser.");
+            return;
+        }
+        section(content, "Mes groupes");
+        for (int i = 0; i < groupsCache.length(); i++) {
+            final org.json.JSONObject g = groupsCache.optJSONObject(i);
+            if (g == null) continue;
+            LinearLayout c = hbox();
+            c.setBackground(pressable(surface(SURF, 20).blobs(new float[][]{{1f, 0f, 0.6f}}, alpha(g.optInt("live") > 0 ? GOOD : VIOLET, 0x1C)), 20));
+            c.setPadding(dp(14), dp(14), dp(14), dp(14));
+            LinearLayout.LayoutParams bp = lp(dp(46), dp(46), 0);
+            bp.rightMargin = dp(12);
+            c.addView(bubble(R.drawable.i_users, VIOLET, 46), bp);
+            LinearLayout col = vbox();
+            col.addView(text(g.optString("name"), 16, TXT, W_BOLD));
+            int n = g.optInt("members");
+            TextView sb = text(n + (n > 1 ? " membres" : " membre") + ("admin".equals(g.optString("role")) ? " · administrateur" : "")
+                    + (g.optBoolean("sharing", true) ? "" : " · partage coupé"), 13, SUB, W_REG);
+            sb.setPadding(0, dp(3), 0, 0);
+            col.addView(sb);
+            c.addView(col, lp(0, -2, 1f));
+            if (g.optInt("live") > 0) c.addView(liveBadge(g.optInt("live") + " en route", GOOD, GOOD, alpha(GOOD, 0x1A)));
+            else c.addView(icon(R.drawable.i_chevron, MUTED), lp(dp(16), dp(16), 0));
+            c.setOnClickListener(new Click() { public void run() { openGroup(g.optString("id")); } });
+            pressScale(c);
+            content.addView(c, fullWidth(10));
+        }
+    }
+
+    void renderGroup() {
+        LinearLayout back = hbox();
+        back.addView(icon(R.drawable.i_back, BLUE), lp(dp(20), dp(20), 0));
+        TextView bt = text("Groupes", 15, BLUE, W_MED);
+        bt.setPadding(dp(8), 0, 0, 0);
+        back.addView(bt);
+        back.setPadding(0, 0, 0, dp(16));
+        back.setOnClickListener(new Click() { public void run() { closeGroup(); } });
+        content.addView(back, new LinearLayout.LayoutParams(-2, -2));
+        if (groupCache == null) {
+            header(content, "Chargement…", null, null);
+            if (groupError != null) content.addView(body(groupError, 13, AMBER));
+            return;
+        }
+        final org.json.JSONObject g = groupCache;
+        final String gid = g.optString("id"), me = g.optString("me");
+        final boolean owner = me.equals(g.optString("owner"));
+        long serverNow = Cloud.parseTs(g.optString("now"));
+        if (serverNow == 0) serverNow = groupLoadedAt;
+        long skew = System.currentTimeMillis() - groupLoadedAt;   // temps écoulé depuis le chargement
+        org.json.JSONArray ms = g.optJSONArray("members");
+        if (ms == null) ms = new org.json.JSONArray();
+
+        boolean admin = false, mySharing = true;
+        int live = 0;
+        List<Charts.Trace.Member> markers = new ArrayList<>();
+        for (int i = 0; i < ms.length(); i++) {
+            org.json.JSONObject m = ms.optJSONObject(i);
+            if (m == null) continue;
+            if (me.equals(m.optString("user_id"))) { admin = "admin".equals(m.optString("role")); mySharing = m.optBoolean("sharing", true); }
+            Charts.Trace.Member mk = marker(m, serverNow);
+            if (mk != null) { markers.add(mk); if (mk.live) live++; }
+        }
+        header(content, g.optString("name"), ms.length() + (ms.length() > 1 ? " membres" : " membre") + (live > 0 ? " · " + live + " en route" : ""), null);
+
+        // Carte du groupe
+        LinearLayout mapc = vbox();
+        mapc.setBackground(surface(SURF, 22));
+        mapc.setClipToOutline(true);
+        if (!markers.isEmpty()) {
+            mapc.addView(new Charts.Trace(this, markers, 0), new LinearLayout.LayoutParams(-1, dp(330)));
+        } else {
+            LinearLayout in = vbox();
+            in.setPadding(dp(18), dp(18), dp(18), dp(18));
+            in.addView(text("Aucune position pour l'instant", 15, TXT, W_BOLD));
+            in.addView(body("Les membres apparaîtront ici dès qu'ils rouleront, puis à l'endroit où ils se garent.", 13, SUB));
+            mapc.addView(in);
+        }
+        TextView upd = text("Actualisé " + ago(skew) + " · mise à jour automatique toutes les 10 s", 11, MUTED, W_REG);
+        upd.setPadding(dp(16), dp(10), dp(16), dp(12));
+        mapc.addView(upd);
+        content.addView(mapc, fullWidth(12));
+
+        section(content, "Membres");
+        LinearLayout list = group(content);
+        for (int i = 0; i < ms.length(); i++) {
+            final org.json.JSONObject m = ms.optJSONObject(i);
+            if (m == null) continue;
+            memberRow(list, m, me, serverNow, admin, gid);
+        }
+
+        section(content, "Mon partage dans ce groupe");
+        LinearLayout sg = group(content);
+        Switch sw = switchRow(sg, R.drawable.i_share, GOOD, "Partager ma position", "Pendant mes trajets + où je suis garé", mySharing);
+        sw.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            public void onCheckedChanged(CompoundButton b, final boolean on) {
+                async(new Job() { public void run() throws Exception {
+                    Cloud.call(MainActivity.this, "set_sharing", new org.json.JSONObject().put("p_group", gid).put("p_on", on));
+                } }, new Runnable() { public void run() { toast(on ? "Ta position est partagée avec ce groupe" : "Tu ne partages plus ta position avec ce groupe"); loadGroup(); } });
+            }
+        });
+        if (!Cloud.shareEnabled(this)) {
+            TextView w = text("Le partage est désactivé dans Réglages : rien n'est envoyé tant qu'il est coupé.", 12, AMBER, W_REG);
+            w.setPadding(dp(4), 0, 0, dp(8));
+            content.addView(w);
+        }
+
+        space(content, 4);
+        if (admin) {
+            content.addView(primaryButton("Inviter quelqu'un", R.drawable.i_share, new Click() { public void run() { invite(gid, g.optString("name")); } }), fullWidth(10));
+            content.addView(tonalButton("Annuler les invitations envoyées", R.drawable.i_info, SUB, new Click() {
+                public void run() {
+                    async(new Job() { public void run() throws Exception {
+                        Cloud.call(MainActivity.this, "revoke_invites", new org.json.JSONObject().put("p_group", gid));
+                    } }, new Runnable() { public void run() { toast("Les liens d'invitation déjà envoyés ne marchent plus"); } });
+                }
+            }), fullWidth(10));
+        } else {
+            TextView n = text("Seuls les administrateurs peuvent inviter de nouveaux membres.", 12, MUTED, W_REG);
+            n.setPadding(dp(4), 0, 0, dp(10));
+            content.addView(n);
+        }
+        content.addView(tonalButton("Quitter le groupe", R.drawable.i_back, BAD, new Click() {
+            public void run() {
+                confirmLeave("Quitter « " + g.optString("name") + " » ?", "Tu ne verras plus les membres et ils ne verront plus ta position.", "leave_group", gid);
+            }
+        }), fullWidth(10));
+        if (owner) {
+            content.addView(tonalButton("Supprimer le groupe", R.drawable.i_trash, BAD, new Click() {
+                public void run() { confirmLeave("Supprimer « " + g.optString("name") + " » ?", "Le groupe disparaît pour tous ses membres.", "delete_group", gid); }
+            }), fullWidth(0));
+        }
+    }
+
+    void confirmLeave(String title, String msg, final String fn, final String gid) {
+        sheet(title, body(msg, 15, SUB), fn.equals("delete_group") ? "Supprimer" : "Quitter", true, new Save() {
+            public boolean run() {
+                async(new Job() { public void run() throws Exception {
+                    Cloud.call(MainActivity.this, fn, new org.json.JSONObject().put("p_group", gid));
+                } }, new Runnable() { public void run() { groupsCache = null; closeGroup(); } });
+                return true;
+            }
+        }, null, null);
+    }
+
+    /** Marqueur de carte pour un membre (null s'il n'a pas de position partagée). */
+    Charts.Trace.Member marker(org.json.JSONObject m, long serverNow) {
+        org.json.JSONObject p = m.optJSONObject("pos");
+        if (p == null) return null;
+        Charts.Trace.Member mk = new Charts.Trace.Member();
+        mk.name = m.optString("name");
+        mk.color = Cloud.COLORS[Math.abs(m.optInt("color")) % Cloud.COLORS.length];
+        long age = serverNow - Cloud.parseTs(p.optString("updated_at"));
+        boolean live = p.optBoolean("live") && !p.isNull("lat") && age < 5 * 60_000;
+        if (live) {
+            mk.live = true;
+            mk.lat = p.optDouble("lat"); mk.lon = p.optDouble("lon");
+            mk.label = mk.name + " · " + Math.round(p.optDouble("speed", 0)) + " km/h";
+            mk.trail = TripService.decode(p.optString("trail", ""));
+            return mk;
+        }
+        if (!p.isNull("parked_lat")) {
+            mk.lat = p.optDouble("parked_lat"); mk.lon = p.optDouble("parked_lon");
+            mk.label = mk.name;
+            return mk;
+        }
+        if (!p.isNull("lat")) {   // trajet interrompu : dernière position connue
+            mk.lat = p.optDouble("lat"); mk.lon = p.optDouble("lon");
+            mk.label = mk.name + " · " + ago(age);
+            return mk;
+        }
+        return null;
+    }
+
+    void memberRow(LinearLayout g, final org.json.JSONObject m, String me, long serverNow, final boolean iAmAdmin, final String gid) {
+        if (g.getChildCount() > 0) divider(g);
+        final String uid = m.optString("user_id"), name = m.optString("name");
+        final boolean isMe = uid.equals(me);
+        org.json.JSONObject p = m.optJSONObject("pos");
+        boolean sharing = m.optBoolean("sharing", true);
+        long age = p == null ? 0 : serverNow - Cloud.parseTs(p.optString("updated_at"));
+        boolean live = p != null && p.optBoolean("live") && !p.isNull("lat") && age < 5 * 60_000;
+        String status;
+        int sc;
+        final double[] where;
+        if (!sharing) { status = "Ne partage pas sa position"; sc = MUTED; where = null; }
+        else if (p == null) { status = "Pas encore de position partagée"; sc = MUTED; where = null; }
+        else if (live) {
+            long since = serverNow - Cloud.parseTs(p.optString("trip_start"));
+            status = "En route · " + Math.round(p.optDouble("speed", 0)) + " km/h · " + Fmt.km(p.optDouble("trip_km", 0))
+                    + (since > 0 && since < 86_400_000L ? " en " + Fmt.dur(since) : "") + (age > 60_000 ? " · " + ago(age) : "");
+            sc = GOOD; where = new double[]{p.optDouble("lat"), p.optDouble("lon")};
+        } else if (!p.isNull("parked_lat")) {
+            where = new double[]{p.optDouble("parked_lat"), p.optDouble("parked_lon")};
+            String addr = Parking.cachedAddress(this, where[0], where[1]);
+            if (addr == null) geocodeLater(where[0], where[1]);
+            status = "Garé " + ago(serverNow - Cloud.parseTs(p.optString("parked_at"))).replace("il y a ", "depuis ")
+                    + (addr != null ? " · " + Stats.shortAddress(addr) : "");
+            sc = SUB;
+        } else if (!p.isNull("lat")) {
+            status = "Signal perdu " + ago(age); sc = AMBER; where = new double[]{p.optDouble("lat"), p.optDouble("lon")};
+        } else { status = "Pas encore de position partagée"; sc = MUTED; where = null; }
+
+        LinearLayout row = hbox();
+        row.setPadding(dp(16), dp(12), dp(14), dp(12));
+        LinearLayout.LayoutParams ap = lp(dp(42), dp(42), 0);
+        ap.rightMargin = dp(12);
+        row.addView(avatar(name, m.optInt("color"), 42, live), ap);
+        LinearLayout col = vbox();
+        col.addView(text(name + (isMe ? " (toi)" : "") + ("admin".equals(m.optString("role")) ? "  ·  admin" : ""), 15, TXT, W_BOLD));
+        TextView st = text(status, 13, sc, W_REG);
+        st.setPadding(0, dp(3), 0, 0);
+        col.addView(st);
+        row.addView(col, lp(0, -2, 1f));
+        if (live) {
+            TextView lv = text("LIVE", 10, GOOD, W_BOLD);
+            lv.setLetterSpacing(0.1f);
+            lv.setBackground(surface(alpha(GOOD, 0x1F), 100).stroke(alpha(GOOD, 0x55)).noHighlight());
+            lv.setPadding(dp(8), dp(3), dp(8), dp(3));
+            row.addView(lv);
+        }
+        LinearLayout.LayoutParams cp = lp(dp(16), dp(16), 0);
+        cp.leftMargin = dp(8);
+        row.addView(icon(R.drawable.i_chevron, MUTED), cp);
+        row.setBackground(pressable(null, 0));
+        final boolean fLive = live;
+        final String fStatus = status;
+        row.setOnClickListener(new Click() {
+            public void run() { memberSheet(m, isMe, iAmAdmin, gid, where, fLive, fStatus); }
+        });
+        g.addView(row, new LinearLayout.LayoutParams(-1, -2));
+    }
+
+    void geocodeLater(final double lat, final double lon) {
+        if (!geocoding.add(Parking.key(lat, lon))) return;
+        new Thread(new Runnable() {
+            public void run() {
+                if (Parking.lookupAddress(MainActivity.this, lat, lon) != null)
+                    runOnUiThread(new Runnable() { public void run() { if (tab == TAB_GROUPS) render(); } });
+            }
+        }).start();
+    }
+
+    void memberSheet(org.json.JSONObject m, boolean isMe, boolean iAmAdmin, final String gid, final double[] where, boolean live, String status) {
+        final String uid = m.optString("user_id"), name = m.optString("name");
+        LinearLayout f = vbox();
+        LinearLayout top = hbox();
+        LinearLayout.LayoutParams ap = lp(dp(56), dp(56), 0);
+        ap.rightMargin = dp(14);
+        top.addView(avatar(name, m.optInt("color"), 56, live), ap);
+        LinearLayout col = vbox();
+        col.addView(text(name + (isMe ? " (toi)" : ""), 20, TXT, W_BOLD));
+        col.addView(body(status, 13, live ? GOOD : SUB));
+        top.addView(col, lp(0, -2, 1f));
+        f.addView(top, fullWidth(18));
+        final Dialog[] holder = new Dialog[1];
+        if (where != null) {
+            f.addView(tonalButton(live ? "Voir sa position sur Google Maps" : "Voir sa voiture sur Google Maps", R.drawable.i_pin, BLUE, new Click() {
+                public void run() {
+                    try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("geo:" + ll(where) + "?q=" + ll(where) + "(" + Uri.encode(name) + ")"))); }
+                    catch (Exception e) { toast("Impossible d'ouvrir la carte"); }
+                }
+            }), fullWidth(10));
+            f.addView(tonalButton("Itinéraire jusqu'à " + (live ? "sa position" : "sa voiture"), R.drawable.i_route, BLUE, new Click() {
+                public void run() {
+                    try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/maps/dir/?api=1&destination=" + ll(where)))); }
+                    catch (Exception e) { toast("Impossible d'ouvrir Google Maps"); }
+                }
+            }), fullWidth(10));
+        }
+        if (iAmAdmin && !isMe) {
+            final boolean isAdmin = "admin".equals(m.optString("role"));
+            f.addView(tonalButton(isAdmin ? "Retirer le rôle d'administrateur" : "Nommer administrateur", R.drawable.i_shield, VIOLET, new Click() {
+                public void run() {
+                    if (holder[0] != null) holder[0].dismiss();
+                    async(new Job() { public void run() throws Exception {
+                        Cloud.call(MainActivity.this, "set_role", new org.json.JSONObject().put("p_group", gid).put("p_user", uid).put("p_role", isAdmin ? "member" : "admin"));
+                    } }, new Runnable() { public void run() { loadGroup(); } });
+                }
+            }), fullWidth(10));
+            f.addView(tonalButton("Retirer " + name + " du groupe", R.drawable.i_trash, BAD, new Click() {
+                public void run() {
+                    if (holder[0] != null) holder[0].dismiss();
+                    async(new Job() { public void run() throws Exception {
+                        Cloud.call(MainActivity.this, "remove_member", new org.json.JSONObject().put("p_group", gid).put("p_user", uid));
+                    } }, new Runnable() { public void run() { toast(name + " a été retiré du groupe"); loadGroup(); } });
+                }
+            }), fullWidth(0));
+        }
+        holder[0] = sheet(name, f, null, false, null, null, null);
+    }
+
+    void profileSheet() {
+        LinearLayout f = vbox();
+        f.addView(body("C'est le nom et la couleur que verront les membres de tes groupes.", 14, SUB), fullWidth(16));
+        final EditText e = field(f, "Pseudo", Cloud.name(this) == null ? "" : Cloud.name(this), "Ex. : Jason", false, null);
+        final int[] col = {Cloud.name(this) == null ? new java.util.Random().nextInt(Cloud.COLORS.length) : Cloud.color(this)};
+        TextView cl = label("Couleur", SUB);
+        cl.setPadding(dp(2), 0, 0, dp(8));
+        f.addView(cl);
+        final LinearLayout row = new LinearLayout(this);
+        final View[] dots = new View[Cloud.COLORS.length];
+        for (int i = 0; i < Cloud.COLORS.length; i++) {
+            final int k = i;
+            View d = new View(this);
+            dots[i] = d;
+            d.setOnClickListener(new Click() { public void run() { col[0] = k; styleDots(dots, k); } });
+            LinearLayout.LayoutParams dp2 = lp(dp(34), dp(34), 0);
+            dp2.rightMargin = dp(8);
+            row.addView(d, dp2);
+        }
+        styleDots(dots, col[0]);
+        f.addView(row, fullWidth(8));
+        sheet("Mon profil", f, "Enregistrer", false, new Save() {
+            public boolean run() {
+                final String n = e.getText().toString().trim();
+                if (n.isEmpty()) { toast("Choisis un pseudo"); return false; }
+                async(new Job() { public void run() throws Exception { Cloud.saveProfile(MainActivity.this, n, col[0]); } },
+                        new Runnable() { public void run() { toast("Profil enregistré"); groupsCache = null; render(); } });
+                return true;
+            }
+        }, null, null);
+    }
+
+    void styleDots(View[] dots, int sel) {
+        for (int i = 0; i < dots.length; i++) {
+            GradientDrawable g = new GradientDrawable();
+            g.setShape(GradientDrawable.OVAL);
+            g.setColor(Cloud.COLORS[i]);
+            g.setStroke(dp(i == sel ? 3 : 0), WHITE);
+            dots[i].setBackground(g);
+        }
+    }
+
+    void serverSheet() {
+        LinearLayout f = vbox();
+        f.addView(body("Une seule personne (l'administrateur) fait ce réglage, une fois :\n"
+                + "1. Crée un projet gratuit sur supabase.com (région Europe).\n"
+                + "2. SQL Editor → colle le fichier schema.sql de Trajo → Run.\n"
+                + "3. Authentication → Sign In / Providers → active « Allow anonymous sign-ins ».\n"
+                + "4. Project Settings → API : copie l'URL du projet et la clé « anon public ».", 13, SUB), fullWidth(16));
+        final EditText u = field(f, "URL du projet", Cloud.url(this) == null ? "" : Cloud.url(this), "https://xxxx.supabase.co", false, null);
+        u.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
+        final EditText k = field(f, "Clé « anon public »", Cloud.key(this) == null ? "" : Cloud.key(this), "eyJhbGciOi…", false, null);
+        k.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        sheet("Connecter mon serveur", f, "Connecter", false, new Save() {
+            public boolean run() {
+                final String url = u.getText().toString().trim(), key = k.getText().toString().trim();
+                if (url.isEmpty() || key.length() < 20) { toast("Renseigne l'URL et la clé"); return false; }
+                Cloud.configure(MainActivity.this, url, key);
+                async(new Job() { public void run() throws Exception {
+                    Cloud.ensureSession(MainActivity.this);
+                    Cloud.myGroups(MainActivity.this);
+                } }, new Runnable() { public void run() {
+                    toast("Serveur connecté ✅");
+                    groupsCache = null;
+                    if (!Cloud.hasProfile(MainActivity.this)) profileSheet();
+                    render();
+                } });
+                return true;
+            }
+        }, null, null);
+    }
+
+    void createGroupSheet() {
+        LinearLayout f = vbox();
+        final EditText e = field(f, "Nom du groupe", "", "Ex. : Famille", false, null);
+        sheet("Nouveau groupe", f, "Créer le groupe", false, new Save() {
+            public boolean run() {
+                final String n = e.getText().toString().trim();
+                if (n.isEmpty()) { toast("Donne un nom au groupe"); return false; }
+                final String[] id = new String[1];
+                async(new Job() { public void run() throws Exception { id[0] = Cloud.createGroup(MainActivity.this, n); } },
+                        new Runnable() { public void run() { groupsCache = null; openGroup(id[0]); invite(id[0], n); } });
+                return true;
+            }
+        }, null, null);
+    }
+
+    /** Crée une invitation et ouvre le partage (WhatsApp, SMS…). */
+    void invite(final String gid, final String gname) {
+        final String[] code = new String[1];
+        async(new Job() { public void run() throws Exception { code[0] = Cloud.createInvite(MainActivity.this, gid); } }, new Runnable() {
+            public void run() {
+                String msg = "🚗 " + Cloud.name(MainActivity.this) + " t'invite à rejoindre le groupe « " + gname + " » sur Trajo.\n\n"
+                        + "Ouvre ce lien sur ton téléphone (Trajo doit être installé) :\n" + Cloud.inviteLink(MainActivity.this, code[0]) + "\n\n"
+                        + "Si le lien ne s'ouvre pas : copie tout ce message, puis Trajo → Groupes → Rejoindre.\n"
+                        + "Code : " + code[0] + " · valable 7 jours.";
+                Intent i = new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, msg);
+                startActivity(Intent.createChooser(i, "Envoyer l'invitation"));
+            }
+        });
+    }
+
+    /** « Rejoindre » : lit l'invitation copiée, sinon propose de la coller. */
+    void pasteInvite() {
+        String clip = null;
+        try {
+            android.content.ClipboardManager cm = getSystemService(android.content.ClipboardManager.class);
+            if (cm != null && cm.hasPrimaryClip() && cm.getPrimaryClip().getItemCount() > 0)
+                clip = String.valueOf(cm.getPrimaryClip().getItemAt(0).coerceToText(this));
+        } catch (Exception ignored) {}
+        String[] inv = Cloud.parseInvite(clip);
+        if (inv != null && (inv[1] != null || Cloud.configured(this))) { handleInvite(inv); return; }
+        LinearLayout f = vbox();
+        f.addView(body("Colle ici le message d'invitation reçu (ou le lien trajo://…).", 14, SUB), fullWidth(14));
+        final EditText e = field(f, "Invitation", "", "Colle le message ici", false, null);
+        e.setSingleLine(false);
+        e.setMaxLines(4);
+        sheet("Rejoindre un groupe", f, "Continuer", false, new Save() {
+            public boolean run() {
+                String[] p = Cloud.parseInvite(e.getText().toString());
+                if (p == null) { toast("Invitation non reconnue"); return false; }
+                if (p[1] == null && !Cloud.configured(MainActivity.this)) { toast("Colle le message complet, avec le lien"); return false; }
+                handleInvite(p);
+                return true;
+            }
+        }, null, null);
+    }
+
+    /** Affiche l'invitation (groupe, qui invite) avec Rejoindre / Refuser. */
+    void handleInvite(final String[] inv) {
+        if (inv == null) { toast("Invitation non reconnue"); return; }
+        if (inv[1] != null && inv[2] != null && !inv[1].equals(Cloud.url(this))) Cloud.configure(this, inv[1], inv[2]);
+        if (!Cloud.configured(this)) { toast("Invitation incomplète : demande le lien complet"); return; }
+        tab = TAB_GROUPS;
+        render();
+        final org.json.JSONObject[] info = new org.json.JSONObject[1];
+        async(new Job() { public void run() throws Exception {
+            Cloud.ensureSession(MainActivity.this);
+            info[0] = Cloud.inviteInfo(MainActivity.this, inv[0]);
+        } }, new Runnable() { public void run() { inviteSheet(inv[0], info[0]); } });
+    }
+
+    void inviteSheet(final String code, final org.json.JSONObject info) {
+        LinearLayout f = vbox();
+        FrameLayout h = new FrameLayout(this);
+        h.setBackground(halo(VIOLET, 60));
+        View b = bubble(R.drawable.i_users, VIOLET, 60);
+        glow(b, VIOLET, 10);
+        h.addView(b, new FrameLayout.LayoutParams(dp(60), dp(60), Gravity.CENTER));
+        LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(-1, dp(100));
+        f.addView(h, hp);
+        TextView gn = text(info.optString("group_name"), 24, TXT, W_BOLD);
+        gn.setGravity(Gravity.CENTER);
+        f.addView(gn);
+        int n = info.optInt("members");
+        TextView who = text("Invitation de " + info.optString("inviter") + " · " + n + (n > 1 ? " membres" : " membre"), 14, SUB, W_REG);
+        who.setGravity(Gravity.CENTER);
+        who.setPadding(0, dp(4), 0, dp(16));
+        f.addView(who);
+        if (!info.optBoolean("valid")) {
+            f.addView(body("Cette invitation a expiré ou a été annulée. Demande un nouveau lien.", 14, AMBER));
+            sheet("Invitation", f, null, false, null, null, null);
+            return;
+        }
+        if (info.optBoolean("already_member")) {
+            f.addView(body("Tu fais déjà partie de ce groupe.", 14, GOOD), fullWidth(8));
+            sheet("Invitation", f, "Ouvrir le groupe", false, new Save() {
+                public boolean run() { openGroup(info.optString("group_id")); return true; }
+            }, null, null);
+            return;
+        }
+        final EditText pseudo = Cloud.hasProfile(this) ? null : field(f, "Ton pseudo", "", "Ex. : Léa", false, null);
+        LinearLayout warn = hbox();
+        warn.setBackground(surface(alpha(WHITE, 0x08), 14).stroke(alpha(WHITE, 0x10)));
+        warn.setPadding(dp(12), dp(10), dp(12), dp(10));
+        LinearLayout.LayoutParams ip = lp(dp(18), dp(18), 0);
+        ip.rightMargin = dp(10);
+        warn.addView(icon(R.drawable.i_shield, GOOD), ip);
+        warn.addView(body("En rejoignant, les membres verront tes trajets en direct (position, vitesse) et où ta voiture est garée. "
+                + "Tu pourras arrêter le partage ou quitter le groupe à tout moment.", 13, TXT), lp(0, -2, 1f));
+        f.addView(warn, fullWidth(4));
+        sheet("Invitation", f, "Rejoindre le groupe", false, new Save() {
+            public boolean run() {
+                final String name = pseudo == null ? null : pseudo.getText().toString().trim();
+                if (pseudo != null && name.isEmpty()) { toast("Choisis un pseudo"); return false; }
+                final String[] gid = new String[1];
+                async(new Job() { public void run() throws Exception {
+                    if (name != null) Cloud.saveProfile(MainActivity.this, name, new java.util.Random().nextInt(Cloud.COLORS.length));
+                    gid[0] = Cloud.acceptInvite(MainActivity.this, code);
+                    Cloud.myGroups(MainActivity.this);
+                } }, new Runnable() { public void run() {
+                    toast("Bienvenue dans « " + info.optString("group_name") + " » 🎉");
+                    groupsCache = null;
+                    tab = TAB_GROUPS;
+                    openGroup(gid[0]);
+                } });
+                return true;
+            }
+        }, "Refuser l'invitation", new Runnable() {
+            public void run() { toast("Invitation refusée"); }
+        });
     }
 }

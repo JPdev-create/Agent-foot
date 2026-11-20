@@ -249,6 +249,25 @@ final class Charts {
         List<List<double[]>> heat;
         float phase;
         android.animation.ValueAnimator radar;
+        /** Mode « groupe » : position des membres. */
+        List<Member> members;
+
+        static final class Member {
+            double lat, lon;
+            int color;
+            String name, label;
+            boolean live;
+            List<double[]> trail;
+        }
+
+        Trace(Context c, List<Member> ms, int unused) {
+            this(c, new java.util.ArrayList<double[]>());
+            members = ms;
+            for (Member m : ms) {
+                pts.add(new double[]{m.lat, m.lon});
+                if (m.trail != null) pts.addAll(m.trail);
+            }
+        }
         final java.util.Set<String> requested = new java.util.HashSet<>();
         final Paint glow = new Paint(Paint.ANTI_ALIAS_FLAG), line = new Paint(Paint.ANTI_ALIAS_FLAG),
                 dot = new Paint(Paint.ANTI_ALIAS_FLAG), grid = new Paint(), tilePaint = new Paint(Paint.FILTER_BITMAP_FLAG), txt, attr;
@@ -278,7 +297,9 @@ final class Charts {
 
         @Override protected void onAttachedToWindow() {
             super.onAttachedToWindow();
-            if (!spot) return;
+            boolean anyLive = false;
+            if (members != null) for (Member m : members) anyLive |= m.live;
+            if (!spot && !anyLive) return;
             radar = android.animation.ValueAnimator.ofFloat(0f, 1f);
             radar.setDuration(2200);
             radar.setRepeatCount(android.animation.ValueAnimator.INFINITE);
@@ -354,7 +375,7 @@ final class Charts {
             }
             float tile = dp(c, 192);       // taille d'une tuile à l'écran (source 256 px)
             float pad = dp(c, 36);
-            int z = spot ? 16 : 17;
+            int z = spot ? 16 : members != null ? 16 : 17;
             for (; z > 2 && !spot; z--) {
                 double world = tile * Math.pow(2, z);
                 double bw = wx(maxLon, world) - wx(minLon, world), bh = wy(minLat, world) - wy(maxLat, world);
@@ -379,6 +400,12 @@ final class Charts {
                     float left = (float) (tx * tile - ox), top = (float) (ty * tile - oy);
                     cv.drawBitmap(b, null, new RectF(left, top, left + tile, top + tile), tilePaint);
                 }
+            }
+
+            if (members != null) {
+                drawMembers(cv, world, ox, oy);
+                if (anyTile) cv.drawText("© les contributeurs d'OpenStreetMap", w - dp(c, 8), h - dp(c, 7), attr);
+                return;
             }
 
             if (spot) {
@@ -489,6 +516,56 @@ final class Charts {
                 }
             });
             return null;
+        }
+
+        /** Membres du groupe : trace en direct, halo pulsant si en route, « P » si garé, étiquette. */
+        void drawMembers(Canvas cv, double world, double ox, double oy) {
+            Context c = getContext();
+            Paint tp = new Paint(Paint.ANTI_ALIAS_FLAG);
+            tp.setStyle(Paint.Style.STROKE); tp.setStrokeWidth(dp(c, 4));
+            tp.setStrokeCap(Paint.Cap.ROUND); tp.setStrokeJoin(Paint.Join.ROUND);
+            for (Member m : members) {
+                if (!m.live || m.trail == null || m.trail.size() < 2) continue;
+                Path p = new Path();
+                for (int i = 0; i < m.trail.size(); i++) {
+                    float x = (float) (wx(m.trail.get(i)[1], world) - ox), y = (float) (wy(m.trail.get(i)[0], world) - oy);
+                    if (i == 0) p.moveTo(x, y); else p.lineTo(x, y);
+                }
+                p.lineTo((float) (wx(m.lon, world) - ox), (float) (wy(m.lat, world) - oy));
+                tp.setColor(BaseUi.alpha(m.color, 0x40)); tp.setStrokeWidth(dp(c, 10)); cv.drawPath(p, tp);
+                tp.setColor(m.color); tp.setStrokeWidth(dp(c, 4)); cv.drawPath(p, tp);
+            }
+            Paint ini = textPaint(c, 13, BaseUi.WHITE, true);
+            ini.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
+            Paint lbl = textPaint(c, 11, BaseUi.WHITE, true);
+            Paint bg = new Paint(Paint.ANTI_ALIAS_FLAG);
+            for (Member m : members) {
+                float x = (float) (wx(m.lon, world) - ox), y = (float) (wy(m.lat, world) - oy);
+                if (m.live) {
+                    for (int k = 0; k < 2; k++) {
+                        float ph = (phase + k * 0.5f) % 1f;
+                        dot.setColor(BaseUi.alpha(m.color, (int) (0x70 * (1 - ph))));
+                        cv.drawCircle(x, y, dp(c, 16 + 30 * ph), dot);
+                    }
+                    dot.setColor(BaseUi.WHITE); cv.drawCircle(x, y, dp(c, 16), dot);
+                    dot.setColor(m.color); cv.drawCircle(x, y, dp(c, 13.5f), dot);
+                    String in = m.name.isEmpty() ? "?" : m.name.substring(0, 1).toUpperCase(Fmt.FR);
+                    cv.drawText(in, x, y + dp(c, 4.5f), ini);
+                } else {
+                    float r = dp(c, 13);
+                    dot.setColor(BaseUi.WHITE);
+                    cv.drawRoundRect(new RectF(x - r - dp(c, 2), y - r - dp(c, 2), x + r + dp(c, 2), y + r + dp(c, 2)), dp(c, 9), dp(c, 9), dot);
+                    dot.setColor(BaseUi.alpha(m.color, 0xFF));
+                    cv.drawRoundRect(new RectF(x - r, y - r, x + r, y + r), dp(c, 7), dp(c, 7), dot);
+                    cv.drawText("P", x, y + dp(c, 4.5f), ini);
+                }
+                String t = m.label;
+                float tw = lbl.measureText(t) + dp(c, 14);
+                RectF rr = new RectF(x - tw / 2, y + dp(c, 20), x + tw / 2, y + dp(c, 40));
+                bg.setColor(0xE60B0E16);
+                cv.drawRoundRect(rr, dp(c, 10), dp(c, 10), bg);
+                cv.drawText(t, x, rr.bottom - dp(c, 6), lbl);
+            }
         }
 
         void marker(Canvas cv, float x, float y, int color) {

@@ -50,7 +50,7 @@ public class MainActivity extends BaseUi {
     static final int[] NAV_ICONS = {R.drawable.i_home, R.drawable.i_route, R.drawable.i_chart, R.drawable.i_fuel, R.drawable.i_users};
     static final String[] NAV_LABELS = {"Accueil", "Trajets", "Stats", "Dépenses", "Groupes"};
     static final int TAB_GROUPS = 4, TAB_SETTINGS = 5;
-    static final String VERSION = "5.0";
+    static final String VERSION = "5.0.1";
 
     FrameLayout root;
     LinearLayout content;
@@ -2299,7 +2299,7 @@ public class MainActivity extends BaseUi {
                 + "2. SQL Editor → colle le fichier schema.sql de Trajo → Run.\n"
                 + "3. Authentication → Sign In / Providers → active « Allow anonymous sign-ins ».\n"
                 + "4. Project Settings → API : copie l'URL du projet et la clé « anon public ».", 13, SUB), fullWidth(16));
-        final EditText u = field(f, "URL du projet", Cloud.url(this) == null ? "" : Cloud.url(this), "https://xxxx.supabase.co", false, null);
+        final EditText u = field(f, "URL du projet", Cloud.url(this) == null ? Cloud.DEFAULT_URL : Cloud.url(this), "https://xxxx.supabase.co", false, null);
         u.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
         final EditText k = field(f, "Clé « anon public »", Cloud.key(this) == null ? "" : Cloud.key(this), "eyJhbGciOi…", false, null);
         k.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);

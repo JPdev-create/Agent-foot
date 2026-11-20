@@ -36,13 +36,20 @@ final class Cloud {
     // ---------- Configuration ----------
 
     static String url(Context c) { return p(c).getString("url", null); }
+    /** Adresse du projet Supabase de l'administrateur, proposée par défaut. */
+    static final String DEFAULT_URL = "https://pwpsbsnxyazockuzxyrt.supabase.co";
     static String key(Context c) { return p(c).getString("key", null); }
     static boolean configured(Context c) { return url(c) != null && key(c) != null; }
 
     static void configure(Context c, String url, String key) {
         url = url.trim();
-        while (url.endsWith("/")) url = url.substring(0, url.length() - 1);
         if (!url.startsWith("http")) url = "https://" + url;
+        // Garde seulement « https://xxxx.supabase.co » (on accepte un lien collé avec /rest/v1/…).
+        try {
+            android.net.Uri u = android.net.Uri.parse(url);
+            if (u.getHost() != null) url = (u.getScheme() == null ? "https" : u.getScheme()) + "://" + u.getHost() + (u.getPort() > 0 ? ":" + u.getPort() : "");
+        } catch (Exception ignored) {}
+        while (url.endsWith("/")) url = url.substring(0, url.length() - 1);
         String old = url(c);
         SharedPreferences.Editor e = p(c).edit().putString("url", url).putString("key", key.trim());
         if (old != null && !old.equals(url)) e.remove("access").remove("refresh").remove("exp").remove("uid");

@@ -15,7 +15,16 @@ import android.content.Intent;
 public class BtReceiver extends BroadcastReceiver {
     @Override public void onReceive(Context c, Intent i) {
         BluetoothDevice d = i.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
-        if (d == null || !Prefs.isCar(c, d.getAddress())) return;
+        if (d == null) return;
+        if (!Prefs.isCar(c, d.getAddress())) {
+            // Diagnostic : on note aussi les autres appareils (pour repérer le boîtier Android Auto).
+            String n = null;
+            try { n = d.getName(); } catch (SecurityException ignored) {}
+            EventLog.add(c, "(autre appareil) Bluetooth " + (n != null ? n : d.getAddress())
+                    + (BluetoothDevice.ACTION_ACL_CONNECTED.equals(i.getAction()) ? " connecté" : " déconnecté")
+                    + (TripService.live != null ? " pendant un trajet" : ""));
+            return;
+        }
 
         String a = i.getAction();
         // Mémorise l'état du Bluetooth voiture (sert à savoir si on est bien dans la voiture).

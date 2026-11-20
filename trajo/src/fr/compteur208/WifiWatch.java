@@ -54,9 +54,58 @@ final class WifiWatch {
         }
     }
 
+    /** Réseaux Wi-Fi de la voiture vus par le rappel réseau (y compris hors réseau principal). */
+    static final java.util.Set<android.net.Network> CAR_NETS = java.util.Collections.synchronizedSet(new java.util.HashSet<android.net.Network>());
+
     static boolean onCarWifi(Context c) {
+        if (!CAR_NETS.isEmpty()) return true;
         String car = Prefs.carSsid(c), cur = currentSsid(c);
         return car != null && cur != null && car.equalsIgnoreCase(cur.trim());
+    }
+
+    static String clean(String s) {
+        if (s == null) return null;
+        if (s.length() >= 2 && s.startsWith("\"") && s.endsWith("\"")) s = s.substring(1, s.length() - 1);
+        return s.isEmpty() || s.equals("<unknown ssid>") ? null : s;
+    }
+
+    /**
+     * Rappel réseau qui lit le nom de chaque Wi-Fi connecté (Android 12+ : avec les infos de
+     * localisation), pour reconnaître le Wi-Fi de la voiture même s'il n'est pas le réseau principal.
+     * onChange est appelé à chaque changement.
+     */
+    static ConnectivityManager.NetworkCallback carCallback(final Context c, final Runnable onChange) {
+        final android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
+        if (Build.VERSION.SDK_INT >= 31) return new CarNetCb(c, h, onChange, ConnectivityManager.NetworkCallback.FLAG_INCLUDE_LOCATION_INFO);
+        return new CarNetCb(c, h, onChange);
+    }
+
+    static final class CarNetCb extends ConnectivityManager.NetworkCallback {
+        final Context c; final android.os.Handler h; final Runnable onChange;
+
+        CarNetCb(Context c, android.os.Handler h, Runnable r) { super(); this.c = c; this.h = h; this.onChange = r; }
+        CarNetCb(Context c, android.os.Handler h, Runnable r, int flags) { super(flags); this.c = c; this.h = h; this.onChange = r; }
+
+        @Override public void onCapabilitiesChanged(android.net.Network n, NetworkCapabilities nc) {
+            String ssid = null;
+            if (Build.VERSION.SDK_INT >= 29 && nc.getTransportInfo() instanceof WifiInfo)
+                ssid = clean(((WifiInfo) nc.getTransportInfo()).getSSID());
+            String car = Prefs.carSsid(c);
+            boolean was = CAR_NETS.contains(n);
+            boolean is = car != null && ssid != null && car.equalsIgnoreCase(ssid);
+            if (is) CAR_NETS.add(n); else if (ssid != null) CAR_NETS.remove(n);
+            if (was != is && ssid != null) fire();
+        }
+
+        @Override public void onLost(android.net.Network n) {
+            boolean was = CAR_NETS.remove(n);
+            if (was) fire();
+            else h.postDelayed(onChange, 3000);   // réseau sans nom lisible : on revérifie
+        }
+
+        @Override public void onAvailable(android.net.Network n) { h.postDelayed(onChange, 3000); }
+
+        void fire() { h.post(onChange); }
     }
 
     /** Réveillé par Android quand un Wi-Fi se connecte. */

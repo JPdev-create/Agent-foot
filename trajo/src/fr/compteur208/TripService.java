@@ -59,18 +59,46 @@ public class TripService extends Service implements LocationListener {
     /** En attente après coupure du contact (lien voiture perdu). */
     boolean parked;
     int fastFixes;
-    /** Lien voiture perdu pendant un trajet : on n'ajoute plus aucun km tant qu'il n'est pas revenu. */
+    /**
+     * Lien voiture perdu pendant un trajet. On continue de compter les km (Android cache parfois
+     * le Wi-Fi d'Android Auto) mais si la voiture s'immobilise sans que le lien revienne,
+     * le trajet s'arrête au dernier moment où elle roulait (on ne compte jamais la marche à pied
+     * ni un autre véhicule pris ensuite).
+     */
     boolean frozen;
     long lostTs;
     int misses;
-    /** Délai pour retrouver la voiture avant de clore le trajet (micro-coupures). */
-    static final long LINK_GRACE_MS = 2 * 60_000L;
+    /** Lien perdu + plus de vitesse de voiture pendant ce délai => fin du trajet. */
+    static final long STOP_WHILE_LOST_MS = 90_000L;
+    /** Dernier instant où le véhicule roulait (> 15 km/h) et état du trajet à ce moment. */
+    long lastDriveTs;
+    double snapDist, snapVmax;
+    long snapMoving;
+    int snapPts, snapAcc, snapBrk;
+    long snapFast;
+    /** Voiture garée : il faut avoir vu le lien absent avant de le considérer « revenu ». */
+    boolean sawAbsent;
 
-    /** Le téléphone est-il connecté à la voiture (Wi-Fi ou Bluetooth configurés) ? */
+    /** Le téléphone est-il connecté à la voiture (Wi-Fi ou un des Bluetooth configurés) ? */
     boolean linkPresent() {
-        boolean wifiCfg = Prefs.carSsid(this) != null, btCfg = Prefs.carAddress(this) != null;
+        boolean wifiCfg = Prefs.carSsid(this) != null, btCfg = !Prefs.carAddresses(this).isEmpty();
         if (!wifiCfg && !btCfg) return true;
-        return (btCfg && Prefs.get(this).getBoolean("bt_on", false)) || (wifiCfg && WifiWatch.onCarWifi(this));
+        return (btCfg && Prefs.btConnected(this)) || (wifiCfg && WifiWatch.onCarWifi(this));
+    }
+
+    /** Mémorise l'état du trajet tant que le véhicule roule vraiment. */
+    private void snapshot() {
+        lastDriveTs = System.currentTimeMillis();
+        snapDist = dist; snapVmax = vmax; snapMoving = moving; snapPts = pts.size();
+        snapAcc = accN; snapBrk = brkN; snapFast = fastMs;
+    }
+
+    /** Revient à l'état du dernier instant où le véhicule roulait. */
+    private void rollback() {
+        dist = snapDist; vmax = snapVmax; moving = snapMoving;
+        accN = snapAcc; brkN = snapBrk; fastMs = snapFast;
+        while (pts.size() > Math.max(snapPts, 1)) pts.remove(pts.size() - 1);
+        lastMoveTs = Math.max(startTs, lastDriveTs);
     }
     // Éco-conduite
     int accN, brkN;
@@ -99,13 +127,7 @@ public class TripService extends Service implements LocationListener {
     final Runnable stopLater = new Runnable() {
         public void run() {
             if (!started || !btPendingStop) return;
-            if (standby) { goParked(); return; }
-            // Voiture toujours introuvable : le trajet s'arrête à l'instant où le lien a été perdu.
-            lastMoveTs = Math.min(lastMoveTs, lostTs);
-            frozen = false;
-            endReason = linkReason;
-            enterStandby();
-            goParked();
+            if (standby) goParked();
         }
     };
 
@@ -113,16 +135,15 @@ public class TripService extends Service implements LocationListener {
     ConnectivityManager.NetworkCallback wifiCb;
 
     private void watchCarWifi() {
-        if (wifiCb != null || Prefs.carSsid(this) == null || !WifiWatch.onCarWifi(this)) return;
+        if (wifiCb != null || Prefs.carSsid(this) == null) return;
         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
-        wifiCb = new ConnectivityManager.NetworkCallback() {
-            @Override public void onLost(Network n) {
-                handler.postDelayed(new Runnable() { public void run() { if (started && !WifiWatch.onCarWifi(TripService.this)) carLinkLost("Wi-Fi de la voiture perdu"); } }, 3000);
+        wifiCb = WifiWatch.carCallback(this, new Runnable() {
+            public void run() {
+                if (!started) return;
+                if (WifiWatch.onCarWifi(TripService.this)) carLinkBack();
+                else carLinkLost("Wi-Fi de la voiture perdu");
             }
-            @Override public void onAvailable(Network n) {
-                handler.postDelayed(new Runnable() { public void run() { if (started && WifiWatch.onCarWifi(TripService.this)) carLinkBack(); } }, 3000);
-            }
-        };
+        });
         try { cm.registerNetworkCallback(WifiWatch.wifiRequest(), wifiCb); } catch (Exception e) { wifiCb = null; }
     }
 
@@ -137,8 +158,7 @@ public class TripService extends Service implements LocationListener {
         } else {
             frozen = true;
             lostTs = System.currentTimeMillis();
-            EventLog.add(this, reason + " : km en pause (2 min pour se reconnecter)");
-            handler.postDelayed(stopLater, LINK_GRACE_MS);
+            EventLog.add(this, reason + " : le trajet continue tant que la voiture roule");
         }
         updateNotif();
     }
@@ -147,7 +167,7 @@ public class TripService extends Service implements LocationListener {
         if (!btPendingStop && !frozen && !(standby && parked)) return;
         btPendingStop = false;
         handler.removeCallbacks(stopLater);
-        if (frozen) { frozen = false; EventLog.add(this, "Voiture retrouvée, le trajet continue"); }
+        if (frozen) { frozen = false; EventLog.add(this, "Voiture retrouvée"); }
         if (standby && parked) newSegment(null, "voiture redémarrée");
         updateNotif();
     }
@@ -155,6 +175,7 @@ public class TripService extends Service implements LocationListener {
     /** Voiture coupée : trajet enregistré, on surveille encore un moment le redémarrage. */
     private void goParked() {
         parked = true;
+        sawAbsent = false;
         standbySince = System.currentTimeMillis();
         stopGps();   // plus besoin du GPS : seul le retour du lien voiture relance un trajet
         EventLog.add(this, "Voiture garée, nouveau trajet si elle se reconnecte dans les 15 min");
@@ -182,6 +203,19 @@ public class TripService extends Service implements LocationListener {
                     stopAll();
                     return;
                 }
+                // Voiture garée : si le lien revient (après avoir disparu), nouveau trajet.
+                if (parked && ticks % 2 == 0) {
+                    if (!linkPresent()) sawAbsent = true;
+                    else if (sawAbsent) { newSegment(null, "voiture reconnectée"); handler.postDelayed(this, 5000); return; }
+                }
+                ticks++;
+            } else if (frozen && now - lastDriveTs > STOP_WHILE_LOST_MS) {
+                // Lien perdu et la voiture ne roule plus : fin du trajet au dernier instant où elle roulait.
+                rollback();
+                endReason = linkReason;
+                frozen = false;
+                enterStandby();
+                goParked();
             } else if ("auto".equals(src) && !btPendingStop && now - lastMoveTs > pauseMs(TripService.this)) {
                 misses = 0;
                 // Arrêté contact mis : on clôt ce trajet et on attend que la voiture reparte.
@@ -196,7 +230,7 @@ public class TripService extends Service implements LocationListener {
             if (!standby && "auto".equals(src) && ticks % 2 == 0) {
                 boolean ok = linkPresent();
                 if (ok) { misses = 0; if (frozen) carLinkBack(); }
-                else if (!frozen && ++misses >= 2) carLinkLost("Voiture déconnectée");
+                else if (!frozen && ++misses >= 3) carLinkLost("Voiture déconnectée");
             }
             updateNotif();
             if (!standby && ++ticks % 4 == 0) checkpoint();
@@ -232,7 +266,7 @@ public class TripService extends Service implements LocationListener {
                 } else if (standby && parked) {
                     newSegment(null, "voiture redémarrée");
                 } else if (frozen) {
-                    btPendingStop = true;   // pour que carLinkBack reprenne le trajet
+                    btPendingStop = true;
                     carLinkBack();
                 }
             }
@@ -323,8 +357,9 @@ public class TripService extends Service implements LocationListener {
             pts.addAll(decode(p.getString("pts", "")));
         }
         checkpoint();
+        snapshot();
         handler.post(tick);
-        if ("auto".equals(src)) watchCarWifi();
+        watchCarWifi();
         EventLog.add(this, "Trajet démarré (" + info + ")");
     }
 
@@ -334,6 +369,9 @@ public class TripService extends Service implements LocationListener {
         parked = false;
         frozen = false;
         misses = 0;
+        btPendingStop = false;
+        lastDriveTs = System.currentTimeMillis();
+        snapDist = 0; snapVmax = 0; snapMoving = 0; snapPts = 0; snapAcc = 0; snapBrk = 0; snapFast = 0;
         fastFixes = 0;
         startTs = lastMoveTs = System.currentTimeMillis();
         dist = 0; vmax = 0; moving = 0; last = null; jumps = 0; curSpeed = 0; ticks = 0;
@@ -386,11 +424,10 @@ public class TripService extends Service implements LocationListener {
             fastFixes = fast ? fastFixes + 1 : 0;
             // Voiture coupée : on ne relance JAMAIS un trajet sur le seul GPS (autre véhicule, bus…),
             // seulement au retour du Wi-Fi / Bluetooth de la voiture (voir carLinkBack).
-            if (!parked && (far || fastFixes >= 1) && linkPresent()) newSegment(l, "reprise après un arrêt");
+            if (!parked && (far || fastFixes >= 1)) newSegment(l, "reprise après un arrêt");
             return;
         }
 
-        if (frozen) return;                 // lien voiture perdu : aucun km compté
         trackDriving(l);
         if (last == null) { last = l; addPoint(l); return; }
         float d = last.distanceTo(l);
@@ -410,6 +447,7 @@ public class TripService extends Service implements LocationListener {
         last = l;
         lastMoveTs = System.currentTimeMillis();
         addPoint(l);
+        if ((l.hasSpeed() ? l.getSpeed() : v) >= 4.2) snapshot();   // > 15 km/h : le véhicule roule
     }
 
     /**
@@ -452,7 +490,7 @@ public class TripService extends Service implements LocationListener {
         } else {
             text = Fmt.km(dist / 1000) + " · " + Fmt.dur(System.currentTimeMillis() - startTs)
                     + " · " + Math.round(curSpeed * 3.6) + " km/h";
-            title = frozen ? "Voiture déconnectée – km en pause" : "🚗 Trajet en cours";
+            title = frozen ? "🚗 Trajet en cours (voiture non détectée)" : "🚗 Trajet en cours";
         }
         try {
             getSystemService(NotificationManager.class).notify(Notifs.ID_TRIP, Notifs.trip(this, title, text));

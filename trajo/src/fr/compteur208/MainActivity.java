@@ -49,7 +49,7 @@ public class MainActivity extends BaseUi {
     static final int RQ_LOC = 1, RQ_BG = 2, RQ_BT = 3, RQ_NOTIF = 4, RQ_LOC_START = 5, RQ_BT_PICK = 6;
     static final int[] NAV_ICONS = {R.drawable.i_home, R.drawable.i_route, R.drawable.i_chart, R.drawable.i_fuel, R.drawable.i_sliders};
     static final String[] NAV_LABELS = {"Accueil", "Trajets", "Stats", "Dépenses", "Réglages"};
-    static final String VERSION = "4.1";
+    static final String VERSION = "4.2";
 
     FrameLayout root;
     LinearLayout content;
@@ -430,7 +430,7 @@ public class MainActivity extends BaseUi {
         mp.topMargin = dp(8);
         h.addView(mid, mp);
 
-        liveStatus = text("Voiture déconnectée : km en pause, le trajet s'arrête si elle ne revient pas", 13, WHITE, W_MED);
+        liveStatus = text("Voiture non détectée : le trajet continue tant que tu roules", 13, WHITE, W_MED);
         liveStatus.setBackground(surface(0x26FFFFFF, 12).noHighlight());
         liveStatus.setPadding(dp(12), dp(8), dp(12), dp(8));
         liveStatus.setVisibility(View.GONE);
@@ -681,6 +681,7 @@ public class MainActivity extends BaseUi {
         double[] wd = new double[7];
         Calendar cal = Calendar.getInstance();
         for (Db.Trip t : trips) {
+            if ("km non suivis".equals(t.src)) continue;
             cal.setTimeInMillis(t.start);
             wd[(cal.get(Calendar.DAY_OF_WEEK) + 5) % 7] += t.km();
         }
@@ -1387,9 +1388,10 @@ public class MainActivity extends BaseUi {
         listRow(g, R.drawable.i_wifi, BLUE, "Wi-Fi de la voiture", ssid == null ? "Non configuré" : ssid,
                 ssid == null ? null : (onWifi ? "Connecté" : null), null, GOOD,
                 new Click() { public void run() { wifiSheet(); } });
-        listRow(g, R.drawable.i_bluetooth, BLUE, "Bluetooth de la voiture", car == null ? "Facultatif" : car, null, null, TXT,
+        listRow(g, R.drawable.i_bluetooth, BLUE, "Bluetooth de la voiture", car == null ? "Ajoute aussi le boîtier AutoBox" : car,
+                Prefs.btConnected(this) ? "Connecté" : null, null, GOOD,
                 new Click() { public void run() { pickCar(); } });
-        TextView note = body("Seuls les km parcourus connecté au Wi-Fi ou au Bluetooth de la voiture sont comptés. Si la connexion est perdue plus de 2 min, le trajet s'arrête.", 12, MUTED);
+        TextView note = body("Un trajet ne démarre que si le téléphone se connecte à la voiture. Si la connexion disparaît, le trajet continue tant que tu roules et s'arrête dès que la voiture s'immobilise sans elle.", 12, MUTED);
         note.setPadding(dp(4), 0, dp(4), dp(4));
         content.addView(note);
 
@@ -1441,10 +1443,8 @@ public class MainActivity extends BaseUi {
                 ref > 0 ? "Relevé du " + Fmt.dateShort(Prefs.odoRefDate(this)) + " : " + Fmt.kmInt(ref) : "À renseigner",
                 est >= 0 ? Fmt.kmInt(est) : null, null, TXT, new Click() {
                     public void run() {
-                        numberSheet("Kilométrage du compteur", "Lis le kilométrage total sur le tableau de bord de ta voiture.", "km", "", new NumCb() {
-                            public void set(double v) {
-                                Prefs.get(MainActivity.this).edit().putFloat("odo_ref", (float) v).putLong("odo_ref_date", System.currentTimeMillis()).apply();
-                            }
+                        numberSheet("Kilométrage du compteur", "Lis le kilométrage total sur le tableau de bord de ta voiture. Les km non enregistrés depuis le dernier relevé seront ajoutés aux statistiques.", "km", "", new NumCb() {
+                            public void set(double v) { setOdometer(v); }
                         });
                     }
                 });
@@ -1508,6 +1508,27 @@ public class MainActivity extends BaseUi {
         ver.setLineSpacing(0, 1.3f);
         ver.setPadding(0, dp(20), 0, 0);
         content.addView(ver, fullWidth(0));
+    }
+
+    /**
+     * Nouveau relevé du compteur. Si l'appli a enregistré moins de km que la voiture, l'écart
+     * est ajouté comme « km non suivis » pour que les totaux, coûts et stats restent justes.
+     */
+    void setOdometer(double v) {
+        Db db = Db.get(this);
+        double est = Calc.estimatedOdo(this, db.fuels(), db.maints());
+        long now = System.currentTimeMillis();
+        double gap = est >= 0 ? v - est : 0;
+        if (gap >= 1 && gap < 5000) {
+            Db.Trip t = new Db.Trip();
+            t.start = now - 1; t.end = now - 1; t.dist = gap * 1000;
+            t.src = "km non suivis"; t.pts = "";
+            t.info = "Écart avec le compteur (" + Fmt.kmInt(est) + " estimés → " + Fmt.kmInt(v) + ")";
+            db.addTrip(t);
+            toast(Fmt.km(gap) + " non suivis ajoutés aux statistiques");
+            EventLog.add(this, "Recalage compteur : " + Fmt.km(gap) + " non suivis");
+        }
+        Prefs.get(this).edit().putFloat("odo_ref", (float) v).putLong("odo_ref_date", now).apply();
     }
 
     View linkChip(int iconRes, String s, boolean connected) {
@@ -1629,41 +1650,41 @@ public class MainActivity extends BaseUi {
         try { bonded = ad.getBondedDevices(); } catch (SecurityException e) { toast("Autorisation Bluetooth refusée"); return; }
 
         LinearLayout f = vbox();
-        f.addView(body("Choisis le Bluetooth de ta voiture (il doit déjà être appairé avec le téléphone).", 14, SUB), fullWidth(14));
+        f.addView(body("Coche tous les appareils de ta voiture : l'autoradio (BT_PEUGEOT) ET le boîtier Android Auto (AutoBox). "
+                + "Plus il y en a, plus la détection est fiable.", 14, SUB), fullWidth(14));
         LinearLayout g = vbox();
         g.setBackground(surface(SURF2, 18));
         g.setClipToOutline(true);
         f.addView(g, fullWidth(4));
-        final Dialog[] holder = new Dialog[1];
-        String current = Prefs.carAddress(this);
-        int count = 0;
+        final List<BluetoothDevice> devs = new ArrayList<>();
+        final List<Switch> sws = new ArrayList<>();
         for (int pass = 0; pass < 2; pass++) {
-            for (final BluetoothDevice d : bonded) {
-                final String n = d.getName() == null ? d.getAddress() : d.getName();
+            for (BluetoothDevice d : bonded) {
+                String n = d.getName() == null ? d.getAddress() : d.getName();
                 String u = n.toUpperCase();
                 boolean looksCar = u.contains("PEUGEOT") || u.contains("208") || u.contains("CAR") || u.contains("AUTO");
                 if ((pass == 0) != looksCar) continue;
-                count++;
-                boolean sel = d.getAddress().equalsIgnoreCase(current == null ? "" : current);
-                listRow(g, looksCar ? R.drawable.i_car : R.drawable.i_bluetooth, sel ? GOOD : BLUE, n, sel ? "Sélectionné" : null,
-                        null, null, TXT, new Click() {
-                            public void run() {
-                                Prefs.get(MainActivity.this).edit().putString("car_addr", d.getAddress()).putString("car_name", n).apply();
-                                toast("Voiture enregistrée : " + n);
-                                if (holder[0] != null) holder[0].dismiss();
-                                render();
-                            }
-                        });
+                devs.add(d);
+                sws.add(switchRow(g, looksCar ? R.drawable.i_car : R.drawable.i_bluetooth, looksCar ? CYAN : BLUE, n,
+                        looksCar ? "Semble faire partie de la voiture" : null, Prefs.isCar(this, d.getAddress())));
             }
         }
-        if (count == 0) f.addView(text("Aucun appareil appairé. Connecte d'abord ton téléphone à ta voiture en Bluetooth.", 14, AMBER, W_REG));
-        holder[0] = sheet("Bluetooth de la voiture", f, null, false, null,
-                current == null ? null : "Ne plus utiliser le Bluetooth", new Runnable() {
-                    public void run() {
-                        Prefs.get(MainActivity.this).edit().remove("car_addr").remove("car_name").apply();
-                        render();
-                    }
-                });
+        if (devs.isEmpty()) f.addView(text("Aucun appareil appairé. Connecte d'abord ton téléphone à ta voiture en Bluetooth.", 14, AMBER, W_REG));
+        sheet("Bluetooth de la voiture", f, "Enregistrer", false, new Save() {
+            public boolean run() {
+                Map<String, String> sel = new LinkedHashMap<>();
+                for (int i = 0; i < devs.size(); i++) {
+                    if (!sws.get(i).isChecked()) continue;
+                    BluetoothDevice d = devs.get(i);
+                    String n = d.getName() == null ? d.getAddress() : d.getName();
+                    sel.put(d.getAddress(), n);
+                }
+                Prefs.setCars(MainActivity.this, sel);
+                toast(sel.isEmpty() ? "Détection Bluetooth désactivée" : sel.size() + (sel.size() > 1 ? " appareils enregistrés" : " appareil enregistré"));
+                render();
+                return true;
+            }
+        }, null, null);
     }
 
     void exportFuel() {

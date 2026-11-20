@@ -14,22 +14,23 @@ import android.content.Intent;
  */
 public class BtReceiver extends BroadcastReceiver {
     @Override public void onReceive(Context c, Intent i) {
-        if (!Prefs.autoEnabled(c)) return;
-        String car = Prefs.carAddress(c);
-        if (car == null) return;
         BluetoothDevice d = i.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
-        if (d == null || !car.equalsIgnoreCase(d.getAddress())) return;
+        if (d == null || !Prefs.isCar(c, d.getAddress())) return;
 
         String a = i.getAction();
         // Mémorise l'état du Bluetooth voiture (sert à savoir si on est bien dans la voiture).
-        Prefs.get(c).edit().putBoolean("bt_on", BluetoothDevice.ACTION_ACL_CONNECTED.equals(a)).apply();
-        EventLog.add(c, BluetoothDevice.ACTION_ACL_CONNECTED.equals(a) ? "Bluetooth voiture connecté" : "Bluetooth voiture déconnecté");
+        boolean on = BluetoothDevice.ACTION_ACL_CONNECTED.equals(a);
+        Prefs.setBtState(c, d.getAddress(), on);
+        String name = null;
+        try { name = d.getName(); } catch (SecurityException ignored) {}
+        EventLog.add(c, "Bluetooth " + (name != null ? name : d.getAddress()) + (on ? " connecté" : " déconnecté"));
+        if (!Prefs.autoEnabled(c)) return;
         if (BluetoothDevice.ACTION_ACL_CONNECTED.equals(a)) {
             // Sans « Toujours autoriser », Android refuse le GPS en arrière-plan :
             // on propose plutôt de démarrer d'un appui sur la notification.
             carConnected(c);
         } else if (BluetoothDevice.ACTION_ACL_DISCONNECTED.equals(a)) {
-            if (TripService.instance == null) return;
+            if (TripService.instance == null || Prefs.btConnected(c)) return;   // un autre appareil voiture reste connecté
             try {
                 c.startService(new Intent(c, TripService.class).setAction(TripService.A_BT_OFF));
             } catch (Exception ignored) {}

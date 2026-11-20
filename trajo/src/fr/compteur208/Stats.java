@@ -93,6 +93,7 @@ final class Stats {
         double[] h = new double[24];
         Calendar c = Calendar.getInstance();
         for (Db.Trip t : trips) {
+            if ("km non suivis".equals(t.src)) continue;
             c.setTimeInMillis(t.start);
             h[c.get(Calendar.HOUR_OF_DAY)] += t.km();
         }

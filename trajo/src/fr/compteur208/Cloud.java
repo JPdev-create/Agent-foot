@@ -125,6 +125,7 @@ final class Cloud {
         if (m.contains("too_many_groups")) return "Limite de 20 groupes atteinte";
         if (m.toLowerCase(Locale.ROOT).contains("anonymous")) return "Active « Allow anonymous sign-ins » dans Supabase (Authentication → Sign In / Providers)";
         if (m.contains("Could not find the function") || m.contains("PGRST202")) return "Base pas prête : exécute le fichier schema.sql dans Supabase";
+        if (res.contains("42883") || m.contains("does not exist")) return "Base à mettre à jour : exécute le correctif SQL dans Supabase";
         if (code == 401 || code == 403) return "Accès refusé par le serveur (vérifie l'adresse et la clé)";
         if (code == 404) return "Serveur introuvable (vérifie l'adresse)";
         return m.length() > 160 ? m.substring(0, 160) : m;

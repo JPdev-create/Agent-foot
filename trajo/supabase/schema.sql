@@ -4,7 +4,6 @@
 -- Le script peut être relancé sans risque (il ne supprime aucune donnée).
 -- =====================================================================
 
-create extension if not exists pgcrypto;
 
 -- ---------- Tables ----------
 
@@ -146,7 +145,8 @@ declare c text;
 begin
   if not public.is_admin(p_group) then raise exception 'not_admin'; end if;
   loop
-    c := upper(substr(translate(encode(gen_random_bytes(9), 'base64'), '+/=0O1Il', ''), 1, 8));
+    -- gen_random_uuid() est intégré à Postgres (pas besoin de l'extension pgcrypto, rangée ailleurs sur Supabase).
+    c := upper(substr(translate(replace(gen_random_uuid()::text, '-', '') || replace(gen_random_uuid()::text, '-', ''), '01', ''), 1, 8));
     exit when length(c) = 8 and not exists (select 1 from invites where code = c);
   end loop;
   insert into invites (code, group_id, created_by) values (c, p_group, auth.uid());

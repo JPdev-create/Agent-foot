@@ -50,7 +50,7 @@ public class MainActivity extends BaseUi {
     static final int[] NAV_ICONS = {R.drawable.i_home, R.drawable.i_route, R.drawable.i_chart, R.drawable.i_fuel, R.drawable.i_users};
     static final String[] NAV_LABELS = {"Accueil", "Trajets", "Stats", "Dépenses", "Groupes"};
     static final int TAB_GROUPS = 4, TAB_SETTINGS = 5;
-    static final String VERSION = "5.1";
+    static final String VERSION = "5.1.1";
 
     FrameLayout root;
     LinearLayout content;
